@@ -55,7 +55,7 @@ service cloud.firestore {
    "Build and deployment", choisis **Deploy from a branch**, branche
    `main`, dossier `/ (root)`. Enregistre.
 6. Après 1-2 minutes, l'URL de ton site apparaît, du type :
-   `https://<ton-pseudo>.github.io/outils-atelier/`
+   `https://<ton-pseudo>.github.io/wheelerBrothers/`
 
 ## Étape 3 — Installer sur ton iPhone (et celui de ton binôme)
 
