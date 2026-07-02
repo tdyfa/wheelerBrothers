@@ -9,12 +9,12 @@
    ============================================================ */
 
 const FIREBASE_CONFIG = {
-  apiKey: "COLLE_ICI_TA_CLE_API",
-  authDomain: "COLLE_ICI.firebaseapp.com",
-  projectId: "COLLE_ICI",
-  storageBucket: "COLLE_ICI.appspot.com",
-  messagingSenderId: "COLLE_ICI",
-  appId: "COLLE_ICI"
+  apiKey: "AIzaSyChDwjw_9MkJJtHatts6u6FKyRMofR-YHs",
+  authDomain: "wheelerbrothers.firebaseapp.com",
+  projectId: "wheelerbrothers",
+  storageBucket: "wheelerbrothers.firebasestorage.app",
+  messagingSenderId: "440186092210",
+  appId: "1:440186092210:web:212818cf3776eed30f27ab"
 };
 
 if(!firebase.apps.length){
