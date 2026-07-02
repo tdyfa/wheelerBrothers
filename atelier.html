@@ -235,6 +235,10 @@ async function loadData(){
     console.error('Synchronisation impossible', err);
     const loadingMsg = document.getElementById('loadingMsg');
     if(loadingMsg) loadingMsg.remove();
+    alert(
+      "Impossible de se connecter à l'espace partagé (" + (err.code || err.message || 'erreur inconnue') + ").\n\n" +
+      "Vérifie ton code d'atelier (Changer le code d'atelier depuis l'accueil) ou ta connexion réseau."
+    );
   });
 }
 
@@ -278,7 +282,11 @@ function importData(file){
           if(!existingIds.has(v.id)) DATA.vehicles.push(v);
         });
       }
-      await saveData();
+      const ok = await saveData();
+      if(!ok){
+        alert("Échec de l'enregistrement dans l'espace partagé. Vérifie ton code d'atelier ou ta connexion, puis réessaie l'import.");
+        return;
+      }
       currentVehicleId = null;
       renderSidebar();
       renderMain();

@@ -545,16 +545,30 @@ function flagQuota(){
 let _saveDebounceTimer = null;
 let _applyingRemoteUpdate = false;
 
+function flagSyncError(){
+  const el = document.getElementById('saveWarn');
+  if(el){
+    el.textContent = "⚠️ Synchronisation impossible (code d'atelier ou réseau) → tes modifications restent sur ce téléphone uniquement";
+    el.style.display = 'inline';
+  }
+}
+function clearSyncError(){
+  const el = document.getElementById('saveWarn');
+  if(el && el.textContent.indexOf('Synchronisation impossible') !== -1){
+    el.style.display = 'none';
+  }
+}
+
 function save(){
   try{ localStorage.setItem('rapport_state', JSON.stringify(state)); }catch(e){ flagQuota(); }
   if(_applyingRemoteUpdate) return; // ne pas ré-émettre ce qu'on vient de recevoir
   clearTimeout(_saveDebounceTimer);
   _saveDebounceTimer = setTimeout(()=>{
     try{
-      sharedDocRef('rapport').set({ payload: JSON.stringify(state), updatedAt: Date.now() }).catch((e)=>{
-        console.error('Erreur de synchronisation', e);
-      });
-    }catch(e){ console.error('Erreur de synchronisation', e); }
+      sharedDocRef('rapport').set({ payload: JSON.stringify(state), updatedAt: Date.now() })
+        .then(()=> clearSyncError())
+        .catch((e)=>{ console.error('Erreur de synchronisation', e); flagSyncError(); });
+    }catch(e){ console.error('Erreur de synchronisation', e); flagSyncError(); }
   }, 600);
 }
 
@@ -569,6 +583,7 @@ function load(){
 function subscribeRemote(){
   try{
     sharedDocRef('rapport').onSnapshot((snap)=>{
+      clearSyncError();
       if(!snap.exists) return;
       const remote = snap.data();
       if(!remote || !remote.payload) return;
@@ -585,8 +600,8 @@ function subscribeRemote(){
       renderReport();
       try{ localStorage.setItem('rapport_state', JSON.stringify(state)); }catch(e){}
       _applyingRemoteUpdate = false;
-    }, (err)=>{ console.error('Synchronisation impossible', err); });
-  }catch(e){ console.error('Impossible de démarrer la synchronisation', e); }
+    }, (err)=>{ console.error('Synchronisation impossible', err); flagSyncError(); });
+  }catch(e){ console.error('Impossible de démarrer la synchronisation', e); flagSyncError(); }
 }
 
 /* ---------- bind simple fields ---------- */

@@ -19,9 +19,15 @@ Contenu du dossier :
    copie les valeurs (`apiKey`, `authDomain`, `projectId`, etc.).
 5. Ouvre le fichier **`firebase-config.js`** (dans ce dossier) et
    colle ces valeurs à la place de `COLLE_ICI...`.
-6. Dans le menu de gauche Firebase, va dans **Firestore Database** →
-   "Créer une base de données" → mode **production** → choisis une
-   région proche (ex. `eur3 (europe-west)`) → Activer.
+6. Dans le menu de gauche Firebase, va dans **Base de données et
+   stockage** → section **noSQL** → **Firestore** (à ne pas confondre
+   avec "Realtime Database", juste au-dessus). Clique **"Créer une
+   base de données"** :
+   - Édition **Standard** → Suivant
+   - ID de base de données : laisse `(default)` → Suivant
+   - Région proche (ex. `eur3 (europe-west)`) → Suivant
+   - Règles de sécurité de démarrage : peu importe ton choix ici, on
+     les remplace à l'étape suivante → **Créer**.
 7. Onglet **Règles** de Firestore, remplace le contenu par :
 
 ```
@@ -55,7 +61,7 @@ service cloud.firestore {
    "Build and deployment", choisis **Deploy from a branch**, branche
    `main`, dossier `/ (root)`. Enregistre.
 6. Après 1-2 minutes, l'URL de ton site apparaît, du type :
-   `https://<ton-pseudo>.github.io/wheelerBrothers/`
+   `https://<ton-pseudo>.github.io/outils-atelier/`
 
 ## Étape 3 — Installer sur ton iPhone (et celui de ton binôme)
 
@@ -86,8 +92,12 @@ toutes les 600 ms pendant la saisie, pour rester fluide.
   intervention, l'autre consulte ou complète autre chose), ça ne pose
   aucun souci.
 - Le code d'atelier est la seule protection d'accès (pas de compte
-  utilisateur). Ne le partage qu'avec ton binôme, choisis-en un non
-  trivial (le code généré automatiquement convient très bien).
+  utilisateur). Ne le partage qu'avec ton binôme. **Il doit faire au
+  moins 12 caractères** — l'app le refuse désormais automatiquement
+  s'il est trop court (avant, un code trop court échouait en silence
+  côté Firestore, sans message d'erreur : corrigé).
+- Pour changer de code (erreur de frappe, nouveau binôme...), utilise
+  le lien "Changer le code d'atelier" en bas de l'écran d'accueil.
 - Le stockage Firestore gratuit (Spark) offre une capacité largement
   suffisante pour un usage à deux (environ 1 Go de données, 50 000
   lectures et 20 000 écritures par jour) — non facturé.

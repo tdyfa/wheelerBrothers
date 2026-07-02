@@ -9,12 +9,12 @@
    ============================================================ */
 
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyChDwjw_9MkJJtHatts6u6FKyRMofR",
-  authDomain: "wheelerbrothers.firebaseapp.com",
-  projectId: "wheelerbrothers",
-  storageBucket: "wheelerbrothers.firebasestorage.app",
-  messagingSenderId: "440186092210",
-  appId: "1:440186092210:web:212818cf3776eed30f27ab"
+  apiKey: "COLLE_ICI_TA_CLE_API",
+  authDomain: "COLLE_ICI.firebaseapp.com",
+  projectId: "COLLE_ICI",
+  storageBucket: "COLLE_ICI.appspot.com",
+  messagingSenderId: "COLLE_ICI",
+  appId: "COLLE_ICI"
 };
 
 if(!firebase.apps.length){
@@ -30,19 +30,31 @@ function getSharedCode(){
 
 function ensureSharedCode(){
   let code = getSharedCode();
-  if(!code){
-    const suggestion = 'atelier-' + Math.random().toString(36).slice(2, 10);
+  if(code) return code;
+
+  const suggestion = 'atelier-' + Math.random().toString(36).slice(2, 10);
+  while(true){
     code = prompt(
       "Code d'atelier partagé\n\n" +
       "Entre le code déjà communiqué par ton binôme, ou valide celui proposé " +
-      "ci-dessous pour créer un nouvel espace (tu devras le lui transmettre) :",
+      "ci-dessous pour créer un nouvel espace (tu devras le lui transmettre).\n\n" +
+      "Le code doit faire au moins 12 caractères (c'est ta protection d'accès).",
       suggestion
     );
-    if(!code) code = suggestion;
+    if(code === null) code = suggestion; // annulé -> on prend la suggestion, déjà assez longue
     code = code.trim();
-    localStorage.setItem('shared_code', code);
+    if(code.length >= 12) break;
+    alert(`Ce code ne fait que ${code.length} caractère(s), il en faut au moins 12. Réessaie, ou valide simplement la suggestion proposée.`);
   }
+  localStorage.setItem('shared_code', code);
   return code;
+}
+
+function resetSharedCode(){
+  if(confirm("Changer de code d'atelier ? Tu devras ressaisir (ou recréer) un code, et l'app se rechargera.")){
+    localStorage.removeItem('shared_code');
+    location.reload();
+  }
 }
 
 function sharedDocRef(toolName){
