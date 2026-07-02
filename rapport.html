@@ -12,6 +12,7 @@
 <meta name="theme-color" content="#0f1216">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="firebase-config.js"></script>
 <style>
   :root{
@@ -287,6 +288,7 @@
   <h1>🛠️ Rapport d'intervention</h1>
   <span class="sub">Remplis, ajoute tes photos, génère le PDF</span>
   <span id="saveWarn" style="display:none; font-size:12px; color:#ffd27a; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
+  <span id="sizeIndicator" style="font-size:11.5px; color:#9aa3b2; font-weight:600;"></span>
   <button class="btn ghost" id="btnArchive">📁 Mes rapports</button>
   <button class="btn ghost" id="btnImport">Importer</button>
   <button class="btn ghost" id="btnExport">Sauvegarder (.json)</button>
@@ -514,6 +516,33 @@ async function processImage(file, maxEdge=1600, quality=0.85){
   }
 }
 
+/* ---------- upload en arrière-plan vers Firebase Storage ---------- */
+async function uploadAndSwapField(key, dataUrl){
+  try{
+    const url = await uploadImageDataUrl(dataUrl, `reports/${currentReportId}/${key}-${Date.now()}.jpg`);
+    if(state[key] === dataUrl){ // personne n'a changé/effacé la photo entre-temps
+      state[key] = url;
+      renderReport();
+      save();
+    }
+  }catch(e){
+    console.warn('Upload photo échoué, elle reste stockée localement (plus volumineuse)', e);
+  }
+}
+
+async function uploadAndSwapArrayItem(item, dataUrl, pathHint){
+  try{
+    const url = await uploadImageDataUrl(dataUrl, `reports/${currentReportId}/${pathHint}-${item.id}-${Date.now()}.jpg`);
+    if(item.src === dataUrl){
+      item.src = url;
+      renderReport();
+      save();
+    }
+  }catch(e){
+    console.warn('Upload photo échoué, elle reste stockée localement (plus volumineuse)', e);
+  }
+}
+
 /* ---------- PDF -> images (pdf.js chargé à la demande depuis le CDN) ---------- */
 let _pdfjsPromise = null;
 function loadPdfJs(){
@@ -603,8 +632,23 @@ function flushPendingSave(){
   }
 }
 
+function fmtSize(bytes){
+  if(bytes < 1000) return bytes + ' o';
+  return (bytes/1000).toFixed(0) + ' Ko';
+}
+
+function updateSizeIndicator(bytes){
+  const el = document.getElementById('sizeIndicator');
+  if(!el) return;
+  const ratio = bytes / FIRESTORE_DOC_SAFE_LIMIT;
+  el.textContent = fmtSize(bytes) + ' / ' + fmtSize(FIRESTORE_DOC_SAFE_LIMIT);
+  el.style.color = ratio > 1 ? '#ff8a80' : (ratio > 0.8 ? '#ffd27a' : '#9aa3b2');
+}
+
 function save(){
-  try{ localStorage.setItem('rapport_state', JSON.stringify(state)); }catch(e){ flagQuota(); }
+  const payloadNow = JSON.stringify(state);
+  updateSizeIndicator(payloadNow.length);
+  try{ localStorage.setItem('rapport_state', payloadNow); }catch(e){ flagQuota(); }
   if(_applyingRemoteUpdate) return; // ne pas ré-émettre ce qu'on vient de recevoir
 
   // on fige la cible (rapport + contenu) tout de suite, pour ne jamais
@@ -612,7 +656,7 @@ function save(){
   // pendant les 600ms d'anti-rebond
   _pendingSave = {
     reportId: currentReportId,
-    payload: JSON.stringify(state),
+    payload: payloadNow,
     meta: {
       title: state.plate || state.model || state.title || 'Sans titre',
       subtitle: [state.brand, state.model].filter(Boolean).join(' ')
@@ -654,6 +698,7 @@ function refreshEditorFromState(){
   buildBaie();
   buildInvoices();
   renderReport();
+  updateSizeIndicator(JSON.stringify(state).length);
 }
 
 function subscribeToReport(id){
@@ -693,9 +738,10 @@ function openReport(id){
 
 async function deleteReport(id, evt){
   evt.stopPropagation();
-  if(!confirm('Supprimer définitivement ce rapport ?')) return;
+  if(!confirm('Supprimer définitivement ce rapport (et ses photos) ?')) return;
   try{
     await reportDocRef(id).delete();
+    deleteStorageFolder(`reports/${id}`); // best-effort, ne bloque pas la suppression du rapport
     if(id === currentReportId) startNewReportSilent();
   }catch(e){
     alert("Échec de la suppression, réessaie.");
@@ -926,7 +972,12 @@ function buildSections(){
           const files=[...fileInput.files]; const old=btn.textContent;
           btn.textContent='⏳ Traitement…';
           for(const f of files){
-            try{ const data=await processImage(f); sec[arrKey].push({id:nid(), src:data, cap:''}); }
+            try{
+              const data=await processImage(f);
+              const item = {id:nid(), src:data, cap:''};
+              sec[arrKey].push(item);
+              uploadAndSwapArrayItem(item, data, arrKey);
+            }
             catch(e){ console.error(e); }
           }
           btn.textContent=old; fileInput.value='';
@@ -946,7 +997,12 @@ function buildSections(){
         const files=[...fileInput.files]; const old=addBtn.textContent;
         addBtn.textContent='⏳ Traitement…';
         for(const f of files){
-          try{ const data=await processImage(f); sec.photos.push({id:nid(), src:data, cap:''}); }
+          try{
+            const data=await processImage(f);
+            const item = {id:nid(), src:data, cap:''};
+            sec.photos.push(item);
+            uploadAndSwapArrayItem(item, data, 'photos');
+          }
           catch(e){ console.error(e); }
         }
         addBtn.textContent=old; fileInput.value='';
@@ -973,7 +1029,7 @@ function renderThumbs(tw, sec, arr){
     cap.addEventListener('input', ()=>{ p.cap=cap.value; renderReport(); save(); });
     th.querySelector('.pup').addEventListener('click', ()=>movePhotoArr(arr,pi,-1));
     th.querySelector('.pdown').addEventListener('click', ()=>movePhotoArr(arr,pi,1));
-    th.querySelector('.pdel').addEventListener('click', ()=>{ arr.splice(pi,1); buildSections(); renderReport(); save(); });
+    th.querySelector('.pdel').addEventListener('click', ()=>{ deleteStorageFileByUrl(arr[pi].src); arr.splice(pi,1); buildSections(); renderReport(); save(); });
     tw.appendChild(th);
   });
 }
@@ -1134,22 +1190,28 @@ function renderReport(){
 /* ---------- file inputs: overview + logo ---------- */
 document.getElementById('f_overview').addEventListener('change', async (e)=>{
   if(!e.target.files[0]) return;
-  state.overview = await processImage(e.target.files[0], 1900, 0.85);
+  const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
+  state.overview = dataUrl;
   renderReport(); save(); e.target.value='';
+  uploadAndSwapField('overview', dataUrl);
 });
-document.getElementById('clearOverview').addEventListener('click',(e)=>{e.preventDefault(); state.overview=null; renderReport(); save();});
+document.getElementById('clearOverview').addEventListener('click',(e)=>{e.preventDefault(); deleteStorageFileByUrl(state.overview); state.overview=null; renderReport(); save();});
 document.getElementById('f_products').addEventListener('change', async (e)=>{
   if(!e.target.files[0]) return;
-  state.products = await processImage(e.target.files[0], 1900, 0.85);
+  const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
+  state.products = dataUrl;
   renderReport(); save(); e.target.value='';
+  uploadAndSwapField('products', dataUrl);
 });
-document.getElementById('clearProducts').addEventListener('click',(e)=>{e.preventDefault(); state.products=null; renderReport(); save();});
+document.getElementById('clearProducts').addEventListener('click',(e)=>{e.preventDefault(); deleteStorageFileByUrl(state.products); state.products=null; renderReport(); save();});
 document.getElementById('f_logo').addEventListener('change', async (e)=>{
   if(!e.target.files[0]) return;
-  state.logo = await processImage(e.target.files[0], 700, 0.92);
+  const dataUrl = await processImage(e.target.files[0], 700, 0.92);
+  state.logo = dataUrl;
   renderReport(); save(); e.target.value='';
+  uploadAndSwapField('logo', dataUrl);
 });
-document.getElementById('resetLogo').addEventListener('click',(e)=>{e.preventDefault(); state.logo=DEFAULT_LOGO; renderReport(); save();});
+document.getElementById('resetLogo').addEventListener('click',(e)=>{e.preventDefault(); deleteStorageFileByUrl(state.logo); state.logo=DEFAULT_LOGO; renderReport(); save();});
 
 /* ---------- baie moteur ---------- */
 function buildBaie(){
@@ -1161,32 +1223,40 @@ function buildBaie(){
 document.getElementById('baieOn').addEventListener('change',(e)=>{ state.baieOn=e.target.checked; buildBaie(); renderReport(); save();});
 document.getElementById('f_baieAvant').addEventListener('change', async (e)=>{
   if(!e.target.files[0]) return;
-  state.baieAvant = await processImage(e.target.files[0], 1900, 0.85);
+  const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
+  state.baieAvant = dataUrl;
   if(!state.baieOn){ state.baieOn=true; buildBaie(); }
   renderReport(); save(); e.target.value='';
+  uploadAndSwapField('baieAvant', dataUrl);
 });
-document.getElementById('clearBaieAvant').addEventListener('click',(e)=>{e.preventDefault(); state.baieAvant=null; renderReport(); save();});
+document.getElementById('clearBaieAvant').addEventListener('click',(e)=>{e.preventDefault(); deleteStorageFileByUrl(state.baieAvant); state.baieAvant=null; renderReport(); save();});
 document.getElementById('f_baieApres').addEventListener('change', async (e)=>{
   if(!e.target.files[0]) return;
-  state.baieApres = await processImage(e.target.files[0], 1900, 0.85);
+  const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
+  state.baieApres = dataUrl;
   if(!state.baieOn){ state.baieOn=true; buildBaie(); }
   renderReport(); save(); e.target.value='';
+  uploadAndSwapField('baieApres', dataUrl);
 });
-document.getElementById('clearBaieApres').addEventListener('click',(e)=>{e.preventDefault(); state.baieApres=null; renderReport(); save();});
+document.getElementById('clearBaieApres').addEventListener('click',(e)=>{e.preventDefault(); deleteStorageFileByUrl(state.baieApres); state.baieApres=null; renderReport(); save();});
 
 /* ---------- étiquette ---------- */
 document.getElementById('f_labelR').addEventListener('change', async (e)=>{
   if(!e.target.files[0]) return;
-  state.labelR = await processImage(e.target.files[0], 1900, 0.85);
+  const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
+  state.labelR = dataUrl;
   renderReport(); save(); e.target.value='';
+  uploadAndSwapField('labelR', dataUrl);
 });
-document.getElementById('clearLabelR').addEventListener('click',(e)=>{e.preventDefault(); state.labelR=null; renderReport(); save();});
+document.getElementById('clearLabelR').addEventListener('click',(e)=>{e.preventDefault(); deleteStorageFileByUrl(state.labelR); state.labelR=null; renderReport(); save();});
 document.getElementById('f_labelV').addEventListener('change', async (e)=>{
   if(!e.target.files[0]) return;
-  state.labelV = await processImage(e.target.files[0], 1900, 0.85);
+  const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
+  state.labelV = dataUrl;
   renderReport(); save(); e.target.value='';
+  uploadAndSwapField('labelV', dataUrl);
 });
-document.getElementById('clearLabelV').addEventListener('click',(e)=>{e.preventDefault(); state.labelV=null; renderReport(); save();});
+document.getElementById('clearLabelV').addEventListener('click',(e)=>{e.preventDefault(); deleteStorageFileByUrl(state.labelV); state.labelV=null; renderReport(); save();});
 
 /* ---------- invoices ---------- */
 function buildInvoices(){
@@ -1206,7 +1276,7 @@ function buildInvoices(){
     th.innerHTML=`<div class="tbar"><button class="pup">‹</button><button class="pdown">›</button><button class="pdel">✕</button></div>${preview}<div style="font-size:11px;text-align:center;padding:5px;border-top:1px solid var(--line);font-weight:600">Facture ${i+1}${isPdf?' (PDF)':''}</div>`;
     th.querySelector('.pup').addEventListener('click',()=>{ if(i>0){[state.invoices[i-1],state.invoices[i]]=[state.invoices[i],state.invoices[i-1]];buildInvoices();renderReport();save();}});
     th.querySelector('.pdown').addEventListener('click',()=>{ if(i<state.invoices.length-1){[state.invoices[i+1],state.invoices[i]]=[state.invoices[i],state.invoices[i+1]];buildInvoices();renderReport();save();}});
-    th.querySelector('.pdel').addEventListener('click',()=>{ state.invoices.splice(i,1); buildInvoices(); renderReport(); save();});
+    th.querySelector('.pdel').addEventListener('click',()=>{ deleteStorageFileByUrl(state.invoices[i].src); state.invoices.splice(i,1); buildInvoices(); renderReport(); save();});
     tw.appendChild(th);
   });
 }
@@ -1223,12 +1293,17 @@ document.getElementById('f_invoice').addEventListener('change', async (e)=>{
       if(isPdf){
         const pages = await pdfToImages(f);   // chaque page -> image JPEG
         pages.forEach((img,pi)=>{
-          state.invoices.push({id:nid(), kind:'img', src:img,
-            name:(f.name||'facture.pdf')+(pages.length>1?` p.${pi+1}`:'')});
+          const item = {id:nid(), kind:'img', src:img,
+            name:(f.name||'facture.pdf')+(pages.length>1?` p.${pi+1}`:'')};
+          state.invoices.push(item);
+          uploadAndSwapArrayItem(item, img, 'invoices');
         });
         ok++;
       } else {
-        state.invoices.push({id:nid(), kind:'img', src:await processImage(f,2200,0.9)});
+        const data = await processImage(f,2200,0.9);
+        const item = {id:nid(), kind:'img', src:data};
+        state.invoices.push(item);
+        uploadAndSwapArrayItem(item, data, 'invoices');
         ok++;
       }
     }
@@ -1268,6 +1343,7 @@ document.getElementById('importFile').addEventListener('change',(e)=>{
 });
 document.getElementById('btnReset').addEventListener('click', ()=>{
   if(!confirm('Tout effacer et repartir de zéro ?')) return;
+  deleteStorageFolder(`reports/${currentReportId}`); // best-effort
   Object.assign(state,{title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,invoicesOn:false,invoices:[],closing:"",sections:[]});
   try{ localStorage.removeItem('rapport_state'); }catch(e){}
   initFields(); buildSections(); buildBaie(); buildInvoices(); renderReport();

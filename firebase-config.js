@@ -68,3 +68,37 @@ function sharedCollectionRef(name){
   const code = ensureSharedCode();
   return db.collection('spaces').doc(code).collection(name);
 }
+
+/* ---- Firebase Storage : upload des photos volumineuses ---- */
+const storage = firebase.storage ? firebase.storage() : null;
+
+function dataUrlToBlob(dataUrl){
+  return fetch(dataUrl).then(r => r.blob());
+}
+
+async function uploadImageDataUrl(dataUrl, pathHint){
+  if(!storage) throw new Error('Firebase Storage non disponible');
+  const code = ensureSharedCode();
+  const blob = await dataUrlToBlob(dataUrl);
+  const path = `spaces/${code}/${pathHint}`;
+  const ref = storage.ref().child(path);
+  await ref.put(blob, { contentType: blob.type || 'image/jpeg' });
+  return await ref.getDownloadURL();
+}
+
+async function deleteStorageFolder(pathHint){
+  if(!storage) return;
+  try{
+    const code = ensureSharedCode();
+    const ref = storage.ref().child(`spaces/${code}/${pathHint}`);
+    const list = await ref.listAll();
+    await Promise.all(list.items.map(item => item.delete().catch(()=>{})));
+  }catch(e){ console.warn('Nettoyage Storage impossible (dossier vide ou déjà supprimé)', e); }
+}
+
+function deleteStorageFileByUrl(url){
+  if(!storage || typeof url !== 'string' || !url.startsWith('https://')) return;
+  try{
+    storage.refFromURL(url).delete().catch(()=>{});
+  }catch(e){ /* URL non Storage ou déjà supprimée, on ignore */ }
+}

@@ -47,6 +47,46 @@ service cloud.firestore {
    exact (au moins 12 caractères) — c'est ta "mot de passe" d'atelier.
    Clique "Publier".
 
+## Étape 1 bis — Activer Firebase Storage (pour les photos volumineuses)
+
+Les photos des rapports sont stockées séparément (Firebase Storage)
+plutôt que dans Firestore, pour ne jamais être limitées par les 1 Mo
+par document. Depuis février 2026, Storage nécessite le plan **Blaze**
+(paiement à l'usage) — mais il reste un quota gratuit confortable
+(~1 Go stockage, ~10 Go de téléchargement/mois) avant toute
+facturation, et le coût au-delà est très faible (quelques centimes par
+Go). Aucun abonnement à prix fixe : tu ne payes que ce que tu dépasses,
+le cas échéant.
+
+1. Dans la console Firebase, va dans **Project Settings** (icône ⚙️) →
+   **Usage and billing** → **Modify plan** → choisis **Blaze**. Il te
+   demandera de lier un compte de facturation Google Cloud (carte
+   bancaire).
+2. Dans le menu de gauche, va dans **Base de données et stockage** →
+   section **Stockage d'objets** → **Storage** → **Créer un bucket**
+   (garde les réglages par défaut) → choisis la même région que ta
+   base Firestore.
+3. Onglet **Règles** de Storage, remplace le contenu par :
+
+```
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /spaces/{spaceId}/{allPaths=**} {
+      allow read, write: if spaceId.size() >= 12;
+    }
+  }
+}
+```
+
+   Même principe que pour Firestore : accès protégé par la connaissance
+   du code d'atelier. Clique "Publier".
+
+**Surveiller les coûts** : dans Project Settings → Usage and billing,
+tu peux consulter ta consommation à tout moment, et définir une alerte
+de budget (ex. 1€) pour être prévenu si jamais l'usage dépasse le
+gratuit — précaution simple, pas obligatoire vu les montants en jeu.
+
 ## Étape 2 — Héberger gratuitement sur GitHub Pages
 
 1. Va sur https://github.com et crée un compte si tu n'en as pas (gratuit).
@@ -103,13 +143,14 @@ toutes les 600 ms pendant la saisie, pour rester fluide.
 - Le stockage Firestore gratuit (Spark) offre une capacité largement
   suffisante pour un usage à deux (environ 1 Go de données, 50 000
   lectures et 20 000 écritures par jour) — non facturé.
-- **Chaque rapport individuel est limité à environ 900 Ko une fois
-  synchronisé** (limite technique Firestore : 1 Mo par document). Un
-  rapport avec beaucoup de photos en haute résolution peut dépasser
-  cette taille : l'app te prévient clairement si c'est le cas, et le
-  rapport reste utilisable localement — utilise alors « Sauvegarder
-  (.json) » pour le garder en sécurité, et réduis si besoin le nombre
-  ou la résolution des photos.
+- **Les photos sont automatiquement envoyées vers Firebase Storage**
+  (pas dans Firestore), donc la limite de 900 Ko/1 Mo par rapport ne
+  s'applique plus qu'au texte — largement suffisant. L'indicateur de
+  taille dans la barre d'outils ne reflète maintenant plus le poids des
+  photos une fois uploadées (juste le temps de l'upload, il peut
+  brièvement rester élevé). Si l'upload échoue (pas de réseau), la
+  photo reste temporairement stockée en local dans le rapport — normal,
+  elle repartira vers Storage dès la prochaine sauvegarde en ligne.
 
 ## Archiver plusieurs rapports
 
