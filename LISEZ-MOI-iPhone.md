@@ -151,6 +151,13 @@ toutes les 600 ms pendant la saisie, pour rester fluide.
   brièvement rester élevé). Si l'upload échoue (pas de réseau), la
   photo reste temporairement stockée en local dans le rapport — normal,
   elle repartira vers Storage dès la prochaine sauvegarde en ligne.
+- **Import d'un ancien `.json` ou réouverture d'un rapport créé avant
+  cette mise à jour** : les photos encore encodées en base64 sont
+  détectées et migrées automatiquement vers Storage dès l'ouverture,
+  en arrière-plan. Il est normal de voir brièvement le bandeau "trop
+  volumineux" clignoter le temps que la migration se termine (quelques
+  secondes selon le nombre de photos et la connexion) — il disparaît
+  de lui-même une fois les photos basculées.
 
 ## Archiver plusieurs rapports
 

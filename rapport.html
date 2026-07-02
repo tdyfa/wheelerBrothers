@@ -690,6 +690,36 @@ function blankState(){
   return {title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,invoicesOn:false,invoices:[],closing:"",sections:[]};
 }
 
+/* ---------- migration : bascule vers Storage toute image encore en base64
+   (import d'un ancien .json, ou rapport chargé qui n'avait pas encore été migré) ---------- */
+function migrateEmbeddedImages(){
+  const SINGLE_FIELDS = ['overview','products','baieAvant','baieApres','labelR','labelV'];
+  SINGLE_FIELDS.forEach(key=>{
+    const val = state[key];
+    if(typeof val === 'string' && val.startsWith('data:')){
+      uploadAndSwapField(key, val);
+    }
+  });
+  // le logo par défaut (partagé par tous) ne vaut pas la peine d'être uploadé
+  if(typeof state.logo === 'string' && state.logo.startsWith('data:') && state.logo !== DEFAULT_LOGO){
+    uploadAndSwapField('logo', state.logo);
+  }
+  (state.invoices||[]).forEach(item=>{
+    if(item && typeof item.src === 'string' && item.src.startsWith('data:')){
+      uploadAndSwapArrayItem(item, item.src, 'invoices');
+    }
+  });
+  (state.sections||[]).forEach(sec=>{
+    ['photos','photosL','photosR'].forEach(arrKey=>{
+      (sec[arrKey]||[]).forEach(item=>{
+        if(item && typeof item.src === 'string' && item.src.startsWith('data:')){
+          uploadAndSwapArrayItem(item, item.src, arrKey);
+        }
+      });
+    });
+  });
+}
+
 function refreshEditorFromState(){
   state.sections.forEach(normSection);
   initFields();
@@ -719,6 +749,7 @@ function subscribeToReport(id){
     refreshEditorFromState();
     try{ localStorage.setItem('rapport_state', JSON.stringify(state)); }catch(e){}
     _applyingRemoteUpdate = false;
+    migrateEmbeddedImages(); // bascule discrètement toute image encore en base64 vers Storage
   }, (err)=>{ console.error('Synchronisation impossible', err); flagSyncError(); });
 }
 
@@ -1337,7 +1368,7 @@ document.getElementById('btnImport').addEventListener('click', ()=>document.getE
 document.getElementById('importFile').addEventListener('change',(e)=>{
   const f=e.target.files[0]; if(!f) return;
   const rd=new FileReader();
-  rd.onload=()=>{ try{ const d=JSON.parse(rd.result); Object.assign(state,d); state.sections.forEach(normSection); initFields(); buildSections(); buildBaie(); buildInvoices(); renderReport(); save(); }
+  rd.onload=()=>{ try{ const d=JSON.parse(rd.result); Object.assign(state,d); state.sections.forEach(normSection); initFields(); buildSections(); buildBaie(); buildInvoices(); renderReport(); save(); migrateEmbeddedImages(); }
     catch(err){ alert('Fichier invalide'); } };
   rd.readAsText(f); e.target.value='';
 });
