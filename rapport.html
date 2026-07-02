@@ -559,37 +559,67 @@ function flagQuota(){
   const el=document.getElementById('saveWarn'); if(el) el.style.display='inline';
 }
 let _saveDebounceTimer = null;
+let _pendingSave = null;
 let _applyingRemoteUpdate = false;
 
-function flagSyncError(){
+function flagSyncError(customMsg){
   const el = document.getElementById('saveWarn');
   if(el){
-    el.textContent = "⚠️ Synchronisation impossible (code d'atelier ou réseau) → tes modifications restent sur ce téléphone uniquement";
+    el.textContent = customMsg || "⚠️ Synchronisation impossible (code d'atelier ou réseau) → tes modifications restent sur ce téléphone uniquement";
     el.style.display = 'inline';
   }
 }
 function clearSyncError(){
   const el = document.getElementById('saveWarn');
-  if(el && el.textContent.indexOf('Synchronisation impossible') !== -1){
+  if(el && (el.textContent.indexOf('Synchronisation impossible') !== -1 || el.textContent.indexOf('trop volumineux') !== -1)){
     el.style.display = 'none';
+  }
+}
+
+const FIRESTORE_DOC_SAFE_LIMIT = 900000; // marge sous la limite Firestore de 1 048 576 octets
+
+function doFirestoreSave(reportId, payloadJson, meta){
+  if(payloadJson.length > FIRESTORE_DOC_SAFE_LIMIT){
+    flagSyncError("⚠️ Ce rapport est trop volumineux pour être synchronisé (photos en haute résolution probablement) → utilise « Sauvegarder (.json) » pour ne rien perdre");
+    return;
+  }
+  try{
+    reportDocRef(reportId).set({
+      payload: payloadJson,
+      title: meta.title,
+      subtitle: meta.subtitle,
+      updatedAt: Date.now()
+    }).then(()=> clearSyncError())
+      .catch((e)=>{ console.error('Erreur de synchronisation', e); flagSyncError(); });
+  }catch(e){ console.error('Erreur de synchronisation', e); flagSyncError(); }
+}
+
+function flushPendingSave(){
+  if(_saveDebounceTimer){
+    clearTimeout(_saveDebounceTimer);
+    _saveDebounceTimer = null;
+    if(_pendingSave) doFirestoreSave(_pendingSave.reportId, _pendingSave.payload, _pendingSave.meta);
+    _pendingSave = null;
   }
 }
 
 function save(){
   try{ localStorage.setItem('rapport_state', JSON.stringify(state)); }catch(e){ flagQuota(); }
   if(_applyingRemoteUpdate) return; // ne pas ré-émettre ce qu'on vient de recevoir
+
+  // on fige la cible (rapport + contenu) tout de suite, pour ne jamais
+  // écrire dans le mauvais rapport si l'utilisateur change de rapport
+  // pendant les 600ms d'anti-rebond
+  _pendingSave = {
+    reportId: currentReportId,
+    payload: JSON.stringify(state),
+    meta: {
+      title: state.plate || state.model || state.title || 'Sans titre',
+      subtitle: [state.brand, state.model].filter(Boolean).join(' ')
+    }
+  };
   clearTimeout(_saveDebounceTimer);
-  _saveDebounceTimer = setTimeout(()=>{
-    try{
-      reportDocRef(currentReportId).set({
-        payload: JSON.stringify(state),
-        title: state.plate || state.model || state.title || 'Sans titre',
-        subtitle: [state.brand, state.model].filter(Boolean).join(' '),
-        updatedAt: Date.now()
-      }).then(()=> clearSyncError())
-        .catch((e)=>{ console.error('Erreur de synchronisation', e); flagSyncError(); });
-    }catch(e){ console.error('Erreur de synchronisation', e); flagSyncError(); }
-  }, 600);
+  _saveDebounceTimer = setTimeout(flushPendingSave, 600);
 }
 
 function load(){
@@ -627,6 +657,7 @@ function refreshEditorFromState(){
 }
 
 function subscribeToReport(id){
+  flushPendingSave(); // écrit d'abord tout changement en attente dans le rapport qu'on quitte
   if(_unsubReport) _unsubReport();
   currentReportId = id;
   try{ localStorage.setItem('current_report_id', id); }catch(e){}

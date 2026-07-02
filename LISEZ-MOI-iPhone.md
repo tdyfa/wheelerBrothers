@@ -34,16 +34,18 @@ Contenu du dossier :
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /spaces/{spaceId}/tools/{toolId} {
+    match /spaces/{spaceId}/{document=**} {
       allow read, write: if spaceId.size() >= 12;
     }
   }
 }
 ```
 
-   Cette règle autorise l'accès à un espace uniquement si on connaît
-   son code exact (au moins 12 caractères) — c'est ton "mot de passe"
-   d'atelier. Clique "Publier".
+   Cette règle autorise l'accès à tout ce qui se trouve sous un espace
+   (`spaces/{code}/...`, quelle que soit la collection : carnet
+   d'atelier, rapports archivés, etc.) uniquement si on connaît le code
+   exact (au moins 12 caractères) — c'est ta "mot de passe" d'atelier.
+   Clique "Publier".
 
 ## Étape 2 — Héberger gratuitement sur GitHub Pages
 
@@ -101,6 +103,13 @@ toutes les 600 ms pendant la saisie, pour rester fluide.
 - Le stockage Firestore gratuit (Spark) offre une capacité largement
   suffisante pour un usage à deux (environ 1 Go de données, 50 000
   lectures et 20 000 écritures par jour) — non facturé.
+- **Chaque rapport individuel est limité à environ 900 Ko une fois
+  synchronisé** (limite technique Firestore : 1 Mo par document). Un
+  rapport avec beaucoup de photos en haute résolution peut dépasser
+  cette taille : l'app te prévient clairement si c'est le cas, et le
+  rapport reste utilisable localement — utilise alors « Sauvegarder
+  (.json) » pour le garder en sécurité, et réduis si besoin le nombre
+  ou la résolution des photos.
 
 ## Archiver plusieurs rapports
 
