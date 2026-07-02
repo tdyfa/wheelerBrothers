@@ -287,11 +287,27 @@
   <h1>🛠️ Rapport d'intervention</h1>
   <span class="sub">Remplis, ajoute tes photos, génère le PDF</span>
   <span id="saveWarn" style="display:none; font-size:12px; color:#ffd27a; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
+  <button class="btn ghost" id="btnArchive">📁 Mes rapports</button>
   <button class="btn ghost" id="btnImport">Importer</button>
   <button class="btn ghost" id="btnExport">Sauvegarder (.json)</button>
   <button class="btn danger" id="btnReset">Réinitialiser</button>
   <button class="btn primary" id="btnPdf">📄 Générer le PDF</button>
   <input type="file" id="importFile" accept="application/json">
+</div>
+
+<div id="archiveOverlay" class="no-print" style="display:none; position:fixed; inset:0; background:rgba(15,18,22,.55); z-index:200; align-items:flex-start; justify-content:center; padding:40px 16px;">
+  <div style="background:#fff; border-radius:14px; width:100%; max-width:640px; max-height:80vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,.3);">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #e3e7ee;">
+      <h2 style="margin:0; font-size:16px;">Mes rapports</h2>
+      <button id="btnCloseArchive" style="border:none; background:none; font-size:20px; line-height:1; cursor:pointer; color:#6b7280;">&times;</button>
+    </div>
+    <div style="padding:14px 20px;">
+      <button id="btnNewReport" class="btn primary" style="width:100%;">+ Nouveau rapport</button>
+    </div>
+    <div id="archiveList" style="overflow-y:auto; padding:0 12px 16px;">
+      <div style="padding:20px; color:#6b7280; font-size:13px; text-align:center;">Chargement…</div>
+    </div>
+  </div>
 </div>
 
 <div class="wrap">
@@ -565,8 +581,12 @@ function save(){
   clearTimeout(_saveDebounceTimer);
   _saveDebounceTimer = setTimeout(()=>{
     try{
-      sharedDocRef('rapport').set({ payload: JSON.stringify(state), updatedAt: Date.now() })
-        .then(()=> clearSyncError())
+      reportDocRef(currentReportId).set({
+        payload: JSON.stringify(state),
+        title: state.plate || state.model || state.title || 'Sans titre',
+        subtitle: [state.brand, state.model].filter(Boolean).join(' '),
+        updatedAt: Date.now()
+      }).then(()=> clearSyncError())
         .catch((e)=>{ console.error('Erreur de synchronisation', e); flagSyncError(); });
     }catch(e){ console.error('Erreur de synchronisation', e); flagSyncError(); }
   }, 600);
@@ -580,28 +600,161 @@ function load(){
   return false;
 }
 
-function subscribeRemote(){
+/* ---------- archive multi-rapports ---------- */
+let currentReportId = null;
+let _unsubReport = null;
+
+function reportDocRef(id){
+  return sharedCollectionRef('reports').doc(id);
+}
+
+function newReportId(){
+  return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+}
+
+function blankState(){
+  return {title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,invoicesOn:false,invoices:[],closing:"",sections:[]};
+}
+
+function refreshEditorFromState(){
+  state.sections.forEach(normSection);
+  initFields();
+  bindAll();
+  buildSections();
+  buildBaie();
+  buildInvoices();
+  renderReport();
+}
+
+function subscribeToReport(id){
+  if(_unsubReport) _unsubReport();
+  currentReportId = id;
+  try{ localStorage.setItem('current_report_id', id); }catch(e){}
+  _unsubReport = reportDocRef(id).onSnapshot((snap)=>{
+    clearSyncError();
+    if(!snap.exists) return; // nouveau rapport pas encore écrit, rien à charger
+    const remote = snap.data();
+    if(!remote || !remote.payload) return;
+    let parsed;
+    try{ parsed = JSON.parse(remote.payload); }catch(e){ return; }
+    _applyingRemoteUpdate = true;
+    Object.keys(state).forEach(k=>delete state[k]);
+    Object.assign(state, parsed);
+    refreshEditorFromState();
+    try{ localStorage.setItem('rapport_state', JSON.stringify(state)); }catch(e){}
+    _applyingRemoteUpdate = false;
+  }, (err)=>{ console.error('Synchronisation impossible', err); flagSyncError(); });
+}
+
+function startNewReport(){
+  if(!confirm('Créer un nouveau rapport ? Le rapport actuel reste enregistré dans "Mes rapports".')) return;
+  Object.keys(state).forEach(k=>delete state[k]);
+  Object.assign(state, blankState());
+  refreshEditorFromState();
+  subscribeToReport(newReportId());
+  closeArchive();
+}
+
+function openReport(id){
+  subscribeToReport(id);
+  closeArchive();
+}
+
+async function deleteReport(id, evt){
+  evt.stopPropagation();
+  if(!confirm('Supprimer définitivement ce rapport ?')) return;
   try{
-    sharedDocRef('rapport').onSnapshot((snap)=>{
-      clearSyncError();
-      if(!snap.exists) return;
-      const remote = snap.data();
-      if(!remote || !remote.payload) return;
-      let parsed;
-      try{ parsed = JSON.parse(remote.payload); }catch(e){ return; }
-      _applyingRemoteUpdate = true;
-      Object.assign(state, parsed);
-      state.sections.forEach(normSection);
-      initFields();
-      bindAll();
-      buildSections();
-      buildBaie();
-      buildInvoices();
-      renderReport();
-      try{ localStorage.setItem('rapport_state', JSON.stringify(state)); }catch(e){}
-      _applyingRemoteUpdate = false;
-    }, (err)=>{ console.error('Synchronisation impossible', err); flagSyncError(); });
-  }catch(e){ console.error('Impossible de démarrer la synchronisation', e); flagSyncError(); }
+    await reportDocRef(id).delete();
+    if(id === currentReportId) startNewReportSilent();
+  }catch(e){
+    alert("Échec de la suppression, réessaie.");
+  }
+}
+
+function startNewReportSilent(){
+  Object.keys(state).forEach(k=>delete state[k]);
+  Object.assign(state, blankState());
+  refreshEditorFromState();
+  subscribeToReport(newReportId());
+}
+
+function fmtArchiveDate(ts){
+  if(!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit', year:'numeric'}) + ' ' +
+         d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+}
+
+function renderArchiveList(docs){
+  const list = document.getElementById('archiveList');
+  if(!list) return;
+  if(docs.length === 0){
+    list.innerHTML = '<div style="padding:20px; color:#6b7280; font-size:13px; text-align:center;">Aucun rapport enregistré pour l\'instant.</div>';
+    return;
+  }
+  list.innerHTML = docs.map(d=>{
+    const data = d.data();
+    const isCurrent = d.id === currentReportId;
+    const title = (data.title || 'Sans titre').replace(/</g,'&lt;');
+    const subtitle = (data.subtitle || '').replace(/</g,'&lt;');
+    return `
+      <div data-id="${d.id}" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 8px; border-bottom:1px solid #eef1f5; cursor:pointer; ${isCurrent ? 'background:#f6f8fb;' : ''}">
+        <div style="min-width:0;">
+          <div style="font-weight:700; font-size:14px; ${isCurrent ? '' : ''}">${title}${isCurrent ? ' <span style="font-weight:600;color:#6b7280;font-size:11px;">(ouvert)</span>' : ''}</div>
+          <div style="font-size:11.5px; color:#6b7280;">${subtitle}${subtitle ? ' · ' : ''}${fmtArchiveDate(data.updatedAt)}</div>
+        </div>
+        <button class="btn-del-report" data-id="${d.id}" style="border:none; background:none; color:#b3261e; font-size:11.5px; text-decoration:underline; cursor:pointer; flex-shrink:0;">supprimer</button>
+      </div>`;
+  }).join('');
+
+  list.querySelectorAll('[data-id]').forEach(row=>{
+    row.addEventListener('click', (e)=>{
+      if(e.target.classList.contains('btn-del-report')) return;
+      openReport(row.dataset.id);
+    });
+  });
+  list.querySelectorAll('.btn-del-report').forEach(btn=>{
+    btn.addEventListener('click', (e)=> deleteReport(btn.dataset.id, e));
+  });
+}
+
+let _archiveDocsCache = [];
+function subscribeReportsList(){
+  sharedCollectionRef('reports').orderBy('updatedAt', 'desc').limit(200).onSnapshot((snap)=>{
+    _archiveDocsCache = snap.docs;
+    renderArchiveList(_archiveDocsCache);
+  }, (err)=>{ console.error('Liste des rapports indisponible', err); });
+}
+
+function openArchive(){
+  document.getElementById('archiveOverlay').style.display = 'flex';
+  renderArchiveList(_archiveDocsCache);
+}
+function closeArchive(){
+  document.getElementById('archiveOverlay').style.display = 'none';
+}
+
+/* migration ponctuelle : reprend l'ancien rapport unique (avant l'archive) s'il existe */
+async function migrateLegacySingleReport(){
+  try{
+    const legacySnap = await sharedDocRef('rapport').get();
+    if(!legacySnap.exists) return null;
+    const existing = await sharedCollectionRef('reports').limit(1).get();
+    if(!existing.empty) return null; // déjà des rapports archivés, pas de migration
+    const remote = legacySnap.data();
+    if(!remote || !remote.payload) return null;
+    const id = newReportId();
+    await reportDocRef(id).set({
+      payload: remote.payload,
+      title: 'Rapport récupéré',
+      subtitle: '',
+      updatedAt: remote.updatedAt || Date.now()
+    });
+    return id;
+  }catch(e){
+    console.error('Migration impossible', e);
+    return null;
+  }
 }
 
 /* ---------- bind simple fields ---------- */
@@ -1087,6 +1240,7 @@ document.getElementById('btnReset').addEventListener('click', ()=>{
   Object.assign(state,{title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,invoicesOn:false,invoices:[],closing:"",sections:[]});
   try{ localStorage.removeItem('rapport_state'); }catch(e){}
   initFields(); buildSections(); buildBaie(); buildInvoices(); renderReport();
+  save();
 });
 
 /* ---------- init ---------- */
@@ -1106,8 +1260,8 @@ function bindAll(){
   bind('f_gendate','genDate'); bind('f_baieTitle','baieTitle');
 }
 
-(function start(){
-  const had = load();
+(async function start(){
+  const had = load(); // cache local instantané (hors-ligne / affichage immédiat)
   state.sections.forEach(normSection);
   if(!had && state.sections.length===0){ addSection(); }
   bindAll();
@@ -1116,7 +1270,23 @@ function bindAll(){
   buildBaie();
   buildInvoices();
   renderReport();
-  subscribeRemote();
+
+  subscribeReportsList();
+
+  let id = null;
+  try{ id = localStorage.getItem('current_report_id'); }catch(e){}
+  if(!id){
+    id = await migrateLegacySingleReport(); // récupère l'ancien rapport unique si présent
+  }
+  if(!id) id = newReportId();
+  subscribeToReport(id);
+
+  document.getElementById('btnArchive').addEventListener('click', openArchive);
+  document.getElementById('btnCloseArchive').addEventListener('click', closeArchive);
+  document.getElementById('archiveOverlay').addEventListener('click', (e)=>{
+    if(e.target.id === 'archiveOverlay') closeArchive();
+  });
+  document.getElementById('btnNewReport').addEventListener('click', startNewReport);
 })();
 </script>
 </body>

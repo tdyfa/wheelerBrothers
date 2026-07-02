@@ -102,6 +102,25 @@ toutes les 600 ms pendant la saisie, pour rester fluide.
   suffisante pour un usage à deux (environ 1 Go de données, 50 000
   lectures et 20 000 écritures par jour) — non facturé.
 
+## Archiver plusieurs rapports
+
+Le générateur de rapport garde maintenant en mémoire **tous** les
+rapports que tu crées, pas juste le dernier :
+
+- Bouton **📁 Mes rapports** (en haut) : ouvre la liste de tous les
+  rapports enregistrés dans l'espace partagé (visible par toi et ton
+  binôme), triés du plus récent au plus ancien.
+- **+ Nouveau rapport** : démarre une page blanche, sans perdre le
+  rapport en cours (il reste dans la liste).
+- Cliquer sur un rapport de la liste le rouvre pour le consulter ou le
+  modifier — tu peux repartir d'un ancien rapport et l'adapter plutôt
+  que de tout ressaisir.
+- Bouton **supprimer** sur chaque ligne pour nettoyer les rapports
+  obsolètes.
+- Si tu avais déjà un rapport en cours avant cette mise à jour, il est
+  automatiquement récupéré comme premier élément de l'archive au
+  prochain lancement (rien n'est perdu).
+
 ## Sauvegarde de secours
 
 Chaque outil garde ses boutons **Exporter / Importer (JSON)**, utiles

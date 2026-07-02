@@ -51,13 +51,20 @@ function ensureSharedCode(){
 }
 
 function resetSharedCode(){
-  if(confirm("Changer de code d'atelier ? Tu devras ressaisir (ou recréer) un code, et l'app se rechargera.")){
-    localStorage.removeItem('shared_code');
-    location.reload();
+  if(!confirm("Changer de code d'atelier ? Il faudra ressaisir le code voulu (le tien ou celui de ton binôme).")){
+    return;
   }
+  localStorage.removeItem('shared_code');
+  const newCode = ensureSharedCode();
+  alert("Code enregistré (" + newCode + ").\nRouvre un outil pour te connecter à cet espace.");
 }
 
 function sharedDocRef(toolName){
   const code = ensureSharedCode();
   return db.collection('spaces').doc(code).collection('tools').doc(toolName);
+}
+
+function sharedCollectionRef(name){
+  const code = ensureSharedCode();
+  return db.collection('spaces').doc(code).collection(name);
 }
