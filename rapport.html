@@ -219,11 +219,10 @@
   .label-photos figcaption{margin-top:5px; font-size:12px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.6px}
 
   /* baie moteur : avant / après côte à côte */
-  .baie-photos{display:grid; gap:6mm; margin-top:6mm; grid-template-columns:1fr 1fr}
-  .baie-photos.one{grid-template-columns:1fr}
+  .baie-photos{display:grid; gap:6mm; margin-top:6mm; grid-template-columns:1fr}
   .baie-photos figure{margin:0; text-align:center; break-inside:avoid}
-  .baie-photos img{width:100%; object-fit:contain; max-height:150mm; border:1px solid var(--line); border-radius:6px; background:#fafbfc}
-  .baie-photos.one img{max-height:200mm}
+  .baie-photos img{width:100%; object-fit:contain; max-height:128mm; border:1px solid var(--line); border-radius:6px; background:#fafbfc}
+  .baie-photos.one img{max-height:220mm}
   .baie-photos figcaption{margin-top:5px; font-size:12px; font-weight:700; color:#fff; background:var(--ink); display:inline-block; padding:3px 14px; border-radius:5px; text-transform:uppercase; letter-spacing:.6px}
 
   /* invoice page */
@@ -1253,9 +1252,20 @@ function renderReport(){
   });
   if(open) html += `</div>`;
 
-  // CLOSING
-  if(s.closing){
-    html += `<div class="page">${wm}<div class="closing"><h4>Recommandations / prochaine révision</h4><p>${esc(s.closing)}</p></div></div>`;
+  // RECOMMANDATIONS + ÉTIQUETTE D'ENTRETIEN (même page)
+  if(s.closing || s.labelR || s.labelV){
+    const two = (s.labelR && s.labelV) ? ' two' : '';
+    html += `<div class="page">${wm}`;
+    if(s.closing){
+      html += `<div class="closing"><h4>Recommandations / prochaine révision</h4><p>${esc(s.closing)}</p></div>`;
+    }
+    if(s.labelR || s.labelV){
+      html += `<div class="label-photos${two}">`;
+      if(s.labelR) html += `<figure><img src="${s.labelR}"><figcaption>Recto</figcaption></figure>`;
+      if(s.labelV) html += `<figure><img src="${s.labelV}"><figcaption>Verso</figcaption></figure>`;
+      html += `</div>`;
+    }
+    html += `</div>`;
   }
 
   // ENTRETIEN BAIE MOTEUR (avant / après)
@@ -1268,15 +1278,7 @@ function renderReport(){
     html += `</div></div>`;
   }
 
-  // ÉTIQUETTE D'ENTRETIEN (page finale)
-  if(s.labelR || s.labelV){
-    const two = (s.labelR && s.labelV) ? ' two' : '';
-    html += `<div class="page">${wm}<h2 class="doc-h2">Étiquette d'entretien</h2>
-      <div class="label-photos${two}">`;
-    if(s.labelR) html += `<figure><img src="${s.labelR}"><figcaption>Recto</figcaption></figure>`;
-    if(s.labelV) html += `<figure><img src="${s.labelV}"><figcaption>Verso</figcaption></figure>`;
-    html += `</div></div>`;
-  }
+  // (étiquette d'entretien désormais fusionnée avec les recommandations ci-dessus)
 
   // FACTURE DES PIÈCES (une page par facture, plein format, sans titre)
   if(s.invoicesOn && s.invoices.length){
