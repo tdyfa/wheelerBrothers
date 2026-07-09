@@ -245,16 +245,24 @@
   .mobile-toggle{display:none}
   @media (max-width:768px){
     /* barre du haut compacte */
-    .app-bar{gap:8px; padding:10px 12px}
+    /* la barre de boutons défile normalement (disparaît en scrollant) et
+       respecte la zone sûre iOS (Dynamic Island / encoche) */
+    .app-bar{
+      position:static;
+      gap:8px;
+      padding:calc(10px + env(safe-area-inset-top)) 12px 10px;
+    }
     .app-bar h1{font-size:14px; width:100%; margin-bottom:2px}
     .app-bar .sub{font-size:11px; width:auto; margin-right:auto}
     .app-bar .btn{padding:8px 10px; font-size:12px; flex:0 0 auto}
     #sizeIndicator{width:100%; order:99}
 
-    /* bascule Éditeur / Aperçu */
+    /* seule la bascule Éditeur / Aperçu reste collée en haut,
+       en respectant elle aussi la zone sûre iOS */
     .mobile-toggle{
       display:flex; position:sticky; top:0; z-index:60;
-      background:#0f1216; padding:8px 12px 10px; gap:8px;
+      background:#0f1216; gap:8px;
+      padding:calc(8px + env(safe-area-inset-top)) 12px 10px;
     }
     .mobile-toggle button{
       flex:1; border:0; border-radius:9px; padding:11px; font-size:14px; font-weight:700;
@@ -341,7 +349,7 @@
 
 <div class="app-bar">
   <h1>🛠️ Rapport d'intervention</h1>
-  <span class="sub">Version 16</span>
+  <span class="sub">Version 17</span>
   <span id="saveWarn" style="display:none; font-size:12px; color:#ffd27a; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
   <span id="sizeIndicator" style="font-size:11.5px; color:#9aa3b2; font-weight:600;"></span>
   <button class="btn ghost" id="btnArchive">📁 Mes rapports</button>
