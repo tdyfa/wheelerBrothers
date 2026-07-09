@@ -214,8 +214,8 @@
   .label-photos{display:grid; gap:6mm; margin-top:6mm}
   .label-photos.two{grid-template-columns:1fr 1fr}
   .label-photos figure{margin:0; text-align:center; break-inside:avoid}
-  .label-photos img{width:100%; object-fit:contain; max-height:170mm; border:1px solid var(--line); border-radius:6px; background:#fafbfc}
-  .label-photos.two img{max-height:150mm}
+  .label-photos img{width:100%; object-fit:contain; max-height:95mm; border:1px solid var(--line); border-radius:6px; background:#fafbfc}
+  .label-photos.two img{max-height:80mm}
   .label-photos figcaption{margin-top:5px; font-size:12px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.6px}
 
   /* baie moteur : avant / après côte à côte */
@@ -225,12 +225,12 @@
   .baie-photos.one img{max-height:220mm}
   .baie-photos figcaption{margin-top:5px; font-size:12px; font-weight:700; color:#fff; background:var(--ink); display:inline-block; padding:3px 14px; border-radius:5px; text-transform:uppercase; letter-spacing:.6px}
 
-  .checklist{margin-top:8mm; display:flex; flex-direction:column; gap:4mm}
-  .checklist-item{display:flex; align-items:center; gap:4mm; padding:4mm 5mm; border:1px solid var(--line); border-radius:7px; background:#fafbfc; break-inside:avoid}
+  .checklist{margin-top:6mm; display:grid; grid-template-columns:1fr 1fr; gap:3mm}
+  .checklist-item{display:flex; align-items:center; gap:3mm; padding:2.5mm 4mm; border:1px solid var(--line); border-radius:6px; background:#fafbfc; break-inside:avoid}
   .checklist-item.checked{background:#f3f9f4; border-color:#bfe3c4}
-  .checklist-box{flex:0 0 auto; width:7mm; height:7mm; border:1.6px solid var(--ink); border-radius:3px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; color:var(--ink)}
+  .checklist-box{flex:0 0 auto; width:5.5mm; height:5.5mm; border:1.4px solid var(--ink); border-radius:3px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:10px; color:var(--ink)}
   .checklist-item.checked .checklist-box{background:var(--ink); color:#fff}
-  .checklist-label{font-size:13px; color:var(--ink-soft)}
+  .checklist-label{font-size:11.5px; line-height:1.3; color:var(--ink-soft)}
 
   /* invoice page */
   .invoice-img{margin-top:6mm; text-align:center}
@@ -412,6 +412,14 @@
     </div>
 
     <div class="card">
+      <h2>Points de contrôle (optionnel)</h2>
+      <div class="body">
+        <div class="hint" style="margin-bottom:10px;">Seuls les points cochés apparaîtront sur le rapport, sur la même page que les recommandations.</div>
+        <div id="checklistItems"></div>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>Entretien baie moteur (optionnel)</h2>
       <div class="body">
         <label class="check" style="margin-bottom:12px; padding:9px 11px; background:var(--field); border:1px solid var(--line); border-radius:9px">
@@ -435,18 +443,6 @@
             <div class="hint"><a href="#" id="clearBaieApres">Retirer</a></div>
           </div>
           <div class="hint">Les deux photos s'affichent l'une au-dessus de l'autre sur une page dédiée.</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Points de contrôle (optionnel)</h2>
-      <div class="body">
-        <label class="check" style="margin-bottom:12px; padding:9px 11px; background:var(--field); border:1px solid var(--line); border-radius:9px">
-          <input type="checkbox" id="checklistOn"> Inclure une page « Points de contrôle »
-        </label>
-        <div id="checklistArea" style="display:none">
-          <div id="checklistItems"></div>
         </div>
       </div>
     </div>
@@ -496,7 +492,6 @@ function normChecklist(){
   if(!Array.isArray(state.checkpoints) || state.checkpoints.length===0){
     state.checkpoints = makeDefaultCheckpoints();
   }
-  if(typeof state.checklistOn !== 'boolean') state.checklistOn = false;
 }
 
 const state = {
@@ -506,7 +501,7 @@ const state = {
   genDate:"",
   labelR:null, labelV:null,
   baieOn:false, baieTitle:"", baieAvant:null, baieApres:null,
-  checklistOn:false, checkpoints: makeDefaultCheckpoints(),
+  checkpoints: makeDefaultCheckpoints(),
   invoicesOn:false, invoices:[],
   closing:"",
   sections: []
@@ -798,7 +793,7 @@ function newReportId(){
 }
 
 function blankState(){
-  return {title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,checklistOn:false,checkpoints:makeDefaultCheckpoints(),invoicesOn:false,invoices:[],closing:"",sections:[]};
+  return {title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,checkpoints:makeDefaultCheckpoints(),invoicesOn:false,invoices:[],closing:"",sections:[]};
 }
 
 /* ---------- migration : bascule vers Storage toute image encore en base64
@@ -1290,8 +1285,9 @@ function renderReport(){
   });
   if(open) html += `</div>`;
 
-  // RECOMMANDATIONS + ÉTIQUETTE D'ENTRETIEN (même page)
-  if(s.closing || s.labelR || s.labelV){
+  // RECOMMANDATIONS + ÉTIQUETTE D'ENTRETIEN + POINTS DE CONTRÔLE (même page)
+  const checkedPoints = (s.checkpoints||[]).filter(cp=>cp.checked);
+  if(s.closing || s.labelR || s.labelV || checkedPoints.length){
     const two = (s.labelR && s.labelV) ? ' two' : '';
     html += `<div class="page">${wm}`;
     if(s.closing){
@@ -1303,17 +1299,14 @@ function renderReport(){
       if(s.labelV) html += `<figure><img src="${s.labelV}"><figcaption>Verso</figcaption></figure>`;
       html += `</div>`;
     }
+    if(checkedPoints.length){
+      html += `<div class="checklist">`;
+      checkedPoints.forEach(cp=>{
+        html += `<div class="checklist-item checked"><span class="checklist-box">✓</span><span class="checklist-label">${esc(cp.label)}</span></div>`;
+      });
+      html += `</div>`;
+    }
     html += `</div>`;
-  }
-
-  // POINTS DE CONTRÔLE
-  if(s.checklistOn && s.checkpoints && s.checkpoints.length){
-    html += `<div class="page">${wm}<h2 class="doc-h2">Points de contrôle</h2>
-      <div class="checklist">`;
-    s.checkpoints.forEach(cp=>{
-      html += `<div class="checklist-item${cp.checked?' checked':''}"><span class="checklist-box">${cp.checked?'✓':''}</span><span class="checklist-label">${esc(cp.label)}</span></div>`;
-    });
-    html += `</div></div>`;
   }
 
   // ENTRETIEN BAIE MOTEUR (avant / après)
@@ -1381,11 +1374,6 @@ function buildBaie(){
 document.getElementById('baieOn').addEventListener('change',(e)=>{ state.baieOn=e.target.checked; buildBaie(); renderReport(); save();});
 
 function buildChecklist(){
-  const on = document.getElementById('checklistOn');
-  const area = document.getElementById('checklistArea');
-  on.checked = !!state.checklistOn;
-  area.style.display = state.checklistOn ? 'block' : 'none';
-
   const container = document.getElementById('checklistItems');
   container.innerHTML = state.checkpoints.map(cp => `
     <label class="check" style="display:flex; align-items:flex-start; gap:8px; margin-bottom:8px; padding:9px 11px; background:var(--field); border:1px solid var(--line); border-radius:9px; font-weight:400;">
@@ -1400,7 +1388,6 @@ function buildChecklist(){
     });
   });
 }
-document.getElementById('checklistOn').addEventListener('change',(e)=>{ state.checklistOn=e.target.checked; buildChecklist(); renderReport(); save();});
 document.getElementById('f_baieAvant').addEventListener('change', async (e)=>{
   if(!e.target.files[0]) return;
   const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
@@ -1533,7 +1520,7 @@ document.getElementById('importFile').addEventListener('change',(e)=>{
 document.getElementById('btnReset').addEventListener('click', ()=>{
   if(!confirm('Tout effacer et repartir de zéro ?')) return;
   deleteStorageFolder(`reports/${currentReportId}`); // best-effort
-  Object.assign(state,{title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,checklistOn:false,checkpoints:makeDefaultCheckpoints(),invoicesOn:false,invoices:[],closing:"",sections:[]});
+  Object.assign(state,{title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,checkpoints:makeDefaultCheckpoints(),invoicesOn:false,invoices:[],closing:"",sections:[]});
   try{ localStorage.removeItem('rapport_state'); }catch(e){}
   initFields(); buildSections(); buildBaie(); buildChecklist(); buildInvoices(); renderReport();
   save();
