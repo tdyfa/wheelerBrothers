@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -241,15 +241,64 @@
   .invoice-page .invoice-full img{display:block; width:100%; height:auto; max-height:297mm; object-fit:contain}
 
   /* ---------- PRINT ---------- */
+  /* ============ MOBILE (≤ 768px) ============ */
+  .mobile-toggle{display:none}
+  @media (max-width:768px){
+    /* barre du haut compacte */
+    .app-bar{gap:8px; padding:10px 12px}
+    .app-bar h1{font-size:14px; width:100%; margin-bottom:2px}
+    .app-bar .sub{font-size:11px; width:auto; margin-right:auto}
+    .app-bar .btn{padding:8px 10px; font-size:12px; flex:0 0 auto}
+    #sizeIndicator{width:100%; order:99}
+
+    /* bascule Éditeur / Aperçu */
+    .mobile-toggle{
+      display:flex; position:sticky; top:0; z-index:60;
+      background:#0f1216; padding:8px 12px 10px; gap:8px;
+    }
+    .mobile-toggle button{
+      flex:1; border:0; border-radius:9px; padding:11px; font-size:14px; font-weight:700;
+      cursor:pointer; background:#2b3340; color:#fff;
+    }
+    .mobile-toggle button.active{background:#fff; color:#0f1216}
+
+    .wrap{padding:12px; gap:0}
+    /* on montre l'un OU l'autre selon la vue choisie */
+    body[data-mview="preview"] .editor{display:none}
+    body[data-mview="editor"] .preview{display:none}
+    .editor{flex:1 1 auto; max-width:none}
+    .preview{width:100%; overflow:hidden}
+    .preview-tools{font-size:11px; padding:6px 4px}
+
+    /* aperçu A4 mis à l'échelle pour tenir dans la largeur du téléphone.
+       --mscale est calculé en JS (largeur écran / 794px). */
+    .stage{align-items:stretch}
+    .report{
+      transform:scale(var(--mscale,1));
+      transform-origin:top left;
+      width:794px;                 /* largeur A4 réelle en px avant mise à l'échelle */
+      /* la hauteur visuelle est réduite par le scale ; on compense le débordement */
+    }
+    .report-shell{overflow:hidden}
+    .page{box-shadow:0 2px 10px rgba(16,24,40,.14)}
+
+    .grid2{grid-template-columns:1fr}
+  }
+
   @page{ size:A4; margin:14mm 0 }
   @page invoice{ size:A4; margin:0 }
+
   @media print{
     html,body{background:#fff}
-    .app-bar,.editor,.preview-tools,.no-print{display:none !important}
+    .app-bar,.editor,.preview-tools,.no-print,.mobile-toggle{display:none !important}
     .wrap{padding:0; margin:0; max-width:none}
     .preview{width:100%}
     .stage{gap:0}
-    .report{gap:0}
+    /* neutralise toute mise à l'échelle mobile : le PDF doit rester en A4 réel */
+    .report{gap:0; transform:none !important; width:auto !important}
+    .report-shell{height:auto !important; overflow:visible !important}
+    body[data-mview="editor"] .preview{display:block !important}
+    body[data-mview="editor"] .editor{display:none !important}
     /* les filigranes intégrés à chaque page provoquent un décalage sur les pages
        de continuation -> on les masque et on utilise un filigrane fixe unique */
     .wm{display:none !important}
@@ -292,7 +341,7 @@
 
 <div class="app-bar">
   <h1>🛠️ Rapport d'intervention</h1>
-  <span class="sub">Version 15</span>
+  <span class="sub">Version 16</span>
   <span id="saveWarn" style="display:none; font-size:12px; color:#ffd27a; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
   <span id="sizeIndicator" style="font-size:11.5px; color:#9aa3b2; font-weight:600;"></span>
   <button class="btn ghost" id="btnArchive">📁 Mes rapports</button>
@@ -302,6 +351,11 @@
   <button class="btn danger" id="btnReset">Réinitialiser</button>
   <button class="btn primary" id="btnPdf">📄 Générer le PDF</button>
   <input type="file" id="importFile" accept="application/json">
+</div>
+
+<div class="mobile-toggle">
+  <button id="mviewEditor" class="active" type="button">✏️ Éditer</button>
+  <button id="mviewPreview" type="button">👁️ Aperçu</button>
 </div>
 
 <div id="archiveOverlay" class="no-print" style="display:none; position:fixed; inset:0; background:rgba(15,18,22,.55); z-index:200; align-items:flex-start; justify-content:center; padding:40px 16px;">
@@ -471,7 +525,9 @@
       <span>Aperçu (format A4) — exactement ce qui sera imprimé en PDF.</span>
     </div>
     <div class="stage">
-      <div class="report" id="report"></div>
+      <div class="report-shell">
+        <div class="report" id="report"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1542,6 +1598,53 @@ function bindAll(){
   bind('f_reg','reg'); bind('f_km','km'); bind('f_summary','summary'); bind('f_closing','closing');
   bind('f_gendate','genDate'); bind('f_baieTitle','baieTitle');
 }
+
+/* ---------- adaptation mobile : bascule éditeur/aperçu + échelle de l'aperçu ---------- */
+function isMobile(){ return window.matchMedia('(max-width:768px)').matches; }
+
+function setMobileView(view){
+  document.body.setAttribute('data-mview', view);
+  const be = document.getElementById('mviewEditor');
+  const bp = document.getElementById('mviewPreview');
+  if(be && bp){
+    be.classList.toggle('active', view==='editor');
+    bp.classList.toggle('active', view==='preview');
+  }
+  if(view==='preview') updatePreviewScale();
+}
+
+function updatePreviewScale(){
+  const report = document.getElementById('report');
+  const shell = document.querySelector('.report-shell');
+  if(!report || !shell) return;
+  if(isMobile()){
+    const avail = document.querySelector('.wrap').clientWidth; // largeur dispo
+    const scale = Math.min(1, avail / 794);
+    report.style.setProperty('--mscale', scale);
+    // ajuste la hauteur du conteneur pour éviter un grand vide sous l'aperçu réduit
+    requestAnimationFrame(()=>{
+      shell.style.height = (report.scrollHeight * scale) + 'px';
+    });
+  } else {
+    report.style.removeProperty('--mscale');
+    shell.style.height = '';
+  }
+}
+
+// recalcule après chaque rendu du rapport (nouveau contenu = nouvelle hauteur)
+const _origRenderReport = renderReport;
+renderReport = function(){
+  _origRenderReport.apply(this, arguments);
+  if(document.body.getAttribute('data-mview') === 'preview' || !isMobile()){
+    updatePreviewScale();
+  }
+};
+
+window.addEventListener('resize', ()=>{ if(isMobile()) updatePreviewScale(); });
+document.getElementById('mviewEditor').addEventListener('click', ()=>setMobileView('editor'));
+document.getElementById('mviewPreview').addEventListener('click', ()=>setMobileView('preview'));
+// vue par défaut sur mobile : éditeur
+setMobileView('editor');
 
 (async function start(){
   const had = load(); // cache local instantané (hors-ligne / affichage immédiat)
