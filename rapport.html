@@ -13,6 +13,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+
 <script src="firebase-config.js"></script>
 <style>
   :root{
@@ -343,13 +344,47 @@
     .invoice-page{ page:invoice; padding:0 !important; }
     .invoice-page .invoice-full img{ max-height:297mm; }
   }
+
+  .atelier-meta-overlay{position:fixed;inset:0;background:rgba(15,23,42,.58);display:none;align-items:center;justify-content:center;padding:18px;z-index:9999}
+  .atelier-meta-modal{width:min(460px,100%);background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.28);overflow:hidden}
+  .atelier-meta-modal h3{margin:0;padding:18px 20px 8px;font-size:19px}
+  .atelier-meta-modal .modal-body{padding:8px 20px 20px}
+  .atelier-meta-modal .modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:16px}
+  .atelier-meta-modal .modal-error{min-height:18px;color:#b3261e;font-size:12px;font-weight:600;margin-top:8px}
 </style>
 </head>
 <body>
+<div class="atelier-meta-overlay" id="atelierMetaOverlay" role="dialog" aria-modal="true" aria-labelledby="atelierMetaTitle">
+  <div class="atelier-meta-modal">
+    <h3 id="atelierMetaTitle">Informations pour le carnet atelier</h3>
+    <div class="modal-body">
+      <div class="hint" style="margin-bottom:13px;">Ces informations seront enregistrées sur la fiche du véhicule et sur l’intervention liée au rapport. Les champs peuvent être laissés vides.</div>
+      <div class="field">
+        <label for="atelierOwner">Nom du propriétaire</label>
+        <input type="text" id="atelierOwner" placeholder="ex. Jean Dupont" autocomplete="name">
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="atelierTime">Temps passé (h)</label>
+          <input type="number" id="atelierTime" min="0" step="0.25" placeholder="ex. 2.5" inputmode="decimal">
+        </div>
+        <div class="field">
+          <label for="atelierPay">Rémunération (€)</label>
+          <input type="number" id="atelierPay" min="0" step="1" placeholder="ex. 150" inputmode="decimal">
+        </div>
+      </div>
+      <div class="modal-error" id="atelierMetaError"></div>
+      <div class="modal-actions">
+        <button class="btn" type="button" id="atelierMetaCancel">Annuler</button>
+        <button class="btn primary" type="button" id="atelierMetaConfirm">Continuer et générer</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="app-bar">
   <h1>🛠️ Rapport d'intervention</h1>
-  <span class="sub">Version 20</span>
+  <span class="sub">Version 21</span>
   <span id="saveWarn" style="display:none; font-size:12px; color:#ffd27a; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
   <span id="sizeIndicator" style="font-size:11.5px; color:#9aa3b2; font-weight:600;"></span>
   <button class="btn ghost" id="btnArchive">📁 Mes rapports</button>
@@ -1583,7 +1618,63 @@ function reportOperationNotes(){
   return parts.filter(Boolean).join(' — ');
 }
 
-async function syncReportToAtelier(){
+async function getAtelierMetadataDefaults(){
+  const defaults={owner:'',temps:'',remuneration:''};
+  const plateKey=normalizePlate(state.plate);
+  if(!plateKey) return defaults;
+  try{
+    const snap=await sharedDocRef('atelier').get();
+    if(!snap.exists) return defaults;
+    const data=JSON.parse(snap.data().payload||'{"vehicles":[]}');
+    const vehicle=(data.vehicles||[]).find(v=>normalizePlate(v.plate)===plateKey);
+    if(!vehicle) return defaults;
+    defaults.owner=String(vehicle.owner||'');
+    const existing=(vehicle.ops||[]).find(o=>o && o.source==='rapport' && o.reportId===currentReportId);
+    if(existing){
+      defaults.temps=existing.temps ?? '';
+      defaults.remuneration=existing.remuneration ?? '';
+    }
+  }catch(e){ console.warn('Préremplissage carnet indisponible',e); }
+  return defaults;
+}
+
+async function askAtelierMetadata(){
+  const overlay=document.getElementById('atelierMetaOverlay');
+  const owner=document.getElementById('atelierOwner');
+  const time=document.getElementById('atelierTime');
+  const pay=document.getElementById('atelierPay');
+  const error=document.getElementById('atelierMetaError');
+  const defaults=await getAtelierMetadataDefaults();
+  owner.value=defaults.owner;
+  time.value=defaults.temps;
+  pay.value=defaults.remuneration;
+  error.textContent='';
+  overlay.style.display='flex';
+  setTimeout(()=>owner.focus(),0);
+  return new Promise(resolve=>{
+    const confirmBtn=document.getElementById('atelierMetaConfirm');
+    const cancelBtn=document.getElementById('atelierMetaCancel');
+    const finish=value=>{
+      overlay.style.display='none';
+      confirmBtn.onclick=null; cancelBtn.onclick=null; overlay.onclick=null;
+      resolve(value);
+    };
+    confirmBtn.onclick=()=>{
+      const ownerValue=owner.value.trim();
+      const timeRaw=String(time.value||'').trim().replace(',','.');
+      const payRaw=String(pay.value||'').trim().replace(',','.');
+      const temps=timeRaw==='' ? 0 : Number(timeRaw);
+      const remuneration=payRaw==='' ? 0 : Number(payRaw);
+      if(!Number.isFinite(temps) || temps<0){ error.textContent='Renseigne un temps passé valide ou laisse le champ vide.'; time.focus(); return; }
+      if(!Number.isFinite(remuneration) || remuneration<0){ error.textContent='Renseigne une rémunération valide ou laisse le champ vide.'; pay.focus(); return; }
+      finish({owner:ownerValue,temps,remuneration});
+    };
+    cancelBtn.onclick=()=>finish(null);
+    overlay.onclick=e=>{ if(e.target===overlay) finish(null); };
+  });
+}
+
+async function syncReportToAtelier(metadata){
   const plateKey = normalizePlate(state.plate);
   if(!plateKey) return {status:'skipped', message:"Aucune immatriculation : le carnet n'a pas été modifié."};
   if(!currentReportId) return {status:'skipped', message:"Rapport non identifié : le carnet n'a pas été modifié."};
@@ -1610,6 +1701,7 @@ Créer automatiquement la fiche « ${label} » dans le carnet atelier ?`);
         modele:label,
         motorisation:String(state.engine||'Non renseignée').trim(),
         plate:String(state.plate||'').trim().toUpperCase(),
+        owner:String(metadata.owner||'').trim(),
         ops:[],
         updatedAt:Date.now()
       };
@@ -1617,13 +1709,16 @@ Créer automatiquement la fiche « ${label} » dans le carnet atelier ?`);
     }
     if(!Array.isArray(vehicle.ops)) vehicle.ops=[];
     vehicle.plate = String(state.plate||vehicle.plate||'').trim().toUpperCase();
+    const ownerValue=String(metadata.owner||'').trim();
+    if(ownerValue) vehicle.owner=ownerValue;
+    else if(typeof vehicle.owner!=='string') vehicle.owner='';
 
     const opData = {
       date:state.date || new Date().toISOString().slice(0,10),
       operation:reportOperationTitle(),
       km:cleanKm(state.km),
-      temps:0,
-      remuneration:0,
+      temps:Number(metadata.temps)||0,
+      remuneration:Number(metadata.remuneration)||0,
       notes:reportOperationNotes(),
       source:'rapport',
       reportId:currentReportId
@@ -1652,7 +1747,9 @@ async function generatePdfAndSync(){
     await saveNow();
     const checkbox=document.getElementById('syncAtelierOnPdf');
     if(!checkbox || checkbox.checked){
-      const result=await syncReportToAtelier();
+      const metadata=await askAtelierMetadata();
+      if(!metadata) return;
+      const result=await syncReportToAtelier(metadata);
       if(result && result.message && result.status!=='skipped') alert(result.message);
     }
     window.print();
