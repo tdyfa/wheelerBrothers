@@ -255,7 +255,7 @@ let editingOpId = null;
 function uid(){ return 'v' + Date.now() + Math.random().toString(16).slice(2,8); }
 
 function captureFormState(){
-  const ids = ['opDate','opKm','opTemps','opOperation','opRemu','opNotes','editModele','editMoto'];
+  const ids = ['opDate','opKm','opTemps','opOperation','opRemu','opNotes','editModele','editMoto','editPlate'];
   const captured = {};
   let anyFocused = false;
   ids.forEach(id=>{
@@ -406,7 +406,7 @@ function renderSidebar(){
   list.innerHTML = '';
   const term = searchTerm.trim().toLowerCase();
   const filtered = DATA.vehicles
-    .filter(v => !term || (v.modele+' '+v.motorisation).toLowerCase().includes(term))
+    .filter(v => !term || (v.modele+' '+v.motorisation+' '+(v.plate||'')).toLowerCase().includes(term))
     .sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
 
   if(filtered.length === 0){
@@ -425,7 +425,7 @@ function renderSidebar(){
     li.innerHTML = `
       <div>
         <span class="vname">${escapeHtml(v.modele)}</span>
-        <span class="vmeta">${escapeHtml(v.motorisation)}</span>
+        <span class="vmeta">${escapeHtml(v.motorisation)}${v.plate ? ` · ${escapeHtml(v.plate)}` : ''}</span>
       </div>
       <span class="vcount">${v.ops.length}</span>
     `;
@@ -494,6 +494,10 @@ function renderMain(){
                 <label for="editMoto">Motorisation</label>
                 <input type="text" id="editMoto" value="${escapeHtml(v.motorisation)}">
               </div>
+              <div class="field">
+                <label for="editPlate">Immatriculation</label>
+                <input type="text" id="editPlate" placeholder="ex. GC-705-LH" value="${escapeHtml(v.plate||'')}">
+              </div>
             </div>
             <div class="form-actions" style="margin-top:8px;">
               <button class="btn" id="btnSaveVehicleEdit" type="button">Enregistrer</button>
@@ -504,7 +508,7 @@ function renderMain(){
               <h2 style="margin:0;">${escapeHtml(v.modele)}</h2>
               <button class="btn ghost" id="btnEditVehicle" type="button" style="padding:3px 10px; font-size:12px;">Modifier</button>
             </div>
-            <div class="moto">${escapeHtml(v.motorisation)}</div>
+            <div class="moto">${escapeHtml(v.motorisation)}${v.plate ? ` · ${escapeHtml(v.plate)}` : ''}</div>
             ${rateFlag}
           `}
         </div>
@@ -598,12 +602,14 @@ async function onSaveVehicleEdit(){
   if(!v) return;
   const modele = document.getElementById('editModele').value.trim();
   const motorisation = document.getElementById('editMoto').value.trim();
+  const plate = document.getElementById('editPlate').value.trim().toUpperCase();
   if(!modele || !motorisation){
     alert('Renseigne le modèle et la motorisation.');
     return;
   }
   v.modele = modele;
   v.motorisation = motorisation;
+  v.plate = plate;
   v.updatedAt = Date.now();
   editingVehicleMode = false;
   const ok = await saveData();
@@ -699,6 +705,10 @@ function renderNewVehicleForm(){
             <label for="newMoto">Motorisation</label>
             <input type="text" id="newMoto" placeholder="ex. 1.6 THP 165 EP6FDTX">
           </div>
+          <div class="field">
+            <label for="newPlate">Immatriculation</label>
+            <input type="text" id="newPlate" placeholder="ex. GC-705-LH">
+          </div>
         </div>
         <div class="form-actions">
           <button class="btn" id="btnCreateVehicle" type="button">Créer la fiche</button>
@@ -715,13 +725,14 @@ function renderNewVehicleForm(){
 async function onCreateVehicle(){
   const modele = document.getElementById('newModele').value.trim();
   const motorisation = document.getElementById('newMoto').value.trim();
+  const plate = document.getElementById('newPlate').value.trim().toUpperCase();
   const statusEl = document.getElementById('newStatus');
   if(!modele || !motorisation){
     statusEl.className='status-msg status-err';
     statusEl.textContent = 'Renseigne le modèle et la motorisation.';
     return;
   }
-  const v = { id: uid(), modele, motorisation, ops: [], updatedAt: Date.now() };
+  const v = { id: uid(), modele, motorisation, plate, ops: [], updatedAt: Date.now() };
   DATA.vehicles.push(v);
   statusEl.textContent = 'Enregistrement…';
   const ok = await saveData();

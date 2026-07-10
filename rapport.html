@@ -357,6 +357,9 @@
   <button class="btn ghost" id="btnImport">Importer</button>
   <button class="btn ghost" id="btnExport">Exporter (.json)</button>
   <button class="btn danger" id="btnReset">Réinitialiser</button>
+  <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#d1d5db;white-space:nowrap;">
+    <input type="checkbox" id="syncAtelierOnPdf" checked> Ajouter au carnet atelier
+  </label>
   <button class="btn primary" id="btnPdf">📄 Générer le PDF</button>
   <input type="file" id="importFile" accept="application/json">
 </div>
@@ -1550,6 +1553,119 @@ document.getElementById('f_invoice').addEventListener('change', async (e)=>{
   }
 }, false);
 
+/* ---------- liaison avec le carnet atelier ---------- */
+function normalizePlate(value){
+  return String(value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+}
+
+function cleanKm(value){
+  const digits = String(value||'').replace(/[^0-9]/g,'');
+  return digits || '';
+}
+
+function reportOperationTitle(){
+  const titles = (state.sections||[]).map(s=>String(s.title||'').trim()).filter(Boolean);
+  if(titles.length) return titles.join(' + ');
+  return String(state.summary||state.title||"Intervention atelier").trim();
+}
+
+function reportOperationNotes(){
+  const parts = [];
+  if(state.summary) parts.push(String(state.summary).trim());
+  (state.sections||[]).forEach(sec=>{
+    const title = String(sec.title||'').trim();
+    const desc = String(sec.desc||'').trim();
+    if(title && desc) parts.push(`${title} : ${desc}`);
+    else if(desc) parts.push(desc);
+  });
+  if(state.closing) parts.push(`Recommandations : ${String(state.closing).trim()}`);
+  parts.push(`Rapport lié : ${currentReportId}`);
+  return parts.filter(Boolean).join(' — ');
+}
+
+async function syncReportToAtelier(){
+  const plateKey = normalizePlate(state.plate);
+  if(!plateKey) return {status:'skipped', message:"Aucune immatriculation : le carnet n'a pas été modifié."};
+  if(!currentReportId) return {status:'skipped', message:"Rapport non identifié : le carnet n'a pas été modifié."};
+
+  const atelierRef = sharedDocRef('atelier');
+  let outcome = null;
+  await db.runTransaction(async tx=>{
+    const snap = await tx.get(atelierRef);
+    let data = {vehicles:[]};
+    if(snap.exists){
+      try{ data = JSON.parse(snap.data().payload||'{"vehicles":[]}'); }catch(e){ data={vehicles:[]}; }
+    }
+    if(!Array.isArray(data.vehicles)) data.vehicles=[];
+
+    let vehicle = data.vehicles.find(v=>normalizePlate(v.plate)===plateKey);
+    if(!vehicle){
+      const label = [state.brand, state.model].filter(Boolean).join(' ').trim() || state.plate;
+      const create = confirm(`Aucune fiche trouvée pour ${state.plate}.
+
+Créer automatiquement la fiche « ${label} » dans le carnet atelier ?`);
+      if(!create){ outcome={status:'skipped',message:'Rapport généré sans modification du carnet.'}; return; }
+      vehicle = {
+        id:'v'+Date.now()+Math.random().toString(16).slice(2,8),
+        modele:label,
+        motorisation:String(state.engine||'Non renseignée').trim(),
+        plate:String(state.plate||'').trim().toUpperCase(),
+        ops:[],
+        updatedAt:Date.now()
+      };
+      data.vehicles.push(vehicle);
+    }
+    if(!Array.isArray(vehicle.ops)) vehicle.ops=[];
+    vehicle.plate = String(state.plate||vehicle.plate||'').trim().toUpperCase();
+
+    const opData = {
+      date:state.date || new Date().toISOString().slice(0,10),
+      operation:reportOperationTitle(),
+      km:cleanKm(state.km),
+      temps:0,
+      remuneration:0,
+      notes:reportOperationNotes(),
+      source:'rapport',
+      reportId:currentReportId
+    };
+    const existing = vehicle.ops.find(o=>o && o.source==='rapport' && o.reportId===currentReportId);
+    if(existing){
+      Object.assign(existing, opData);
+      outcome={status:'updated',message:`Opération mise à jour dans la fiche ${vehicle.plate || vehicle.modele}.`};
+    }else{
+      vehicle.ops.push({id:'v'+Date.now()+Math.random().toString(16).slice(2,8), ...opData});
+      outcome={status:'created',message:`Opération ajoutée à la fiche ${vehicle.plate || vehicle.modele}.`};
+    }
+    vehicle.updatedAt=Date.now();
+    tx.set(atelierRef,{payload:JSON.stringify(data),updatedAt:Date.now()});
+  });
+  return outcome || {status:'skipped',message:'Rapport généré sans modification du carnet.'};
+}
+
+async function generatePdfAndSync(){
+  const btn=document.getElementById('btnPdf');
+  const original=btn.textContent;
+  btn.disabled=true;
+  btn.textContent='⏳ Préparation…';
+  try{
+    save();
+    await saveNow();
+    const checkbox=document.getElementById('syncAtelierOnPdf');
+    if(!checkbox || checkbox.checked){
+      const result=await syncReportToAtelier();
+      if(result && result.message && result.status!=='skipped') alert(result.message);
+    }
+    window.print();
+  }catch(e){
+    console.error('Synchronisation carnet impossible',e);
+    const printAnyway=confirm("Impossible de mettre à jour le carnet atelier.\n\nGénérer quand même le PDF ?");
+    if(printAnyway) window.print();
+  }finally{
+    btn.disabled=false;
+    btn.textContent=original;
+  }
+}
+
 /* ---------- toolbar ---------- */
 document.getElementById('btnAddSection').addEventListener('click', addSection);
 document.getElementById('btnAddSym').addEventListener('click', addSymSection);
@@ -1557,7 +1673,7 @@ document.getElementById('globalNewPage').addEventListener('change', (e)=>{
   state.sections.forEach(s=> s.newpage = e.target.checked);
   buildSections(); renderReport(); save();
 });
-document.getElementById('btnPdf').addEventListener('click', ()=>window.print());
+document.getElementById('btnPdf').addEventListener('click', generatePdfAndSync);
 document.getElementById('btnExport').addEventListener('click', ()=>{
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
