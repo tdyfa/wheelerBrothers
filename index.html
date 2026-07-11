@@ -27,28 +27,23 @@
     background:var(--card); border:1px solid var(--line); border-radius:20px;
     box-shadow:0 6px 24px rgba(16,24,40,.10); padding:34px 28px; width:100%; max-width:420px; text-align:center;
   }
-  .box img{height:52px; margin-bottom:18px;}
-  h1{font-size:19px; margin:0 0 6px;}
-  p{font-size:13px; color:var(--muted); margin:0 0 26px; line-height:1.5;}
+  .brand-logo{display:block; width:min(280px,82%); height:auto; margin:0 auto 30px;}
   a.tool{
     display:block; width:100%; padding:16px; margin-bottom:12px; border-radius:12px;
     font-size:15.5px; font-weight:700; cursor:pointer; text-decoration:none;
   }
   a.tool.primary{background:var(--ink); color:#fff;}
   a.tool.secondary{background:transparent; color:var(--ink); border:1px solid var(--line);}
-  .foot{font-size:11px; color:var(--muted); margin-top:18px; line-height:1.5;}
+  .version{font-size:11.5px; color:var(--muted); font-weight:600; margin-top:18px;}
 </style>
 </head>
 <body>
   <div class="box">
-    <img src="apple-touch-icon.png" alt="logo" style="border-radius:14px;">
-    <h1>Outils Atelier</h1>
-    <div style="font-size:11.5px; color:var(--muted); font-weight:600; margin-bottom:14px;">Version 29</div>
-    <p>Choisis l'outil à ouvrir. Tes données sont synchronisées avec ton binôme via l'espace partagé.</p>
+    <img class="brand-logo" src="report-cover-logo.png" alt="Wheeler Brothers">
     <a class="tool primary" href="atelier.html">Carnet d'atelier</a>
     <a class="tool secondary" href="rapport.html">Générateur de rapport</a>
     <button type="button" id="btnResetCode" style="background:none;border:none;color:var(--muted);font-size:11.5px;text-decoration:underline;cursor:pointer;padding:0;margin-top:4px;">Changer le code d'atelier</button>
-    <div class="foot">Astuce : utilise le bouton Exporter de chaque outil de temps en temps pour garder une sauvegarde.</div>
+    <div class="version">Version 30</div>
   </div>
 <script>
   document.getElementById('btnResetCode').addEventListener('click', resetSharedCode);

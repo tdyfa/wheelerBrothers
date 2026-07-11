@@ -1,4 +1,4 @@
-const CACHE_NAME = 'outils-atelier-v29';
+const CACHE_NAME = 'outils-atelier-v30';
 const ASSETS = [
   './',
   './index.html',
@@ -8,7 +8,8 @@ const ASSETS = [
   './firebase-config.js',
   './apple-touch-icon.png',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './report-cover-logo.png'
 ];
 
 self.addEventListener('install', (event) => {
