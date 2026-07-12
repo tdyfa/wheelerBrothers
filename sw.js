@@ -1,4 +1,4 @@
-const CACHE_NAME = 'outils-atelier-v32';
+const CACHE_NAME = 'outils-atelier-v33';
 const ASSETS = [
   './',
   './index.html',
@@ -9,7 +9,8 @@ const ASSETS = [
   './apple-touch-icon.png',
   './icon-192.png',
   './icon-512.png',
-  './report-cover-logo.png'
+  './report-cover-logo.png',
+  './html2pdf.bundle.min.js'
 ];
 
 self.addEventListener('install', (event) => {

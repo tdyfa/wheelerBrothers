@@ -15,6 +15,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 
 <script src="firebase-config.js"></script>
+<script src="html2pdf.bundle.min.js"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -76,9 +77,9 @@
   @media (min-width:1101px){
     .editor{
       position:sticky;
-      top:194px;                        /* sous la barre d’actions structurée */
+      top:62px;                         /* juste sous la barre du haut */
       align-self:flex-start;
-      max-height:calc(100vh - 206px);
+      max-height:calc(100vh - 74px);
       overflow-y:auto;
       overflow-x:hidden;
       padding-right:6px;                /* évite que la scrollbar masque le contenu */
@@ -363,6 +364,16 @@
     .invoice-page .invoice-full img{ max-height:297mm; }
   }
 
+  /* Export PDF direct : rendu A4 indépendant de l'impression Safari */
+  .pdf-export-host{position:fixed;left:-100000px;top:0;width:210mm;background:#fff;z-index:-1;pointer-events:none}
+  .pdf-export-host .report{width:210mm;display:block;background:#fff}
+  .pdf-export-host .page{
+    width:210mm;min-height:297mm;margin:0;box-shadow:none;
+    page-break-after:always;break-after:page;
+  }
+  .pdf-export-host .page:last-child{page-break-after:auto;break-after:auto}
+  .pdf-export-host #printWm,.pdf-export-host .wm{display:none !important}
+
   .atelier-meta-overlay{position:fixed;inset:0;background:rgba(15,23,42,.58);display:none;align-items:center;justify-content:center;padding:18px;z-index:9999}
   .atelier-meta-modal{width:min(460px,100%);background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.28);overflow:hidden}
   .atelier-meta-modal h3{margin:0;padding:18px 20px 8px;font-size:19px}
@@ -405,7 +416,7 @@
     <div class="app-bar-top">
       <div class="app-bar-title">
         <h1>🛠️ Rapport d'intervention</h1>
-        <span class="sub">Version 32</span>
+        <span class="sub">Version 33</span>
       </div>
       <div class="app-bar-notices">
         <span id="saveWarn" style="display:none; font-size:12px; color:#ffd27a; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
@@ -1791,22 +1802,123 @@ Créer automatiquement la fiche « ${label} » dans le carnet atelier ?`);
   return outcome || {status:'skipped',message:'Rapport sauvegardé sans modification du carnet.'};
 }
 
+async function waitForPdfImages(root){
+  const images=[...root.querySelectorAll('img')];
+  await Promise.all(images.map(img=>new Promise(resolve=>{
+    if(img.complete && img.naturalWidth){ resolve(); return; }
+    const done=()=>resolve();
+    img.addEventListener('load',done,{once:true});
+    img.addEventListener('error',done,{once:true});
+  })));
+}
+
+async function pdfSourceAsDataUrl(src){
+  if(!src) return '';
+  if(src.startsWith('data:')) return src;
+  try{
+    const response=await fetch(src,{cache:'force-cache'});
+    if(!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob=await response.blob();
+    return await new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(String(reader.result||''));
+      reader.onerror=reject;
+      reader.readAsDataURL(blob);
+    });
+  }catch(e){
+    console.warn('Logo PDF non récupérable, utilisation directe de la source.',e);
+    return src;
+  }
+}
+
+async function makePdfWatermark(src){
+  const dataUrl=await pdfSourceAsDataUrl(src);
+  if(!dataUrl) return null;
+  return await new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>{
+      const max=900;
+      const ratio=Math.min(1,max/Math.max(img.naturalWidth||1,img.naturalHeight||1));
+      const canvas=document.createElement('canvas');
+      canvas.width=Math.max(1,Math.round((img.naturalWidth||1)*ratio));
+      canvas.height=Math.max(1,Math.round((img.naturalHeight||1)*ratio));
+      const ctx=canvas.getContext('2d');
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.globalAlpha=.09;
+      ctx.drawImage(img,0,0,canvas.width,canvas.height);
+      resolve({data:canvas.toDataURL('image/png'),ratio:canvas.height/canvas.width});
+    };
+    img.onerror=()=>resolve(null);
+    img.src=dataUrl;
+  });
+}
+
+function reportPdfFilename(){
+  const raw=[state.plate,state.brand,state.model,state.date].filter(Boolean).join('-') || 'rapport-intervention';
+  const safe=raw.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-+|-+$/g,'');
+  return `${safe||'rapport-intervention'}.pdf`;
+}
+
 async function generatePdf(){
   const btn=document.getElementById('btnPdf');
   const original=btn.textContent;
   btn.disabled=true;
-  btn.textContent='⏳ Préparation…';
+  btn.textContent='⏳ Génération…';
+  let host=null;
   try{
-    // Le PDF ne modifie plus le carnet. Il fige seulement le rapport courant
-    // avant d'ouvrir la boîte de dialogue d'impression.
     save();
     flushPendingSave();
-    await new Promise(r=>setTimeout(r, 250));
-    window.print();
+    renderReport();
+    if(typeof html2pdf!=='function') throw new Error('Moteur PDF indisponible');
+
+    host=document.createElement('div');
+    host.className='pdf-export-host';
+    const clone=document.getElementById('report').cloneNode(true);
+    clone.removeAttribute('id');
+    host.appendChild(clone);
+    document.body.appendChild(host);
+    await waitForPdfImages(host);
+    await new Promise(requestAnimationFrame);
+
+    const options={
+      margin:0,
+      filename:reportPdfFilename(),
+      image:{type:'jpeg',quality:.94},
+      html2canvas:{
+        scale:window.matchMedia('(max-width: 800px)').matches?1.5:2,
+        useCORS:true,
+        allowTaint:false,
+        backgroundColor:'#ffffff',
+        logging:false,
+        scrollX:0,
+        scrollY:0,
+        windowWidth:Math.ceil(210*96/25.4)
+      },
+      jsPDF:{unit:'mm',format:'a4',orientation:'portrait',compress:true},
+      pagebreak:{
+        mode:['css','legacy'],
+        avoid:['.doc-h2','.sec-title','.sec-desc','figure.ph','.sym-row','.closing','.checklist-item']
+      }
+    };
+
+    const worker=html2pdf().set(options).from(clone).toPdf();
+    const pdf=await worker.get('pdf');
+    const watermark=await makePdfWatermark(state.logo || DEFAULT_LOGO);
+    if(watermark){
+      const pages=pdf.internal.getNumberOfPages();
+      const width=30;
+      const height=width*watermark.ratio;
+      for(let page=2;page<=pages;page++){
+        pdf.setPage(page);
+        pdf.addImage(watermark.data,'PNG',210-4-width,2,width,height,undefined,'FAST');
+      }
+    }
+    pdf.save(options.filename);
   }catch(e){
     console.error('Génération du PDF impossible',e);
-    alert("Impossible de préparer le PDF.");
+    alert("Impossible de générer le PDF. Vérifie que les images du rapport sont bien chargées puis réessaie.");
   }finally{
+    if(host) host.remove();
     btn.disabled=false;
     btn.textContent=original;
   }
