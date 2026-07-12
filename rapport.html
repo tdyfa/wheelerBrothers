@@ -369,9 +369,11 @@
   .pdf-export-host .report{width:210mm;display:block;background:#fff}
   .pdf-export-host .page{
     width:210mm;min-height:297mm;margin:0;box-shadow:none;
-    page-break-after:always;break-after:page;
+    page-break-after:auto;break-after:auto;
   }
-  .pdf-export-host .page:last-child{page-break-after:auto;break-after:auto}
+  /* Un saut avant chaque page suivante évite la page blanche finale créée
+     par Safari/html2pdf avec un saut forcé après la dernière page. */
+  .pdf-export-host .page + .page{page-break-before:always;break-before:page}
   .pdf-export-host #printWm,.pdf-export-host .wm{display:none !important}
 
   .atelier-meta-overlay{position:fixed;inset:0;background:rgba(15,23,42,.58);display:none;align-items:center;justify-content:center;padding:18px;z-index:9999}
@@ -416,7 +418,7 @@
     <div class="app-bar-top">
       <div class="app-bar-title">
         <h1>🛠️ Rapport d'intervention</h1>
-        <span class="sub">Version 33</span>
+        <span class="sub">Version 34</span>
       </div>
       <div class="app-bar-notices">
         <span id="saveWarn" style="display:none; font-size:12px; color:#ffd27a; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
@@ -1875,6 +1877,9 @@ async function generatePdf(){
     host.className='pdf-export-host';
     const clone=document.getElementById('report').cloneNode(true);
     clone.removeAttribute('id');
+    /* Le logo de l'aperçu est déjà ajouté directement au PDF ci-dessous.
+       On le retire du clone pour éviter deux logos superposés. */
+    clone.querySelectorAll('.wm, #printWm').forEach(el=>el.remove());
     host.appendChild(clone);
     document.body.appendChild(host);
     await waitForPdfImages(host);
@@ -1896,7 +1901,7 @@ async function generatePdf(){
       },
       jsPDF:{unit:'mm',format:'a4',orientation:'portrait',compress:true},
       pagebreak:{
-        mode:['css','legacy'],
+        mode:['css'],
         avoid:['.doc-h2','.sec-title','.sec-desc','figure.ph','.sym-row','.closing','.checklist-item']
       }
     };
