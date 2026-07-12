@@ -420,7 +420,7 @@
     <div class="app-bar-top">
       <div class="app-bar-title">
         <h1>🛠️ Rapport d'intervention</h1>
-        <span class="sub">Version 35</span>
+        <span class="sub">Version 36</span>
       </div>
       <div class="app-bar-notices">
         <span id="saveWarn" style="display:none; font-size:12px; color:#ffd27a; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
@@ -1999,7 +1999,16 @@ function bindAll(){
 /* ---------- adaptation mobile : bascule éditeur/aperçu + échelle de l'aperçu ---------- */
 function isMobile(){ return window.matchMedia('(max-width:768px)').matches; }
 
+// Sur mobile, l'éditeur et l'aperçu utilisent la même fenêtre de défilement.
+// On mémorise donc une position indépendante pour chaque volet lors de la bascule.
+const mobileScrollPositions = {editor:0, preview:0};
+
 function setMobileView(view){
+  const previousView = document.body.getAttribute('data-mview');
+  if(isMobile() && previousView && previousView !== view){
+    mobileScrollPositions[previousView] = window.scrollY || document.documentElement.scrollTop || 0;
+  }
+
   document.body.setAttribute('data-mview', view);
   const be = document.getElementById('mviewEditor');
   const bp = document.getElementById('mviewPreview');
@@ -2008,6 +2017,12 @@ function setMobileView(view){
     bp.classList.toggle('active', view==='preview');
   }
   if(view==='preview') updatePreviewScale();
+
+  if(isMobile()){
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=>window.scrollTo(0, mobileScrollPositions[view] || 0));
+    });
+  }
 }
 
 function updatePreviewScale(){
