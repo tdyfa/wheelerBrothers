@@ -1,9 +1,10 @@
-const CACHE_NAME = 'outils-atelier-v36';
+const CACHE_NAME = 'outils-atelier-v37';
 const ASSETS = [
   './',
   './index.html',
   './atelier.html',
   './rapport.html',
+  './inventaire.html',
   './manifest.json',
   './firebase-config.js',
   './apple-touch-icon.png',

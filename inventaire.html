@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Inventaire — Wheeler Brothers</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#f2f4f7">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<script src="firebase-config.js"></script>
+<style>
+:root{--ink:#111418;--muted:#667085;--line:#dfe4ea;--bg:#eef1f5;--card:#fff;--danger:#b42318;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{min-height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Helvetica Neue",Arial,"Segoe UI",sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding:12px 16px}
+.head{max-width:1100px;margin:auto;display:flex;align-items:center;gap:12px}
+.back{text-decoration:none;color:var(--ink);font-size:22px;padding:6px}
+.title{flex:1}
+.title h1{font-size:20px;margin:0}
+.sub{font-size:11.5px;color:var(--muted);font-weight:600}
+.sync{font-size:11px;color:var(--danger);display:none}
+main{max-width:1100px;margin:0 auto;padding:16px}
+.toolbar{display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:12px}
+.search{width:100%;border:1px solid var(--line);background:white;border-radius:12px;padding:13px 14px;font-size:16px}
+button,.btn{border:1px solid var(--line);background:white;color:var(--ink);border-radius:11px;padding:12px 14px;font-weight:700;font-size:14px;cursor:pointer}
+button:active,.btn:active{background:#f2f4f7}
+.primary{background:#111418;color:white;border-color:#111418}
+.filters{display:flex;gap:8px;overflow:auto;padding-bottom:8px;margin-bottom:8px}
+.filter{white-space:nowrap;padding:8px 12px;font-size:13px}
+.filter.active{background:#111418;color:white;border-color:#111418}
+.summary{font-size:13px;color:var(--muted);margin:4px 2px 12px}
+.list{display:grid;gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(16,24,40,.04)}
+.card-top{display:flex;gap:12px;align-items:flex-start}
+.card-main{flex:1;min-width:0}
+.cat{font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.name{font-size:17px;font-weight:800;margin:3px 0}
+.meta{font-size:13px;color:#344054;line-height:1.45;overflow-wrap:anywhere}
+.ref{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700}
+.qtybox{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.qtybtn{width:34px;height:34px;padding:0;font-size:20px;border-radius:9px}
+.qty{min-width:34px;text-align:center;font-size:18px;font-weight:800}
+.actions{display:flex;gap:8px;margin-top:12px}
+.actions button{padding:8px 11px;font-size:12px}
+.empty{background:white;border:1px dashed var(--line);border-radius:14px;padding:30px;text-align:center;color:var(--muted)}
+.modal{position:fixed;inset:0;z-index:30;background:rgba(15,18,22,.55);display:none;align-items:flex-end;justify-content:center}
+.modal.open{display:flex}
+.sheet{width:100%;max-width:620px;max-height:92vh;overflow:auto;background:white;border-radius:20px 20px 0 0;padding:20px 18px calc(20px + env(safe-area-inset-bottom))}
+.sheet h2{margin:0 0 14px;font-size:20px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field.full{grid-column:1/-1}
+label{font-size:12px;font-weight:700;color:#344054}
+input,textarea,select{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;font:inherit;background:white}
+textarea{min-height:74px;resize:vertical}
+.modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.danger{color:var(--danger)}
+.io{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.file{display:none}
+@media(min-width:720px){
+ .list{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .modal{align-items:center;padding:20px}
+ .sheet{border-radius:20px}
+}
+@media(max-width:520px){
+ main{padding:12px}
+ .toolbar{grid-template-columns:1fr}
+ .toolbar .primary{width:100%}
+ .grid{grid-template-columns:1fr}
+ .field.full{grid-column:auto}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="head">
+    <a class="back" href="index.html" aria-label="Accueil">‹</a>
+    <div class="title"><h1>Inventaire</h1><div class="sub">Version 37</div><div id="syncWarn" class="sync">Synchronisation indisponible</div></div>
+    <button type="button" id="addBtn" class="primary">＋ Ajouter</button>
+  </div>
+</header>
+<main>
+  <div class="toolbar">
+    <input id="search" class="search" type="search" placeholder="Rechercher une pièce, référence, véhicule…">
+    <button type="button" id="clearSearch">Effacer</button>
+  </div>
+  <div id="filters" class="filters"></div>
+  <div id="summary" class="summary">Chargement…</div>
+  <div id="list" class="list"></div>
+  <div class="io">
+    <button type="button" id="exportBtn">Exporter (.json)</button>
+    <label class="btn" for="importFile">Importer (.json)</label>
+    <input class="file" id="importFile" type="file" accept=".json,application/json">
+  </div>
+</main>
+
+<div id="modal" class="modal" role="dialog" aria-modal="true">
+  <form id="itemForm" class="sheet">
+    <h2 id="modalTitle">Ajouter une pièce</h2>
+    <input type="hidden" id="itemId">
+    <div class="grid">
+      <div class="field"><label for="categorie">Catégorie</label><input id="categorie" required></div>
+      <div class="field"><label for="sousCategorie">Sous-catégorie</label><input id="sousCategorie"></div>
+      <div class="field"><label for="marque">Marque</label><input id="marque"></div>
+      <div class="field"><label for="reference">Référence</label><input id="reference"></div>
+      <div class="field"><label for="quantite">Quantité</label><input id="quantite" type="number" min="0" step="1" value="1" required></div>
+      <div class="field"><label for="compatibilite">Compatibilité / véhicule</label><input id="compatibilite"></div>
+      <div class="field full"><label for="motorisation">Motorisation</label><input id="motorisation"></div>
+      <div class="field full"><label for="notes">Notes</label><textarea id="notes"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" id="cancelBtn">Annuler</button>
+      <button type="submit" class="primary">Enregistrer</button>
+    </div>
+    <button type="button" id="deleteBtn" class="danger" style="display:none;width:100%;margin-top:10px">Supprimer cette pièce</button>
+  </form>
+</div>
+
+<script>
+const SEED_ITEMS=[{"id":"seed-001","categorie":"Boîte de vitesse","sousCategorie":"Cylindre émetteur","marque":"RIDEX","reference":"234M0003","quantite":1,"compatibilite":"A3 8P, Golf","motorisation":"","notes":""},{"id":"seed-002","categorie":"Filtration","sousCategorie":"Huile","marque":"Mann Filter","reference":"HU 179/6 x","quantite":1,"compatibilite":"S3, RS3 8P","motorisation":"","notes":""},{"id":"seed-003","categorie":"Filtration","sousCategorie":"Huile","marque":"Valeo","reference":"586506","quantite":1,"compatibilite":"A3 8P, Golf 5","motorisation":"1.9, 2.0 TDI","notes":""},{"id":"seed-004","categorie":"Filtration","sousCategorie":"Huile","marque":"Audi","reference":"071 115 562 C","quantite":1,"compatibilite":"A3 8P, Golf 5","motorisation":"1.9, 2.0 TDI","notes":""},{"id":"seed-005","categorie":"Filtration","sousCategorie":"Huile","marque":"Purflux","reference":"L267D","quantite":1,"compatibilite":"A3 8P, Golf 5","motorisation":"1.9, 2.0 TDI","notes":""},{"id":"seed-006","categorie":"Freinage","sousCategorie":"Plaquettes","marque":"Brembo","reference":"P85073","quantite":1,"compatibilite":"A3, Leon, Golf","motorisation":"","notes":""},{"id":"seed-007","categorie":"Filtration","sousCategorie":"Carburant","marque":"MecaFilter","reference":"ELE6063","quantite":1,"compatibilite":"A3, Leon, Golf","motorisation":"TSI, TFSI","notes":""},{"id":"seed-008","categorie":"Freinage","sousCategorie":"Plaquettes","marque":"Valeo","reference":"301408","quantite":1,"compatibilite":"A3, Leon, Golf","motorisation":"","notes":""},{"id":"seed-009","categorie":"Essuie glace","sousCategorie":"Avant","marque":"HELLA","reference":"WP45","quantite":1,"compatibilite":"Leon, Xsara","motorisation":"","notes":""},{"id":"seed-010","categorie":"Essuie glace","sousCategorie":"Arrière","marque":"BOSCH","reference":"H 283","quantite":2,"compatibilite":"308, 3008, Scenic 4, C4 Picasso ","motorisation":"","notes":""},{"id":"seed-011","categorie":"Joints","sousCategorie":"Cache culbuteurs","marque":"Elring","reference":"266.060","quantite":1,"compatibilite":"VW, SEAT, AUDI","motorisation":"1.9 TDI","notes":""},{"id":"seed-012","categorie":"Joints","sousCategorie":"Injecteur","marque":"ET","reference":"TM0005","quantite":4,"compatibilite":"A3, Leon, Golf","motorisation":"1.9, 2.0 TDI","notes":""},{"id":"seed-013","categorie":"Lève vitre","sousCategorie":"Machoire","marque":"Febi","reference":"23749","quantite":4,"compatibilite":"Volvo","motorisation":"","notes":""},{"id":"seed-014","categorie":"Visserie","sousCategorie":"M8x1,25","marque":"Febi","reference":"38116","quantite":6,"compatibilite":"","motorisation":"","notes":""},{"id":"seed-015","categorie":"Filtration","sousCategorie":"Air","marque":"STARK","reference":"61609","quantite":1,"compatibilite":"VW LT46","motorisation":"","notes":""},{"id":"seed-016","categorie":"Transmission","sousCategorie":"Soufflet de cardan","marque":"SKF","reference":"VKJP 1351","quantite":1,"compatibilite":"A3, Leon, Golf","motorisation":"","notes":""},{"id":"seed-017","categorie":"Filtration","sousCategorie":"Huile","marque":"VAICO","reference":"V10-1609","quantite":1,"compatibilite":"VW LT46","motorisation":"","notes":""},{"id":"seed-018","categorie":"Filtration","sousCategorie":"Carburant","marque":"RIDEX","reference":"9F0033","quantite":1,"compatibilite":"VW, SEAT, AUDI","motorisation":"???","notes":""},{"id":"seed-019","categorie":"Filtration","sousCategorie":"Carburant","marque":"topran","reference":"111169","quantite":1,"compatibilite":"VW, SEAT, AUDI","motorisation":"???","notes":"idem dessus"},{"id":"seed-020","categorie":"Joints","sousCategorie":"Injecteur","marque":"Elring","reference":"234.480","quantite":2,"compatibilite":"TFSI","motorisation":"2.5 TFSI 8V2","notes":""},{"id":"seed-021","categorie":"Filtration","sousCategorie":"Air","marque":"Mann Filter","reference":"C 36 188","quantite":1,"compatibilite":"3.2, RS3","motorisation":"","notes":""},{"id":"seed-022","categorie":"Courroie","sousCategorie":"Accessoire","marque":"Bosch","reference":"6 PK 1275","quantite":1,"compatibilite":"S80, Sierra, Corsa, Astra","motorisation":"1.7 CDTI, ","notes":""},{"id":"seed-023","categorie":"Filtration","sousCategorie":"Habitacle","marque":"Knecht","reference":"LA 118","quantite":1,"compatibilite":"Ford Transit","motorisation":"","notes":""},{"id":"seed-024","categorie":"Bougies","sousCategorie":"Préchauffage","marque":"Valeo","reference":"345130","quantite":4,"compatibilite":"VW, SEAT, AUDI","motorisation":"1.9 TDI 100 / 130","notes":""},{"id":"seed-025","categorie":"Joints","sousCategorie":"Cache culbuteurs","marque":"Victor Reinz","reference":"43549249","quantite":1,"compatibilite":"VW, SEAT, AUDI","motorisation":"1.9 TDI 100 / 130","notes":""},{"id":"seed-026","categorie":"Filtration","sousCategorie":"Air","marque":"Valeo","reference":"585081","quantite":1,"compatibilite":"Fiat / Lancia","motorisation":"1.2 60 / 69 ","notes":""},{"id":"seed-027","categorie":"Transmission","sousCategorie":"Soufflet de cardan","marque":"VW","reference":"1K0 498 203 A","quantite":1,"compatibilite":"VW, SEAT, AUDI","motorisation":"1.9 TDI 100 / 130","notes":""}];
+let DATA={items:[]};
+let selectedCategory='Toutes';
+let unsubscribe=null;
+const $=id=>document.getElementById(id);
+const normalize=s=>(s??'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+const esc=s=>(s??'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const uid=()=> 'i'+Date.now()+Math.random().toString(16).slice(2,8);
+
+function setSyncError(show){
+  $('syncWarn').style.display=show?'block':'none';
+}
+async function saveData(){
+  try{
+    await sharedDocRef('inventaire').set({payload:JSON.stringify(DATA),updatedAt:Date.now()});
+    setSyncError(false);
+  }catch(e){ console.error(e); setSyncError(true); alert("La modification reste affichée, mais n'a pas pu être synchronisée."); }
+}
+function loadData(){
+  unsubscribe=sharedDocRef('inventaire').onSnapshot(async snap=>{
+    setSyncError(false);
+    if(snap.exists){
+      try{ DATA=JSON.parse(snap.data().payload||'{"items":[]}'); }catch{ DATA={items:[]}; }
+      if(!Array.isArray(DATA.items)) DATA.items=[];
+    }else{
+      DATA={items:SEED_ITEMS.map(x=>({...x}))};
+      await saveData();
+    }
+    render();
+  },e=>{console.error(e);setSyncError(true);DATA={items:SEED_ITEMS.map(x=>({...x}))};render();});
+}
+function categories(){
+  return [...new Set(DATA.items.map(x=>x.categorie).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
+}
+function filteredItems(){
+  const q=normalize($('search').value);
+  return DATA.items.filter(x=>{
+    if(selectedCategory!=='Toutes' && x.categorie!==selectedCategory) return false;
+    if(!q) return true;
+    return normalize([x.categorie,x.sousCategorie,x.marque,x.reference,x.compatibilite,x.motorisation,x.notes].join(' ')).includes(q);
+  }).sort((a,b)=>{
+    return (a.categorie||'').localeCompare(b.categorie||'','fr') ||
+      (a.sousCategorie||'').localeCompare(b.sousCategorie||'','fr') ||
+      (a.marque||'').localeCompare(b.marque||'','fr');
+  });
+}
+function renderFilters(){
+  const cats=['Toutes',...categories()];
+  $('filters').innerHTML=cats.map(c=>`<button type="button" class="filter ${c===selectedCategory?'active':''}" data-cat="${esc(c)}">${esc(c)}</button>`).join('');
+  $('filters').querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{selectedCategory=b.dataset.cat;render();});
+}
+function render(){
+  renderFilters();
+  const arr=filteredItems();
+  const total=arr.reduce((s,x)=>s+(Number(x.quantite)||0),0);
+  $('summary').textContent=`${arr.length} référence${arr.length>1?'s':''} · ${total} pièce${total>1?'s':''} en stock`;
+  $('list').innerHTML=arr.length?arr.map(x=>`
+    <article class="card">
+      <div class="card-top">
+        <div class="card-main">
+          <div class="cat">${esc(x.categorie)}${x.sousCategorie?' · '+esc(x.sousCategorie):''}</div>
+          <div class="name">${esc(x.marque||'Sans marque')}${x.reference?' — <span class="ref">'+esc(x.reference)+'</span>':''}</div>
+          <div class="meta">
+            ${x.compatibilite?'<div><strong>Compatibilité :</strong> '+esc(x.compatibilite)+'</div>':''}
+            ${x.motorisation?'<div><strong>Motorisation :</strong> '+esc(x.motorisation)+'</div>':''}
+            ${x.notes?'<div><strong>Notes :</strong> '+esc(x.notes)+'</div>':''}
+          </div>
+        </div>
+        <div class="qtybox">
+          <button type="button" class="qtybtn" data-delta="-1" data-id="${esc(x.id)}">−</button>
+          <div class="qty">${Number(x.quantite)||0}</div>
+          <button type="button" class="qtybtn" data-delta="1" data-id="${esc(x.id)}">＋</button>
+        </div>
+      </div>
+      <div class="actions"><button type="button" data-edit="${esc(x.id)}">Modifier</button></div>
+    </article>`).join(''):'<div class="empty">Aucune pièce ne correspond à la recherche.</div>';
+  $('list').querySelectorAll('[data-delta]').forEach(b=>b.onclick=async()=>{
+    const x=DATA.items.find(i=>i.id===b.dataset.id); if(!x)return;
+    x.quantite=Math.max(0,(Number(x.quantite)||0)+Number(b.dataset.delta));
+    render(); await saveData();
+  });
+  $('list').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openModal(DATA.items.find(i=>i.id===b.dataset.edit)));
+}
+function openModal(item=null){
+  $('itemForm').reset();
+  $('quantite').value=1;
+  $('itemId').value=item?.id||'';
+  $('modalTitle').textContent=item?'Modifier la pièce':'Ajouter une pièce';
+  $('deleteBtn').style.display=item?'block':'none';
+  ['categorie','sousCategorie','marque','reference','quantite','compatibilite','motorisation','notes'].forEach(k=>{
+    if(item && item[k]!==undefined) $(k).value=item[k];
+  });
+  $('modal').classList.add('open');
+  setTimeout(()=>$('categorie').focus(),100);
+}
+function closeModal(){$('modal').classList.remove('open');}
+$('itemForm').onsubmit=async e=>{
+  e.preventDefault();
+  const id=$('itemId').value||uid();
+  const item={
+    id,
+    categorie:$('categorie').value.trim(),
+    sousCategorie:$('sousCategorie').value.trim(),
+    marque:$('marque').value.trim(),
+    reference:$('reference').value.trim(),
+    quantite:Math.max(0,parseInt($('quantite').value,10)||0),
+    compatibilite:$('compatibilite').value.trim(),
+    motorisation:$('motorisation').value.trim(),
+    notes:$('notes').value.trim()
+  };
+  const idx=DATA.items.findIndex(x=>x.id===id);
+  if(idx>=0) DATA.items[idx]=item; else DATA.items.push(item);
+  closeModal(); render(); await saveData();
+};
+$('deleteBtn').onclick=async()=>{
+  const id=$('itemId').value;
+  const x=DATA.items.find(i=>i.id===id);
+  if(!x||!confirm(`Supprimer ${x.marque} ${x.reference} de l'inventaire ?`))return;
+  DATA.items=DATA.items.filter(i=>i.id!==id); closeModal(); render(); await saveData();
+};
+$('addBtn').onclick=()=>openModal();
+$('cancelBtn').onclick=closeModal;
+$('modal').onclick=e=>{if(e.target===$('modal'))closeModal();};
+$('search').oninput=render;
+$('clearSearch').onclick=()=>{$('search').value='';selectedCategory='Toutes';render();};
+$('exportBtn').onclick=()=>{
+  const blob=new Blob([JSON.stringify(DATA,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`inventaire_${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href);
+};
+$('importFile').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=async()=>{
+    try{
+      const p=JSON.parse(r.result);if(!p||!Array.isArray(p.items))throw new Error();
+      if(confirm(`Remplacer l'inventaire actuel par les ${p.items.length} référence(s) du fichier ?`)){
+        DATA=p;render();await saveData();
+      }
+    }catch{alert('Fichier inventaire invalide.');}
+    e.target.value='';
+  };r.readAsText(f);
+};
+loadData();
+</script>
+<script>
+if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+</script>
+</body>
+</html>
