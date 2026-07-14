@@ -209,3 +209,7 @@ mêmes fichiers avec **Capacitor** (https://capacitorjs.com) pour obtenir
 une app iOS native avec stockage fichier réel et installation via
 Xcode/câble USB — plus solide que le stockage navigateur, mais demande
 plus de mise en place. Dis-moi si tu veux qu'on parte sur cette voie.
+
+## Configuration CORS requise pour les photos dans les PDF
+
+Pour qu'une photo déjà enregistrée dans Firebase Storage puisse être relue et intégrée au PDF par le navigateur, applique une fois la configuration décrite dans `CONFIGURER-CORS-FIREBASE.md`. L'upload et l'affichage des photos peuvent fonctionner sans CORS, mais pas leur lecture binaire par le canvas PDF.
