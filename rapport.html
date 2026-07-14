@@ -152,7 +152,10 @@
   .stage{display:flex; flex-direction:column; align-items:center; gap:20px}
 
   /* ---------- THE REPORT (printable) ---------- */
-  .report{width:100%; display:flex; flex-direction:column; align-items:center; gap:20px}
+  .report{width:794px; max-width:none; display:flex; flex-direction:column; align-items:center; gap:20px}
+  .pdf-preview-page{width:794px; height:1123px; background:#fff; box-shadow:0 4px 24px rgba(16,24,40,.16); overflow:hidden; flex:0 0 auto}
+  .pdf-preview-page img{display:block; width:100%; height:100%; object-fit:contain; background:#fff}
+  .pdf-preview-message{width:794px; min-height:180px; display:flex; align-items:center; justify-content:center; text-align:center; padding:28px; background:#fff; color:var(--muted); border:1px solid var(--line); border-radius:10px; box-shadow:0 4px 24px rgba(16,24,40,.10)}
   .page{
     width:210mm; min-height:297mm; background:#fff; color:var(--ink);
     padding:16mm 15mm; box-shadow:0 4px 24px rgba(16,24,40,.16);
@@ -423,7 +426,7 @@
     <div class="app-bar-top">
       <div class="app-bar-title">
         <h1>🛠️ Rapport d'intervention</h1>
-        <span class="sub">Version 45</span>
+        <span class="sub">Version 46</span>
       </div>
       <div class="app-bar-notices">
         <span id="saveWarn" style="display:none; font-size:12px; color:#ffd27a; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
@@ -614,7 +617,7 @@
   <!-- ====================== PREVIEW ====================== -->
   <div class="preview">
     <div class="preview-tools">
-      <span>Aperçu (format A4) — exactement ce qui sera imprimé en PDF.</span>
+      <span id="previewStatus">Aperçu A4 — mise à jour automatique.</span>
     </div>
     <div class="stage">
       <div class="report-shell">
@@ -1166,6 +1169,8 @@ function normSection(sec){
     if(sec.labelR===undefined) sec.labelR = 'Droite';
   }
   if(sec.cols===undefined) sec.cols = 2;
+  if(sec.rowsPerPage===undefined) sec.rowsPerPage = 0; // 0 = automatique
+  sec.rowsPerPage = Math.max(0, Math.min(4, Number(sec.rowsPerPage)||0));
   return sec;
 }
 
@@ -1191,6 +1196,13 @@ function buildSections(){
             <button data-c="1">1</button><button data-c="2">2</button><button data-c="3">3</button>
           </div>
         </div>
+        <div class="field" style="margin:12px 0 0">
+          <label>Lignes de photos par page</label>
+          <div class="seg s-rows">
+            <button data-r="0">Auto</button><button data-r="1">1</button><button data-r="2">2</button><button data-r="3">3</button><button data-r="4">4</button>
+          </div>
+          <div class="hint">Ex. 2 = deux rangées gauche/droite maximum sur une page.</div>
+        </div>
         <div class="side-name-row">
           <div><label>Nom colonne gauche</label><input type="text" class="s-labelL" placeholder="Gauche"></div>
           <div><label>Nom colonne droite</label><input type="text" class="s-labelR" placeholder="Droite"></div>
@@ -1214,6 +1226,13 @@ function buildSections(){
           <div class="seg s-cols">
             <button data-c="1">1</button><button data-c="2">2</button><button data-c="3">3</button><button data-c="4">4</button><button data-c="5">5</button><button data-c="6">6</button>
           </div>
+        </div>
+        <div class="field" style="margin:12px 0 0">
+          <label>Lignes de photos par page</label>
+          <div class="seg s-rows">
+            <button data-r="0">Auto</button><button data-r="1">1</button><button data-r="2">2</button><button data-r="3">3</button><button data-r="4">4</button>
+          </div>
+          <div class="hint">Ex. 1 photo par ligne + 2 lignes par page = 2 photos sur la page.</div>
         </div>
         <div style="height:12px"></div>
         <label class="filebtn s-addphoto">📷 Ajouter des photos…</label>
@@ -1253,6 +1272,10 @@ function buildSections(){
     card.querySelectorAll('.s-cols button').forEach(b=>{
       if(+b.dataset.c === (sec.cols||2)) b.classList.add('on');
       b.addEventListener('click', ()=>{ sec.cols=+b.dataset.c; buildSections(); renderReport(); save(); });
+    });
+    card.querySelectorAll('.s-rows button').forEach(b=>{
+      if(+b.dataset.r === (sec.rowsPerPage||0)) b.classList.add('on');
+      b.addEventListener('click', ()=>{ sec.rowsPerPage=+b.dataset.r; buildSections(); renderReport(); save(); });
     });
     // new page
     const np = card.querySelector('.s-newpage'); np.checked=!!sec.newpage;
@@ -1359,11 +1382,11 @@ function movePhotoArr(arr,i,d){
   buildSections(); renderReport(); save();
 }
 function addSection(){
-  state.sections.push({id:nid(), type:'normal', title:'', desc:'', cols:2, newpage:false, photos:[]});
+  state.sections.push({id:nid(), type:'normal', title:'', desc:'', cols:2, rowsPerPage:0, newpage:false, photos:[]});
   buildSections(); renderReport(); save();
 }
 function addSymSection(){
-  state.sections.push({id:nid(), type:'sym', title:'', desc:'', cols:1, newpage:false,
+  state.sections.push({id:nid(), type:'sym', title:'', desc:'', cols:1, rowsPerPage:0, newpage:false,
     labelL:'Gauche', labelR:'Droite', photosL:[], photosR:[]});
   buildSections(); renderReport(); save();
 }
@@ -2030,10 +2053,10 @@ function reportDateFr(value){
   return text;
 }
 
-async function renderReportPdfPages(){
+async function renderReportPdfPages(options={}){
   const s=state;
   const pages=[];
-  const imageCache=new Map();
+  const imageCache=options.imageCache||new Map();
   const logo=await loadReportPdfImage(s.logo||DEFAULT_LOGO,imageCache);
   const contentW=REPORT_PDF_W-REPORT_PDF_MARGIN*2;
   const newCanvas=()=>{
@@ -2128,24 +2151,59 @@ async function renderReportPdfPages(){
 
   /* Détail des prestations */
   if(s.sections.length){
-    let p=null,firstDetail=true;
-    const begin=()=>{p=contentPage(firstDetail?'Détail des prestations':null);firstDetail=false;};
-    const ensure=height=>{if(!p)begin();if(p.y+height>REPORT_PDF_H-REPORT_PDF_MARGIN){finish(p);begin();}};
-    const drawSectionTitle=(sec,index)=>{
-      ensure(65);
+    let p=null,firstDetail=true,pageHasSection=false;
+    const pageBottom=REPORT_PDF_H-REPORT_PDF_MARGIN;
+    const begin=()=>{
+      p=contentPage(firstDetail?'Détail des prestations':null);
+      firstDetail=false;
+      pageHasSection=false;
+    };
+    const nextPage=()=>{if(p)finish(p);begin();};
+    const ensure=height=>{
+      if(!p)begin();
+      if(p.y+height>pageBottom)nextPage();
+    };
+    const sectionHeaderInfo=sec=>{
+      if(!p)begin();
+      p.ctx.font='23px Arial';
+      const lines=sec.desc?pdfTextLines(p.ctx,sec.desc,contentW):[];
+      return {lines,height:58+(lines.length?lines.length*31+16:0)};
+    };
+    const drawSectionTitle=(sec,index,headerInfo)=>{
+      const info=headerInfo||sectionHeaderInfo(sec);
+      ensure(info.height);
       p.ctx.fillStyle='#101216';p.ctx.beginPath();p.ctx.arc(REPORT_PDF_MARGIN+20,p.y+20,20,0,Math.PI*2);p.ctx.fill();
       p.ctx.fillStyle='#fff';p.ctx.font='bold 18px Arial';p.ctx.textAlign='center';p.ctx.fillText(String(index+1),REPORT_PDF_MARGIN+20,p.y+9);p.ctx.textAlign='left';
       p.ctx.fillStyle='#101216';p.ctx.font='bold 29px Arial';p.ctx.fillText(sec.title||'(sans titre)',REPORT_PDF_MARGIN+58,p.y+4);p.y+=58;
-      if(sec.desc){
+      if(info.lines.length){
         p.ctx.fillStyle='#4b5563';p.ctx.font='23px Arial';
-        const lines=pdfTextLines(p.ctx,sec.desc,contentW);ensure(lines.length*31+20);
-        p.y=pdfDrawLines(p.ctx,lines,REPORT_PDF_MARGIN,p.y,31)+16;
+        p.y=pdfDrawLines(p.ctx,info.lines,REPORT_PDF_MARGIN,p.y,31)+16;
       }
+      pageHasSection=true;
     };
+    const fixedRowImageHeight=(rowsPerPage,captionAndGap)=>{
+      const available=Math.max(1,pageBottom-p.y);
+      return Math.max(110,Math.floor((available-rowsPerPage*captionAndGap)/rowsPerPage));
+    };
+
     for(let i=0;i<s.sections.length;i++){
       const sec=s.sections[i];normSection(sec);
-      if(sec.newpage&&p){finish(p);p=null;}
-      drawSectionTitle(sec,i);
+      if(sec.newpage&&p)nextPage();
+      if(!p)begin();
+
+      const fixedRows=Math.max(0,Math.min(4,Number(sec.rowsPerPage)||0));
+      const headerInfo=sectionHeaderInfo(sec);
+      const symHeaderHeight=sec.type==='sym'?58:0;
+      /* Avec un nombre de lignes imposé, évite de commencer une prestation tout
+         en bas d'une page déjà occupée : ses photos resteraient lisibles mais
+         beaucoup trop petites. La première page "Détail" n'est jamais laissée
+         seule, car pageHasSection reste faux tant qu'aucune prestation n'y figure. */
+      if(fixedRows&&pageHasSection){
+        const estimated=headerInfo.height+symHeaderHeight+fixedRows*(180+62);
+        if(p.y+estimated>pageBottom)nextPage();
+      }
+      drawSectionTitle(sec,i,headerInfo);
+
       if(sec.type==='sym'){
         const L=sec.photosL||[],R=sec.photosR||[],rows=Math.max(L.length,R.length);
         ensure(58);
@@ -2154,32 +2212,54 @@ async function renderReportPdfPages(){
         p.ctx.fillStyle='#fff';p.ctx.font='bold 21px Arial';p.ctx.textAlign='center';
         p.ctx.fillText(sec.labelL||'Gauche',REPORT_PDF_MARGIN+colW/2,p.y+10);p.ctx.fillText(sec.labelR||'Droite',REPORT_PDF_MARGIN+colW+gap+colW/2,p.y+10);p.ctx.textAlign='left';p.y+=58;
         if(!rows){p.ctx.fillStyle='#6b7280';p.ctx.font='italic 22px Arial';p.ctx.fillText('Aucune photo',REPORT_PDF_MARGIN,p.y);p.y+=48;}
+
+        let rowsOnPage=0,fixedImageH=0;
         for(let row=0;row<rows;row++){
+          if(fixedRows&&rowsOnPage>=fixedRows){nextPage();rowsOnPage=0;fixedImageH=0;}
           const itemL=L[row],itemR=R[row];
           const imgL=itemL?await loadReportPdfImage(itemL.src,imageCache):null;
           const imgR=itemR?await loadReportPdfImage(itemR.src,imageCache):null;
-          const capH=(itemL?.cap||itemR?.cap)?36:0,rowH=480+capH;
-          ensure(rowH+26);
-          pdfDrawContain(p.ctx,imgL,REPORT_PDF_MARGIN,p.y,colW,480,{border:true,background:'#fafbfc'});
-          pdfDrawContain(p.ctx,imgR,REPORT_PDF_MARGIN+colW+gap,p.y,colW,480,{border:true,background:'#fafbfc'});
-          if(itemL?.cap){p.ctx.fillStyle='#6b7280';p.ctx.font='19px Arial';p.ctx.textAlign='center';p.ctx.fillText(itemL.cap,REPORT_PDF_MARGIN+colW/2,p.y+488);}
-          if(itemR?.cap){p.ctx.fillStyle='#6b7280';p.ctx.font='19px Arial';p.ctx.textAlign='center';p.ctx.fillText(itemR.cap,REPORT_PDF_MARGIN+colW+gap+colW/2,p.y+488);}
-          p.ctx.textAlign='left';p.y+=rowH+26;
+          const captionReserve=36,rowGap=26;
+          let imageH=480;
+          if(fixedRows){
+            if(rowsOnPage===0)fixedImageH=fixedRowImageHeight(fixedRows,captionReserve+rowGap);
+            imageH=fixedImageH;
+            if(p.y+imageH+captionReserve+rowGap>pageBottom){nextPage();rowsOnPage=0;fixedImageH=fixedRowImageHeight(fixedRows,captionReserve+rowGap);imageH=fixedImageH;}
+          }else{
+            ensure(imageH+(itemL?.cap||itemR?.cap?captionReserve:0)+rowGap);
+          }
+          pdfDrawContain(p.ctx,imgL,REPORT_PDF_MARGIN,p.y,colW,imageH,{border:true,background:'#fafbfc'});
+          pdfDrawContain(p.ctx,imgR,REPORT_PDF_MARGIN+colW+gap,p.y,colW,imageH,{border:true,background:'#fafbfc'});
+          if(itemL?.cap){p.ctx.fillStyle='#6b7280';p.ctx.font='19px Arial';p.ctx.textAlign='center';p.ctx.fillText(itemL.cap,REPORT_PDF_MARGIN+colW/2,p.y+imageH+8);}
+          if(itemR?.cap){p.ctx.fillStyle='#6b7280';p.ctx.font='19px Arial';p.ctx.textAlign='center';p.ctx.fillText(itemR.cap,REPORT_PDF_MARGIN+colW+gap+colW/2,p.y+imageH+8);}
+          p.ctx.textAlign='left';
+          p.y+=imageH+(fixedRows?captionReserve:(itemL?.cap||itemR?.cap?captionReserve:0))+rowGap;
+          rowsOnPage++;pageHasSection=true;
         }
       }else{
         const photos=sec.photos||[],cols=Math.max(1,Math.min(6,Number(sec.cols)||2));
         const gap=22,colW=(contentW-gap*(cols-1))/cols;
-        const maxImageH={1:820,2:500,3:340,4:250,5:205,6:170}[cols];
+        const autoImageH={1:820,2:500,3:340,4:250,5:205,6:170}[cols];
+        let rowsOnPage=0,fixedImageH=0;
         for(let start=0;start<photos.length;start+=cols){
+          if(fixedRows&&rowsOnPage>=fixedRows){nextPage();rowsOnPage=0;fixedImageH=0;}
           const row=photos.slice(start,start+cols);
-          const capH=row.some(x=>x.cap)?36:0,rowH=maxImageH+capH+26;
-          ensure(rowH);
+          const captionReserve=36,rowGap=26;
+          let imageH=autoImageH;
+          if(fixedRows){
+            if(rowsOnPage===0)fixedImageH=fixedRowImageHeight(fixedRows,captionReserve+rowGap);
+            imageH=fixedImageH;
+            if(p.y+imageH+captionReserve+rowGap>pageBottom){nextPage();rowsOnPage=0;fixedImageH=fixedRowImageHeight(fixedRows,captionReserve+rowGap);imageH=fixedImageH;}
+          }else{
+            ensure(imageH+(row.some(x=>x.cap)?captionReserve:0)+rowGap);
+          }
           for(let j=0;j<row.length;j++){
             const item=row[j],img=await loadReportPdfImage(item.src,imageCache),x=REPORT_PDF_MARGIN+j*(colW+gap);
-            pdfDrawContain(p.ctx,img,x,p.y,colW,maxImageH,{border:true,background:'#fafbfc'});
-            if(item.cap){p.ctx.fillStyle='#6b7280';p.ctx.font='18px Arial';p.ctx.textAlign='center';p.ctx.fillText(item.cap,x+colW/2,p.y+maxImageH+8);p.ctx.textAlign='left';}
+            pdfDrawContain(p.ctx,img,x,p.y,colW,imageH,{border:true,background:'#fafbfc'});
+            if(item.cap){p.ctx.fillStyle='#6b7280';p.ctx.font='18px Arial';p.ctx.textAlign='center';p.ctx.fillText(item.cap,x+colW/2,p.y+imageH+8);p.ctx.textAlign='left';}
           }
-          p.y+=rowH;
+          p.y+=imageH+(fixedRows?captionReserve:(row.some(x=>x.cap)?captionReserve:0))+rowGap;
+          rowsOnPage++;pageHasSection=true;
         }
       }
       p.y+=24;
@@ -2249,8 +2329,8 @@ async function generatePdf(){
   const original=btn.textContent;
   btn.disabled=true;btn.textContent='⏳ Génération…';
   try{
-    save();flushPendingSave();renderReport();
-    const pages=await renderReportPdfPages();
+    save();flushPendingSave();
+    const pages=await renderReportPdfPages({imageCache:reportPreviewImageCache});
     if(!pages.length)throw new Error('Aucune page générée');
     const blob=buildReportImagePdf(pages);
     const url=URL.createObjectURL(blob);
@@ -2351,7 +2431,7 @@ function setMobileView(view){
     be.classList.toggle('active', view==='editor');
     bp.classList.toggle('active', view==='preview');
   }
-  if(view==='preview') updatePreviewScale();
+  if(view==='preview') renderReport(true);
 
   if(isMobile()){
     requestAnimationFrame(()=>{
@@ -2378,13 +2458,52 @@ function updatePreviewScale(){
   }
 }
 
-// recalcule après chaque rendu du rapport (nouveau contenu = nouvelle hauteur)
-const _origRenderReport = renderReport;
-renderReport = function(){
-  _origRenderReport.apply(this, arguments);
-  if(document.body.getAttribute('data-mview') === 'preview' || !isMobile()){
-    updatePreviewScale();
+// L'aperçu utilise exactement le même moteur canvas que le PDF final.
+// Il est différé de quelques millisecondes pour rester fluide pendant la saisie.
+const _legacyRenderReport = renderReport; // conservé uniquement pour compatibilité interne
+const reportPreviewImageCache = new Map();
+let reportPreviewTimer = null;
+let reportPreviewRevision = 0;
+
+function shouldRenderA4Preview(){
+  return !isMobile() || document.body.getAttribute('data-mview') === 'preview';
+}
+
+async function refreshA4Preview(revision){
+  const report=document.getElementById('report');
+  const status=document.getElementById('previewStatus');
+  if(!report)return;
+  if(status)status.textContent='Aperçu A4 — génération en cours…';
+  if(!report.children.length)report.innerHTML='<div class="pdf-preview-message">⏳ Préparation des pages A4…</div>';
+  try{
+    const pages=await renderReportPdfPages({imageCache:reportPreviewImageCache});
+    if(revision!==reportPreviewRevision)return;
+    report.innerHTML='';
+    pages.forEach((page,index)=>{
+      const holder=document.createElement('div');
+      holder.className='pdf-preview-page';
+      holder.setAttribute('aria-label',`Page ${index+1} sur ${pages.length}`);
+      const img=document.createElement('img');
+      img.src=page.dataUrl;img.alt=`Aperçu de la page ${index+1}`;
+      holder.appendChild(img);report.appendChild(holder);
+    });
+    if(status)status.textContent=`Aperçu A4 — ${pages.length} page${pages.length>1?'s':''}, identique au PDF.`;
+    requestAnimationFrame(()=>updatePreviewScale());
+  }catch(error){
+    if(revision!==reportPreviewRevision)return;
+    console.error('Aperçu A4 impossible',error);
+    report.innerHTML='<div class="pdf-preview-message">L’aperçu A4 ne peut pas charger une image du rapport. Vérifie la connexion puis réessaie.</div>';
+    if(status)status.textContent='Aperçu A4 indisponible — une image n’a pas pu être chargée.';
+    requestAnimationFrame(()=>updatePreviewScale());
   }
+}
+
+renderReport = function(force=false){
+  reportPreviewRevision++;
+  const revision=reportPreviewRevision;
+  clearTimeout(reportPreviewTimer);
+  if(!force&&!shouldRenderA4Preview())return;
+  reportPreviewTimer=setTimeout(()=>refreshA4Preview(revision),320);
 };
 
 window.addEventListener('resize', ()=>{ if(isMobile()) updatePreviewScale(); });
