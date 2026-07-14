@@ -365,7 +365,8 @@
   }
 
   /* Export PDF direct : rendu A4 indépendant de l'impression Safari */
-  .pdf-export-host{position:fixed;left:0;top:0;width:210mm;background:#fff;z-index:-2147483647;pointer-events:none}
+  .pdf-export-host{position:absolute;left:0;top:0;width:210mm;background:#fff;z-index:2147483000;pointer-events:none;opacity:1;visibility:visible}
+  .pdf-export-mask{position:fixed;inset:0;z-index:2147483647;background:#f4f6f8;display:flex;align-items:center;justify-content:center;font:700 16px system-ui,-apple-system,sans-serif;color:#111827}
   /* Ne pas placer le document à -100000 px : Chromium peut alors produire des
      canvases entièrement blancs. Le conteneur reste dans la zone de rendu,
      derrière l'application, sans modifier la mise en page visible. */
@@ -423,7 +424,7 @@
     <div class="app-bar-top">
       <div class="app-bar-title">
         <h1>🛠️ Rapport d'intervention</h1>
-        <span class="sub">Version 39</span>
+        <span class="sub">Version 40</span>
       </div>
       <div class="app-bar-notices">
         <span id="saveWarn" style="display:none; font-size:12px; color:#ffd27a; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
@@ -1861,9 +1862,14 @@ async function makePdfWatermark(src){
 }
 
 function reportPdfFilename(){
-  const raw=[state.plate,state.brand,state.model,state.date].filter(Boolean).join('-') || 'rapport-intervention';
-  const safe=raw.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-+|-+$/g,'');
-  return `${safe||'rapport-intervention'}.pdf`;
+  const plateRaw=String(state.plate||'sans-immatriculation').trim().toUpperCase();
+  const dateRaw=String(state.date||new Date().toISOString().slice(0,10)).trim();
+  const clean=(value,fallback)=>{
+    const safe=String(value||fallback).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-+|-+$/g,'');
+    return safe||fallback;
+  };
+  return `rapport_${clean(plateRaw,'sans-immatriculation')}_${clean(dateRaw,'sans-date')}.pdf`;
 }
 
 async function generatePdf(){
@@ -1872,16 +1878,26 @@ async function generatePdf(){
   btn.disabled=true;
   btn.textContent='⏳ Génération…';
   let host=null;
+  let mask=null;
   try{
     save();
     flushPendingSave();
     renderReport();
     if(typeof html2pdf!=='function') throw new Error('Moteur PDF indisponible');
 
+    mask=document.createElement('div');
+    mask.className='pdf-export-mask';
+    mask.textContent='Génération du PDF…';
+    document.body.appendChild(mask);
+
     host=document.createElement('div');
     host.className='pdf-export-host';
     const clone=document.getElementById('report').cloneNode(true);
     clone.removeAttribute('id');
+    clone.style.opacity='1';
+    clone.style.visibility='visible';
+    clone.style.display='block';
+    clone.style.transform='none';
     /* Le logo de l'aperçu est déjà ajouté directement au PDF ci-dessous.
        On le retire du clone pour éviter deux logos superposés. */
     clone.querySelectorAll('.wm, #printWm').forEach(el=>el.remove());
@@ -1905,6 +1921,8 @@ async function generatePdf(){
         allowTaint:false,
         backgroundColor:'#ffffff',
         logging:false,
+        foreignObjectRendering:false,
+        removeContainer:true,
         scrollX:0,
         scrollY:0,
         windowWidth:Math.ceil(210*96/25.4)
@@ -1942,6 +1960,7 @@ async function generatePdf(){
     alert("Impossible de générer le PDF. Vérifie que les images du rapport sont bien chargées puis réessaie.");
   }finally{
     if(host) host.remove();
+    if(mask) mask.remove();
     btn.disabled=false;
     btn.textContent=original;
   }
