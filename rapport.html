@@ -423,7 +423,7 @@
     <div class="app-bar-top">
       <div class="app-bar-title">
         <h1>🛠️ Rapport d'intervention</h1>
-        <span class="sub">Version 39</span>
+        <span class="sub">Version 42</span>
       </div>
       <div class="app-bar-notices">
         <span id="saveWarn" style="display:none; font-size:12px; color:#ffd27a; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
@@ -1809,21 +1809,11 @@ Créer automatiquement la fiche « ${label} » dans le carnet atelier ?`);
   return outcome || {status:'skipped',message:'Rapport sauvegardé sans modification du carnet.'};
 }
 
-async function waitForPdfImages(root){
-  const images=[...root.querySelectorAll('img')];
-  await Promise.all(images.map(img=>new Promise(resolve=>{
-    if(img.complete && img.naturalWidth){ resolve(); return; }
-    const done=()=>resolve();
-    img.addEventListener('load',done,{once:true});
-    img.addEventListener('error',done,{once:true});
-  })));
-}
-
 async function pdfSourceAsDataUrl(src){
   if(!src) return '';
   if(src.startsWith('data:')) return src;
   try{
-    const response=await fetch(src,{cache:'force-cache'});
+    const response=await fetch(src,{cache:'force-cache',mode:'cors'});
     if(!response.ok) throw new Error(`HTTP ${response.status}`);
     const blob=await response.blob();
     return await new Promise((resolve,reject)=>{
@@ -1833,123 +1823,369 @@ async function pdfSourceAsDataUrl(src){
       reader.readAsDataURL(blob);
     });
   }catch(e){
-    console.warn('Logo PDF non récupérable, utilisation directe de la source.',e);
-    return src;
+    console.warn('Image PDF non récupérable.',e);
+    return '';
   }
 }
 
-async function makePdfWatermark(src){
-  const dataUrl=await pdfSourceAsDataUrl(src);
-  if(!dataUrl) return null;
-  return await new Promise(resolve=>{
-    const img=new Image();
-    img.onload=()=>{
-      const max=900;
-      const ratio=Math.min(1,max/Math.max(img.naturalWidth||1,img.naturalHeight||1));
-      const canvas=document.createElement('canvas');
-      canvas.width=Math.max(1,Math.round((img.naturalWidth||1)*ratio));
-      canvas.height=Math.max(1,Math.round((img.naturalHeight||1)*ratio));
-      const ctx=canvas.getContext('2d');
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      ctx.globalAlpha=.09;
-      ctx.drawImage(img,0,0,canvas.width,canvas.height);
-      resolve({data:canvas.toDataURL('image/png'),ratio:canvas.height/canvas.width});
-    };
-    img.onerror=()=>resolve(null);
-    img.src=dataUrl;
-  });
+function reportPdfFilename(){
+  const clean=value=>String(value||'')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-zA-Z0-9_-]+/g,'_')
+    .replace(/^_+|_+$/g,'');
+  const plate=clean(state.plate)||'sans_immatriculation';
+  const date=/^\d{4}-\d{2}-\d{2}$/.test(String(state.date||''))
+    ? state.date
+    : new Date().toISOString().slice(0,10);
+  return `rapport_${plate}_${date}.pdf`;
 }
 
-function reportPdfFilename(){
-  const raw=[state.plate,state.brand,state.model,state.date].filter(Boolean).join('-') || 'rapport-intervention';
-  const safe=raw.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-+|-+$/g,'');
-  return `${safe||'rapport-intervention'}.pdf`;
+function pdfBase64Bytes(dataUrl){
+  const binary=atob(String(dataUrl).split(',')[1]||'');
+  const bytes=new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+  return bytes;
+}
+
+/* Même principe que l'export historique : chaque page est d'abord dessinée
+   dans un canvas, puis les JPEG sont assemblés dans un vrai fichier PDF.
+   Aucun aperçu d'impression ni capture html2canvas n'est utilisé. */
+function buildReportImagePdf(jpegPages,pageWidthPt=595.28,pageHeightPt=841.89){
+  const encoder=new TextEncoder();
+  const chunks=[];
+  const offsets=[0];
+  let length=0;
+  const pushBytes=bytes=>{chunks.push(bytes);length+=bytes.length;};
+  const pushText=text=>pushBytes(encoder.encode(text));
+  const pageCount=jpegPages.length;
+  const objectCount=2+pageCount*3;
+  pushText('%PDF-1.4\n%âãÏÓ\n');
+  const writeObject=(id,parts)=>{
+    offsets[id]=length;
+    pushText(`${id} 0 obj\n`);parts();pushText('\nendobj\n');
+  };
+  writeObject(1,()=>pushText('<< /Type /Catalog /Pages 2 0 R >>'));
+  const pageIds=jpegPages.map((_,i)=>3+i*3);
+  writeObject(2,()=>pushText(`<< /Type /Pages /Count ${pageCount} /Kids [${pageIds.map(id=>`${id} 0 R`).join(' ')}] >>`));
+  jpegPages.forEach((page,i)=>{
+    const pageId=3+i*3,imageId=pageId+1,contentId=pageId+2;
+    writeObject(pageId,()=>pushText(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidthPt} ${pageHeightPt}] /Resources << /XObject << /Im${i} ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`));
+    const imageBytes=pdfBase64Bytes(page.dataUrl);
+    writeObject(imageId,()=>{
+      pushText(`<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>\nstream\n`);
+      pushBytes(imageBytes);pushText('\nendstream');
+    });
+    const stream=`q\n${pageWidthPt} 0 0 ${pageHeightPt} 0 0 cm\n/Im${i} Do\nQ`;
+    writeObject(contentId,()=>pushText(`<< /Length ${encoder.encode(stream).length} >>\nstream\n${stream}\nendstream`));
+  });
+  const xrefOffset=length;
+  pushText(`xref\n0 ${objectCount+1}\n0000000000 65535 f \n`);
+  for(let i=1;i<=objectCount;i++) pushText(`${String(offsets[i]).padStart(10,'0')} 00000 n \n`);
+  pushText(`trailer\n<< /Size ${objectCount+1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+  return new Blob(chunks,{type:'application/pdf'});
+}
+
+const REPORT_PDF_W=1240;
+const REPORT_PDF_H=1754;
+const REPORT_PDF_MARGIN=88;
+
+function pdfTextLines(ctx,value,maxWidth){
+  const paragraphs=String(value||'').replace(/\r/g,'').split('\n');
+  const lines=[];
+  paragraphs.forEach((paragraph,index)=>{
+    const words=paragraph.trim().split(/\s+/).filter(Boolean);
+    if(!words.length){lines.push('');return;}
+    let line='';
+    words.forEach(word=>{
+      const test=line?`${line} ${word}`:word;
+      if(line&&ctx.measureText(test).width>maxWidth){lines.push(line);line=word;}
+      else line=test;
+    });
+    if(line) lines.push(line);
+    if(index<paragraphs.length-1) lines.push('');
+  });
+  return lines;
+}
+
+function pdfDrawLines(ctx,lines,x,y,lineHeight,maxLines){
+  const count=typeof maxLines==='number'?Math.min(lines.length,maxLines):lines.length;
+  for(let i=0;i<count;i++) ctx.fillText(lines[i],x,y+i*lineHeight);
+  return y+count*lineHeight;
+}
+
+function pdfRoundRect(ctx,x,y,w,h,r,fill,stroke){
+  const radius=Math.min(r,w/2,h/2);
+  ctx.beginPath();ctx.moveTo(x+radius,y);ctx.arcTo(x+w,y,x+w,y+h,radius);
+  ctx.arcTo(x+w,y+h,x,y+h,radius);ctx.arcTo(x,y+h,x,y,radius);
+  ctx.arcTo(x,y,x+w,y,radius);ctx.closePath();
+  if(fill)ctx.fill();if(stroke)ctx.stroke();
+}
+
+function pdfDrawContain(ctx,img,x,y,w,h,{border=false,background='#fff'}={}){
+  ctx.fillStyle=background;ctx.fillRect(x,y,w,h);
+  if(border){ctx.strokeStyle='#d9dde4';ctx.lineWidth=2;ctx.strokeRect(x,y,w,h);}
+  if(!img||!img.width||!img.height)return;
+  const ratio=Math.min(w/img.width,h/img.height);
+  const dw=img.width*ratio,dh=img.height*ratio;
+  ctx.drawImage(img,x+(w-dw)/2,y+(h-dh)/2,dw,dh);
+}
+
+async function loadReportPdfImage(src,cache){
+  if(!src)return null;
+  if(cache.has(src))return cache.get(src);
+  const promise=(async()=>{
+    const dataUrl=await pdfSourceAsDataUrl(src);
+    if(!dataUrl)return null;
+    return await new Promise(resolve=>{
+      const img=new Image();
+      img.onload=()=>resolve(img);img.onerror=()=>resolve(null);img.src=dataUrl;
+    });
+  })();
+  cache.set(src,promise);
+  return promise;
+}
+
+function reportDateFr(value){
+  const text=String(value||'');
+  if(/^\d{4}-\d{2}-\d{2}$/.test(text)){
+    const [y,m,d]=text.split('-');return `${d}/${m}/${y}`;
+  }
+  return text;
+}
+
+async function renderReportPdfPages(){
+  const s=state;
+  const pages=[];
+  const imageCache=new Map();
+  const logo=await loadReportPdfImage(s.logo||DEFAULT_LOGO,imageCache);
+  const contentW=REPORT_PDF_W-REPORT_PDF_MARGIN*2;
+  const newCanvas=()=>{
+    const canvas=document.createElement('canvas');
+    canvas.width=REPORT_PDF_W;canvas.height=REPORT_PDF_H;
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.textBaseline='top';ctx.fillStyle='#101216';
+    return {canvas,ctx,y:REPORT_PDF_MARGIN};
+  };
+  const drawWatermark=page=>{
+    if(!logo)return;
+    const maxW=190,maxH=82;
+    const ratio=Math.min(maxW/logo.width,maxH/logo.height);
+    page.ctx.save();page.ctx.globalAlpha=.09;
+    page.ctx.drawImage(logo,REPORT_PDF_W-REPORT_PDF_MARGIN-logo.width*ratio,28,logo.width*ratio,logo.height*ratio);
+    page.ctx.restore();
+  };
+  const finish=page=>pages.push({dataUrl:page.canvas.toDataURL('image/jpeg',.94),width:page.canvas.width,height:page.canvas.height});
+  const contentPage=(title)=>{
+    const page=newCanvas();drawWatermark(page);
+    if(title){
+      page.ctx.font='bold 34px Arial';page.ctx.fillStyle='#101216';
+      page.ctx.fillText(title,REPORT_PDF_MARGIN,page.y);
+      page.y+=58;page.ctx.fillRect(REPORT_PDF_MARGIN,page.y,contentW,4);page.y+=30;
+    }
+    return page;
+  };
+
+  /* Couverture */
+  {
+    const p=newCanvas(),ctx=p.ctx;
+    if(logo){
+      const maxW=520,maxH=230,ratio=Math.min(maxW/logo.width,maxH/logo.height);
+      ctx.drawImage(logo,(REPORT_PDF_W-logo.width*ratio)/2,p.y,logo.width*ratio,logo.height*ratio);
+      p.y+=logo.height*ratio+65;
+    }else p.y+=80;
+    ctx.textAlign='center';ctx.fillStyle='#101216';ctx.font='bold 48px Arial';
+    ctx.fillText(s.title||"RAPPORT D'INTERVENTION",REPORT_PDF_W/2,p.y);p.y+=68;
+    ctx.fillRect(REPORT_PDF_W/2-180,p.y,360,5);p.y+=38;
+    if(s.summary){
+      ctx.font='25px Arial';ctx.fillStyle='#4b5563';
+      const lines=pdfTextLines(ctx,s.summary,850);pdfDrawLines(ctx,lines,REPORT_PDF_W/2,p.y,34);
+      p.y+=lines.length*34+28;
+    }
+    ctx.textAlign='left';
+    const rows=[
+      ["DATE D'INTERVENTION",reportDateFr(s.date)],['MARQUE',s.brand],['MODÈLE',s.model],
+      ['MOTORISATION',s.engine],['MISE EN CIRCULATION',s.reg],['IMMATRICULATION',s.plate],['KILOMÉTRAGE',s.km]
+    ].filter(row=>String(row[1]||'').trim());
+    const tableX=180,tableW=880,labelW=330,rowH=58;
+    rows.forEach(([label,value],index)=>{
+      const y=p.y+index*rowH;
+      ctx.fillStyle='#f4f6f9';ctx.fillRect(tableX,y,labelW,rowH);
+      ctx.strokeStyle='#d9dde4';ctx.lineWidth=2;ctx.strokeRect(tableX,y,tableW,rowH);
+      ctx.beginPath();ctx.moveTo(tableX+labelW,y);ctx.lineTo(tableX+labelW,y+rowH);ctx.stroke();
+      ctx.fillStyle='#4b5563';ctx.font='bold 18px Arial';ctx.fillText(label,tableX+18,y+19);
+      ctx.fillStyle='#101216';ctx.font='23px Arial';ctx.fillText(String(value),tableX+labelW+20,y+16);
+    });
+    p.y+=rows.length*rowH+34;
+    if(s.overview){
+      const img=await loadReportPdfImage(s.overview,imageCache);
+      const available=Math.max(220,REPORT_PDF_H-p.y-150);
+      pdfDrawContain(ctx,img,REPORT_PDF_MARGIN,p.y,contentW,available,{border:true,background:'#fafbfc'});
+      p.y+=available;
+    }
+    ctx.textAlign='center';ctx.fillStyle='#6b7280';ctx.font='18px Arial';
+    ctx.fillText(`Rapport généré le ${(s.genDate&&s.genDate.trim())?s.genDate.trim():new Date().toLocaleDateString('fr-FR')}`,REPORT_PDF_W/2,REPORT_PDF_H-65);
+    ctx.textAlign='left';finish(p);
+  }
+
+  /* Sommaire */
+  if(s.sections.length){
+    let p=contentPage('Sommaire des prestations');
+    for(let i=0;i<s.sections.length;i++){
+      const sec=s.sections[i];normSection(sec);
+      const title=`${sec.title||'(prestation sans titre)'}${sec.type==='sym'?' (G/D)':''}`;
+      if(p.y+66>REPORT_PDF_H-REPORT_PDF_MARGIN){finish(p);p=contentPage('Sommaire des prestations (suite)');}
+      p.ctx.fillStyle='#101216';p.ctx.beginPath();p.ctx.arc(REPORT_PDF_MARGIN+22,p.y+22,22,0,Math.PI*2);p.ctx.fill();
+      p.ctx.fillStyle='#fff';p.ctx.font='bold 20px Arial';p.ctx.textAlign='center';p.ctx.fillText(String(i+1),REPORT_PDF_MARGIN+22,p.y+10);p.ctx.textAlign='left';
+      p.ctx.fillStyle='#101216';p.ctx.font='bold 25px Arial';p.ctx.fillText(title,REPORT_PDF_MARGIN+68,p.y+7);
+      p.ctx.strokeStyle='#d9dde4';p.ctx.lineWidth=2;p.ctx.beginPath();p.ctx.moveTo(REPORT_PDF_MARGIN,p.y+58);p.ctx.lineTo(REPORT_PDF_W-REPORT_PDF_MARGIN,p.y+58);p.ctx.stroke();
+      p.y+=66;
+    }
+    if(s.products){
+      const img=await loadReportPdfImage(s.products,imageCache);
+      if(p.y+500>REPORT_PDF_H-REPORT_PDF_MARGIN){finish(p);p=contentPage('Produits / pièces utilisés');}
+      pdfDrawContain(p.ctx,img,REPORT_PDF_MARGIN,p.y,contentW,Math.min(600,REPORT_PDF_H-p.y-REPORT_PDF_MARGIN-45),{border:true,background:'#fafbfc'});
+    }
+    finish(p);
+  }
+
+  /* Détail des prestations */
+  if(s.sections.length){
+    let p=null,firstDetail=true;
+    const begin=()=>{p=contentPage(firstDetail?'Détail des prestations':'Détail des prestations (suite)');firstDetail=false;};
+    const ensure=height=>{if(!p)begin();if(p.y+height>REPORT_PDF_H-REPORT_PDF_MARGIN){finish(p);begin();}};
+    const drawSectionTitle=(sec,index)=>{
+      ensure(65);
+      p.ctx.fillStyle='#101216';p.ctx.beginPath();p.ctx.arc(REPORT_PDF_MARGIN+20,p.y+20,20,0,Math.PI*2);p.ctx.fill();
+      p.ctx.fillStyle='#fff';p.ctx.font='bold 18px Arial';p.ctx.textAlign='center';p.ctx.fillText(String(index+1),REPORT_PDF_MARGIN+20,p.y+9);p.ctx.textAlign='left';
+      p.ctx.fillStyle='#101216';p.ctx.font='bold 29px Arial';p.ctx.fillText(sec.title||'(sans titre)',REPORT_PDF_MARGIN+58,p.y+4);p.y+=58;
+      if(sec.desc){
+        p.ctx.fillStyle='#4b5563';p.ctx.font='23px Arial';
+        const lines=pdfTextLines(p.ctx,sec.desc,contentW);ensure(lines.length*31+20);
+        p.y=pdfDrawLines(p.ctx,lines,REPORT_PDF_MARGIN,p.y,31)+16;
+      }
+    };
+    for(let i=0;i<s.sections.length;i++){
+      const sec=s.sections[i];normSection(sec);
+      if(sec.newpage&&p){finish(p);p=null;}
+      drawSectionTitle(sec,i);
+      if(sec.type==='sym'){
+        const L=sec.photosL||[],R=sec.photosR||[],rows=Math.max(L.length,R.length);
+        ensure(58);
+        const gap=34,colW=(contentW-gap)/2;
+        p.ctx.fillStyle='#101216';pdfRoundRect(p.ctx,REPORT_PDF_MARGIN,p.y,colW,44,7,true,false);pdfRoundRect(p.ctx,REPORT_PDF_MARGIN+colW+gap,p.y,colW,44,7,true,false);
+        p.ctx.fillStyle='#fff';p.ctx.font='bold 21px Arial';p.ctx.textAlign='center';
+        p.ctx.fillText(sec.labelL||'Gauche',REPORT_PDF_MARGIN+colW/2,p.y+10);p.ctx.fillText(sec.labelR||'Droite',REPORT_PDF_MARGIN+colW+gap+colW/2,p.y+10);p.ctx.textAlign='left';p.y+=58;
+        if(!rows){p.ctx.fillStyle='#6b7280';p.ctx.font='italic 22px Arial';p.ctx.fillText('Aucune photo',REPORT_PDF_MARGIN,p.y);p.y+=48;}
+        for(let row=0;row<rows;row++){
+          const itemL=L[row],itemR=R[row];
+          const imgL=itemL?await loadReportPdfImage(itemL.src,imageCache):null;
+          const imgR=itemR?await loadReportPdfImage(itemR.src,imageCache):null;
+          const capH=(itemL?.cap||itemR?.cap)?36:0,rowH=480+capH;
+          ensure(rowH+26);
+          pdfDrawContain(p.ctx,imgL,REPORT_PDF_MARGIN,p.y,colW,480,{border:true,background:'#fafbfc'});
+          pdfDrawContain(p.ctx,imgR,REPORT_PDF_MARGIN+colW+gap,p.y,colW,480,{border:true,background:'#fafbfc'});
+          if(itemL?.cap){p.ctx.fillStyle='#6b7280';p.ctx.font='19px Arial';p.ctx.textAlign='center';p.ctx.fillText(itemL.cap,REPORT_PDF_MARGIN+colW/2,p.y+488);}
+          if(itemR?.cap){p.ctx.fillStyle='#6b7280';p.ctx.font='19px Arial';p.ctx.textAlign='center';p.ctx.fillText(itemR.cap,REPORT_PDF_MARGIN+colW+gap+colW/2,p.y+488);}
+          p.ctx.textAlign='left';p.y+=rowH+26;
+        }
+      }else{
+        const photos=sec.photos||[],cols=Math.max(1,Math.min(6,Number(sec.cols)||2));
+        const gap=22,colW=(contentW-gap*(cols-1))/cols;
+        const maxImageH={1:820,2:500,3:340,4:250,5:205,6:170}[cols];
+        for(let start=0;start<photos.length;start+=cols){
+          const row=photos.slice(start,start+cols);
+          const capH=row.some(x=>x.cap)?36:0,rowH=maxImageH+capH+26;
+          ensure(rowH);
+          for(let j=0;j<row.length;j++){
+            const item=row[j],img=await loadReportPdfImage(item.src,imageCache),x=REPORT_PDF_MARGIN+j*(colW+gap);
+            pdfDrawContain(p.ctx,img,x,p.y,colW,maxImageH,{border:true,background:'#fafbfc'});
+            if(item.cap){p.ctx.fillStyle='#6b7280';p.ctx.font='18px Arial';p.ctx.textAlign='center';p.ctx.fillText(item.cap,x+colW/2,p.y+maxImageH+8);p.ctx.textAlign='left';}
+          }
+          p.y+=rowH;
+        }
+      }
+      p.y+=24;
+    }
+    if(p)finish(p);
+  }
+
+  /* Recommandations, étiquette et points de contrôle */
+  const checked=(s.checkpoints||[]).filter(cp=>cp.checked);
+  if(s.closing||s.labelR||s.labelV||checked.length){
+    const p=contentPage('Recommandations et contrôles'),ctx=p.ctx;
+    if(s.closing){
+      ctx.fillStyle='#fafbfd';ctx.strokeStyle='#d9dde4';ctx.lineWidth=2;pdfRoundRect(ctx,REPORT_PDF_MARGIN,p.y,contentW,150,10,true,true);
+      ctx.fillStyle='#101216';ctx.font='bold 22px Arial';ctx.fillText('RECOMMANDATIONS / PROCHAINE RÉVISION',REPORT_PDF_MARGIN+24,p.y+20);
+      ctx.fillStyle='#4b5563';ctx.font='22px Arial';const lines=pdfTextLines(ctx,s.closing,contentW-48);pdfDrawLines(ctx,lines,REPORT_PDF_MARGIN+24,p.y+58,29,3);p.y+=176;
+    }
+    if(s.labelR||s.labelV){
+      const items=[s.labelR,s.labelV].filter(Boolean),gap=28,w=(contentW-gap*(items.length-1))/items.length,h=520;
+      for(let i=0;i<items.length;i++){
+        const img=await loadReportPdfImage(items[i],imageCache);pdfDrawContain(ctx,img,REPORT_PDF_MARGIN+i*(w+gap),p.y,w,h,{border:true,background:'#fafbfc'});
+      }
+      p.y+=h+35;
+    }
+    if(checked.length){
+      ctx.font='bold 27px Arial';ctx.fillStyle='#101216';ctx.fillText('Points de contrôle',REPORT_PDF_MARGIN,p.y);p.y+=46;
+      for(const cp of checked){
+        const lines=pdfTextLines(ctx,cp.label,contentW-105),h=Math.max(58,20+lines.length*27);
+        if(p.y+h>REPORT_PDF_H-REPORT_PDF_MARGIN)break;
+        ctx.fillStyle='#f3f9f4';ctx.strokeStyle='#bfe3c4';pdfRoundRect(ctx,REPORT_PDF_MARGIN,p.y,contentW,h,8,true,true);
+        ctx.fillStyle='#101216';ctx.fillRect(REPORT_PDF_MARGIN+18,p.y+15,30,30);ctx.fillStyle='#fff';ctx.font='bold 20px Arial';ctx.fillText('✓',REPORT_PDF_MARGIN+24,p.y+18);
+        ctx.fillStyle='#374151';ctx.font='21px Arial';pdfDrawLines(ctx,lines,REPORT_PDF_MARGIN+70,p.y+15,27);p.y+=h+13;
+      }
+    }
+    finish(p);
+  }
+
+  /* Entretien baie moteur */
+  if(s.baieOn&&(s.baieAvant||s.baieApres)){
+    const p=contentPage((s.baieTitle&&s.baieTitle.trim())?s.baieTitle.trim():'Entretien baie moteur');
+    const items=[];if(s.baieAvant)items.push(['Avant',s.baieAvant]);if(s.baieApres)items.push(['Après',s.baieApres]);
+    const h=items.length===1?1250:590;
+    for(const [label,src] of items){
+      const img=await loadReportPdfImage(src,imageCache);pdfDrawContain(p.ctx,img,REPORT_PDF_MARGIN,p.y,contentW,h,{border:true,background:'#fafbfc'});
+      p.ctx.fillStyle='#101216';p.ctx.font='bold 22px Arial';p.ctx.textAlign='center';p.ctx.fillText(label.toUpperCase(),REPORT_PDF_W/2,p.y+h+8);p.ctx.textAlign='left';p.y+=h+50;
+    }
+    finish(p);
+  }
+
+  /* Factures */
+  if(s.invoicesOn&&s.invoices.length){
+    for(const inv of s.invoices){
+      const p=newCanvas();drawWatermark(p);
+      if(inv.kind==='pdf'){
+        p.ctx.fillStyle='#101216';p.ctx.font='bold 34px Arial';p.ctx.fillText('Facture des pièces',REPORT_PDF_MARGIN,p.y);p.y+=70;
+        p.ctx.fillStyle='#6b7280';p.ctx.font='24px Arial';p.ctx.fillText('Cette facture PDF doit être réimportée sous forme d’image.',REPORT_PDF_MARGIN,p.y);
+      }else{
+        const img=await loadReportPdfImage(inv.src,imageCache);pdfDrawContain(p.ctx,img,REPORT_PDF_MARGIN,REPORT_PDF_MARGIN,contentW,REPORT_PDF_H-REPORT_PDF_MARGIN*2,{background:'#fff'});
+      }
+      finish(p);
+    }
+  }
+  return pages;
 }
 
 async function generatePdf(){
   const btn=document.getElementById('btnPdf');
   const original=btn.textContent;
-  btn.disabled=true;
-  btn.textContent='⏳ Génération…';
-  let host=null;
-  const previousBodyOverflow=document.body.style.overflow;
+  btn.disabled=true;btn.textContent='⏳ Génération…';
   try{
-    save();
-    flushPendingSave();
-    renderReport();
-    if(typeof html2pdf!=='function') throw new Error('Moteur PDF indisponible');
-
-    host=document.createElement('div');
-    host.className='pdf-export-host';
-    /* Chrome doit réellement peindre le document avant html2canvas. Un z-index
-       négatif produit des canvases blancs, même lorsque les dimensions sont justes. */
-    Object.assign(host.style,{position:'fixed',left:'0',top:'0',width:'210mm',minHeight:'297mm',background:'#fff',zIndex:'2147483000',visibility:'visible',opacity:'1',pointerEvents:'none'});
-    document.body.style.overflow='hidden';
-    const clone=document.getElementById('report').cloneNode(true);
-    clone.removeAttribute('id');
-    /* Le logo de l'aperçu est déjà ajouté directement au PDF ci-dessous.
-       On le retire du clone pour éviter deux logos superposés. */
-    clone.querySelectorAll('.wm, #printWm').forEach(el=>el.remove());
-    host.appendChild(clone);
-    document.body.appendChild(host);
-    await waitForPdfImages(host);
-    if(document.fonts && document.fonts.ready) await document.fonts.ready;
-    /* Deux frames garantissent que Chromium a calculé les dimensions et peint
-       le clone avant la capture. Sans cela, le PDF peut avoir le bon nombre de
-       pages mais rester entièrement blanc sur ordinateur. */
-    await new Promise(requestAnimationFrame);
-    await new Promise(requestAnimationFrame);
-
-    const options={
-      margin:0,
-      filename:reportPdfFilename(),
-      image:{type:'jpeg',quality:.94},
-      html2canvas:{
-        scale:1.5,
-        useCORS:true,
-        allowTaint:false,
-        backgroundColor:'#ffffff',
-        logging:false,
-        scrollX:0,
-        scrollY:0,
-        windowWidth:Math.ceil(210*96/25.4)
-      },
-      jsPDF:{unit:'mm',format:'a4',orientation:'portrait',compress:true},
-      pagebreak:{
-        mode:['css'],
-        avoid:['.doc-h2','.sec-title','.sec-desc','figure.ph','.sym-row','.closing','.checklist-item']
-      }
-    };
-
-    const expectedReportPages=clone.querySelectorAll('.page').length;
-    const worker=html2pdf().set(options).from(clone).toPdf();
-    const pdf=await worker.get('pdf');
-    /* Sur Safari, html2pdf peut encore produire une page terminale vide à cause
-       d'un arrondi sous-pixel. Dans ce rapport, chaque bloc .page représente une
-       page explicite : une unique page supplémentaire est donc supprimée. */
-    const generatedPages=pdf.internal.getNumberOfPages();
-    if(generatedPages===expectedReportPages+1){
-      pdf.deletePage(generatedPages);
-    }
-    const watermark=await makePdfWatermark(state.logo || DEFAULT_LOGO);
-    if(watermark){
-      const pages=pdf.internal.getNumberOfPages();
-      const width=30;
-      const height=width*watermark.ratio;
-      for(let page=2;page<=pages;page++){
-        pdf.setPage(page);
-        pdf.addImage(watermark.data,'PNG',210-4-width,2,width,height,undefined,'FAST');
-      }
-    }
-    pdf.save(options.filename);
+    save();flushPendingSave();renderReport();
+    const pages=await renderReportPdfPages();
+    if(!pages.length)throw new Error('Aucune page générée');
+    const blob=buildReportImagePdf(pages);
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=reportPdfFilename();a.rel='noopener';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
   }catch(e){
     console.error('Génération du PDF impossible',e);
-    alert("Impossible de générer le PDF. Vérifie que les images du rapport sont bien chargées puis réessaie.");
+    alert("Impossible de générer le PDF. Vérifie que les images du rapport sont accessibles puis réessaie.");
   }finally{
-    if(host) host.remove();
-    document.body.style.overflow=previousBodyOverflow;
-    btn.disabled=false;
-    btn.textContent=original;
+    btn.disabled=false;btn.textContent=original;
   }
 }
 
