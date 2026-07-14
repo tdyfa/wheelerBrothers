@@ -17,8 +17,8 @@
 :root{--ink:#111418;--muted:#667085;--line:#dfe4ea;--bg:#eef1f5;--card:#fff;--danger:#b42318;}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{min-height:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:"Helvetica Neue",Arial,"Segoe UI",sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
-header{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding:12px 16px}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Helvetica Neue",Arial,"Segoe UI",sans-serif;padding:0 0 env(safe-area-inset-bottom)}
+header{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding:calc(12px + env(safe-area-inset-top)) 16px 12px}
 .head{max-width:1100px;margin:auto;display:flex;align-items:center;gap:12px}
 .back{text-decoration:none;color:var(--ink);font-size:22px;padding:6px}
 .title{flex:1}
@@ -81,7 +81,7 @@ textarea{min-height:74px;resize:vertical}
 <header>
   <div class="head">
     <a class="back" href="index.html" aria-label="Accueil">‹</a>
-    <div class="title"><h1>Inventaire</h1><div class="sub">Version 37</div><div id="syncWarn" class="sync">Synchronisation indisponible</div></div>
+    <div class="title"><h1>Inventaire</h1><div class="sub">Version 38</div><div id="syncWarn" class="sync">Synchronisation indisponible</div></div>
     <button type="button" id="addBtn" class="primary">＋ Ajouter</button>
   </div>
 </header>
