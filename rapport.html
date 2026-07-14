@@ -365,7 +365,10 @@
   }
 
   /* Export PDF direct : rendu A4 indépendant de l'impression Safari */
-  .pdf-export-host{position:fixed;left:-100000px;top:0;width:210mm;background:#fff;z-index:-1;pointer-events:none}
+  .pdf-export-host{position:fixed;left:0;top:0;width:210mm;background:#fff;z-index:-2147483647;pointer-events:none}
+  /* Ne pas placer le document à -100000 px : Chromium peut alors produire des
+     canvases entièrement blancs. Le conteneur reste dans la zone de rendu,
+     derrière l'application, sans modifier la mise en page visible. */
   .pdf-export-host .report{width:210mm;display:block;background:#fff}
   .pdf-export-host .page{
     width:210mm;min-height:296mm;margin:0;box-shadow:none;
@@ -420,7 +423,7 @@
     <div class="app-bar-top">
       <div class="app-bar-title">
         <h1>🛠️ Rapport d'intervention</h1>
-        <span class="sub">Version 38</span>
+        <span class="sub">Version 39</span>
       </div>
       <div class="app-bar-notices">
         <span id="saveWarn" style="display:none; font-size:12px; color:#ffd27a; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
@@ -1885,6 +1888,11 @@ async function generatePdf(){
     host.appendChild(clone);
     document.body.appendChild(host);
     await waitForPdfImages(host);
+    if(document.fonts && document.fonts.ready) await document.fonts.ready;
+    /* Deux frames garantissent que Chromium a calculé les dimensions et peint
+       le clone avant la capture. Sans cela, le PDF peut avoir le bon nombre de
+       pages mais rester entièrement blanc sur ordinateur. */
+    await new Promise(requestAnimationFrame);
     await new Promise(requestAnimationFrame);
 
     const options={
@@ -1892,7 +1900,7 @@ async function generatePdf(){
       filename:reportPdfFilename(),
       image:{type:'jpeg',quality:.94},
       html2canvas:{
-        scale:window.matchMedia('(max-width: 800px)').matches?1.5:2,
+        scale:1.5,
         useCORS:true,
         allowTaint:false,
         backgroundColor:'#ffffff',
