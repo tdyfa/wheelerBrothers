@@ -423,7 +423,7 @@
     <div class="app-bar-top">
       <div class="app-bar-title">
         <h1>🛠️ Rapport d'intervention</h1>
-        <span class="sub">Version 42</span>
+        <span class="sub">Version 43</span>
       </div>
       <div class="app-bar-notices">
         <span id="saveWarn" style="display:none; font-size:12px; color:#ffd27a; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
@@ -1809,23 +1809,81 @@ Créer automatiquement la fiche « ${label} » dans le carnet atelier ?`);
   return outcome || {status:'skipped',message:'Rapport sauvegardé sans modification du carnet.'};
 }
 
-async function pdfSourceAsDataUrl(src){
-  if(!src) return '';
-  if(src.startsWith('data:')) return src;
+function pdfCacheBustedUrl(value,attempt=0){
   try{
-    const response=await fetch(src,{cache:'force-cache',mode:'cors'});
-    if(!response.ok) throw new Error(`HTTP ${response.status}`);
-    const blob=await response.blob();
-    return await new Promise((resolve,reject)=>{
-      const reader=new FileReader();
-      reader.onload=()=>resolve(String(reader.result||''));
-      reader.onerror=reject;
-      reader.readAsDataURL(blob);
-    });
-  }catch(e){
-    console.warn('Image PDF non récupérable.',e);
-    return '';
+    const url=new URL(value,location.href);
+    url.searchParams.set('_wb_pdf',`${Date.now()}-${attempt}-${Math.random().toString(36).slice(2,8)}`);
+    return url.href;
+  }catch(e){ return value; }
+}
+
+function pdfXhrBlob(url){
+  return new Promise((resolve,reject)=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open('GET',url,true);
+    xhr.responseType='blob';
+    xhr.timeout=30000;
+    xhr.onload=()=>{
+      if(xhr.status>=200&&xhr.status<300&&xhr.response&&xhr.response.size){
+        resolve(xhr.response);
+      }else reject(new Error(`XHR HTTP ${xhr.status}`));
+    };
+    xhr.onerror=()=>reject(new Error('XHR réseau impossible'));
+    xhr.ontimeout=()=>reject(new Error('XHR délai dépassé'));
+    xhr.send();
+  });
+}
+
+async function pdfSourceAsBlob(src){
+  if(!src) return null;
+  if(src.startsWith('data:')){
+    const response=await fetch(src);
+    if(!response.ok) throw new Error('Image intégrée illisible');
+    return await response.blob();
   }
+
+  const candidates=[];
+  if(storage){
+    try{
+      const ref=storage.refFromURL(src);
+      // Certaines versions récentes du SDK exposent directement getBlob().
+      if(typeof ref.getBlob==='function'){
+        const blob=await ref.getBlob();
+        if(blob&&blob.size) return blob;
+      }
+      const freshUrl=await ref.getDownloadURL();
+      if(freshUrl) candidates.push(freshUrl);
+    }catch(e){
+      // L'URL peut être une image externe non issue de Firebase Storage.
+    }
+  }
+  candidates.push(src);
+
+  let lastError=null;
+  for(const candidate of [...new Set(candidates)]){
+    for(let attempt=0;attempt<2;attempt++){
+      const url=pdfCacheBustedUrl(candidate,attempt);
+      try{
+        const response=await fetch(url,{
+          mode:'cors',
+          cache:'no-store',
+          credentials:'omit',
+          referrerPolicy:'no-referrer'
+        });
+        if(!response.ok||response.type==='opaque') throw new Error(`HTTP ${response.status||0}`);
+        const blob=await response.blob();
+        if(!blob||!blob.size) throw new Error('Image vide');
+        return blob;
+      }catch(e){
+        lastError=e;
+        try{
+          const blob=await pdfXhrBlob(url);
+          if(blob&&blob.size) return blob;
+        }catch(xhrError){ lastError=xhrError; }
+      }
+    }
+  }
+  throw lastError||new Error('Image distante inaccessible');
 }
 
 function reportPdfFilename(){
@@ -1934,12 +1992,35 @@ async function loadReportPdfImage(src,cache){
   if(!src)return null;
   if(cache.has(src))return cache.get(src);
   const promise=(async()=>{
-    const dataUrl=await pdfSourceAsDataUrl(src);
-    if(!dataUrl)return null;
-    return await new Promise(resolve=>{
-      const img=new Image();
-      img.onload=()=>resolve(img);img.onerror=()=>resolve(null);img.src=dataUrl;
-    });
+    let lastError=null;
+    for(let attempt=0;attempt<2;attempt++){
+      try{
+        const blob=await pdfSourceAsBlob(src);
+        if(!blob||!blob.size) throw new Error('Image vide');
+        if('createImageBitmap' in window){
+          try{
+            const bitmap=await createImageBitmap(blob,{imageOrientation:'from-image'});
+            if(bitmap&&bitmap.width&&bitmap.height)return bitmap;
+          }catch(e){ lastError=e; }
+        }
+        const objectUrl=URL.createObjectURL(blob);
+        try{
+          return await new Promise((resolve,reject)=>{
+            const img=new Image();
+            img.onload=()=>resolve(img);
+            img.onerror=()=>reject(new Error('Décodage de l’image impossible'));
+            img.src=objectUrl;
+          });
+        }finally{
+          URL.revokeObjectURL(objectUrl);
+        }
+      }catch(e){
+        lastError=e;
+        if(attempt===0) await new Promise(r=>setTimeout(r,250));
+      }
+    }
+    console.error('Photo du rapport inaccessible pour le PDF :',src,lastError);
+    throw new Error('Une photo enregistrée dans Firebase n’a pas pu être chargée.');
   })();
   cache.set(src,promise);
   return promise;
@@ -2183,7 +2264,7 @@ async function generatePdf(){
     setTimeout(()=>URL.revokeObjectURL(url),60000);
   }catch(e){
     console.error('Génération du PDF impossible',e);
-    alert("Impossible de générer le PDF. Vérifie que les images du rapport sont accessibles puis réessaie.");
+    alert("Impossible de générer le PDF : une ou plusieurs photos enregistrées n’ont pas pu être chargées depuis Firebase. Vérifie la connexion, puis réessaie.");
   }finally{
     btn.disabled=false;btn.textContent=original;
   }
