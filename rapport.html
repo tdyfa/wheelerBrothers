@@ -426,7 +426,7 @@
     <div class="app-bar-top">
       <div class="app-bar-title">
         <h1>🛠️ Rapport d'intervention</h1>
-        <span class="sub">Version 46</span>
+        <span class="sub">Version 47</span>
       </div>
       <div class="app-bar-notices">
         <span id="saveWarn" style="display:none; font-size:12px; color:#ffd27a; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
@@ -751,7 +751,8 @@ async function patchReportField(reportId, key, oldDataUrl, newUrl){
       payload: JSON.stringify(parsed),
       title: parsed.plate || parsed.model || parsed.title || 'Sans titre',
       subtitle: [parsed.brand, parsed.model].filter(Boolean).join(' '),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      writerId: SYNC_CLIENT_ID
     });
   }catch(e){ console.warn('Correction différée du rapport impossible', e); }
 }
@@ -783,7 +784,8 @@ async function patchReportArrayItem(reportId, itemId, oldDataUrl, newUrl){
       payload: JSON.stringify(parsed),
       title: parsed.plate || parsed.model || parsed.title || 'Sans titre',
       subtitle: [parsed.brand, parsed.model].filter(Boolean).join(' '),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      writerId: SYNC_CLIENT_ID
     });
   }catch(e){ console.warn('Correction différée du rapport impossible', e); }
 }
@@ -836,6 +838,24 @@ let _saveDebounceTimer = null;
 let _pendingSave = null;
 let _applyingRemoteUpdate = false;
 
+// Identifie cette session pour ignorer les retours Firestore de nos propres
+// sauvegardes. Sans cela, le snapshot reconstruit toute la liste des
+// prestations après chaque frappe et iOS ferme le clavier car le champ actif
+// vient d'être remplacé dans le DOM.
+const SYNC_CLIENT_ID = (()=>{
+  const key = 'rapport_sync_client_id';
+  try{
+    let id = sessionStorage.getItem(key);
+    if(!id){
+      id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2,10);
+      sessionStorage.setItem(key, id);
+    }
+    return id;
+  }catch(e){
+    return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2,10);
+  }
+})();
+
 function flagSyncError(customMsg){
   const el = document.getElementById('saveWarn');
   if(el){
@@ -862,7 +882,8 @@ function doFirestoreSave(reportId, payloadJson, meta){
       payload: payloadJson,
       title: meta.title,
       subtitle: meta.subtitle,
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      writerId: SYNC_CLIENT_ID
     }).then(()=> clearSyncError())
       .catch((e)=>{ console.error('Erreur de synchronisation', e); flagSyncError(); });
   }catch(e){ console.error('Erreur de synchronisation', e); flagSyncError(); }
@@ -1008,7 +1029,8 @@ function migrateEmbeddedImages(){
 function refreshEditorFromState(){
   state.sections.forEach(normSection); normChecklist();
   initFields();
-  bindAll();
+  // Les champs simples sont liés une seule fois au démarrage. Les relier ici
+  // empilerait des gestionnaires à chaque mise à jour distante.
   buildSections();
   buildBaie();
   buildChecklist();
@@ -1022,11 +1044,28 @@ function subscribeToReport(id){
   if(_unsubReport) _unsubReport();
   currentReportId = id;
   try{ localStorage.setItem('current_report_id', id); }catch(e){}
+
+  // Le premier snapshot doit toujours être appliqué pour charger un rapport
+  // existant. Les snapshots suivants provenant de cette même session sont
+  // simplement l'écho de nos sauvegardes : l'état local est déjà à jour et il
+  // ne faut surtout pas reconstruire les champs de prestation en cours de saisie.
+  let initialSnapshotHandled = false;
   _unsubReport = reportDocRef(id).onSnapshot((snap)=>{
     clearSyncError();
+    const isInitialSnapshot = !initialSnapshotHandled;
+    initialSnapshotHandled = true;
+
     if(!snap.exists) return; // nouveau rapport pas encore écrit, rien à charger
     const remote = snap.data();
     if(!remote || !remote.payload) return;
+
+    if(!isInitialSnapshot && (
+      (snap.metadata && snap.metadata.hasPendingWrites) ||
+      remote.writerId === SYNC_CLIENT_ID
+    )){
+      return;
+    }
+
     let parsed;
     try{ parsed = JSON.parse(remote.payload); }catch(e){ return; }
     _applyingRemoteUpdate = true;
