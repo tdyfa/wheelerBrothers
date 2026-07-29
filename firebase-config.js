@@ -36,6 +36,47 @@ let resolveAtelierReady;
 const atelierReady = new Promise(resolve=>{ resolveAtelierReady = resolve; });
 window.atelierReady = atelierReady;
 
+/* Indicateur visuel commun aux outils : vert lorsque la session atelier
+   et la configuration Firebase sont disponibles, rouge sinon. */
+let atelierFirebaseConnected = false;
+
+function refreshFirebaseStatusIndicators(){
+  const connected = atelierFirebaseConnected === true;
+  document.querySelectorAll('[data-firebase-status]').forEach(indicator=>{
+    indicator.classList.toggle('is-connected', connected);
+    indicator.classList.toggle('is-disconnected', !connected);
+    indicator.setAttribute('aria-label', connected ? 'Firebase connecté' : 'Firebase déconnecté');
+    indicator.setAttribute('title', connected ? 'Firebase connecté' : 'Firebase déconnecté');
+  });
+}
+
+function setAtelierFirebaseStatus(connected){
+  atelierFirebaseConnected = connected === true;
+  window.ATELIER_FIREBASE_CONNECTED = atelierFirebaseConnected;
+  refreshFirebaseStatusIndicators();
+  window.dispatchEvent(new CustomEvent('atelier-firebase-status', {
+    detail: { connected: atelierFirebaseConnected }
+  }));
+}
+window.setAtelierFirebaseStatus = setAtelierFirebaseStatus;
+
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', refreshFirebaseStatusIndicators, {once:true});
+}else{
+  refreshFirebaseStatusIndicators();
+}
+
+window.addEventListener('offline', ()=>setAtelierFirebaseStatus(false));
+window.addEventListener('online', ()=>{
+  const user = auth.currentUser;
+  setAtelierFirebaseStatus(Boolean(
+    user &&
+    user.uid === ATELIER_ADMIN_UID &&
+    atelierSpaceId &&
+    navigator.onLine
+  ));
+});
+
 function whenDomReady(){
   if(document.readyState !== 'loading') return Promise.resolve();
   return new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}));
@@ -83,7 +124,7 @@ async function ensureAuthGate(){
         <button id="atelierAuthButton" type="submit">Accéder à l’atelier</button>
         <div id="atelierAuthStatus" class="auth-status"></div>
       </form>
-      <div class="auth-version">Version 49.5</div>
+      <div class="auth-version">Version 49.7</div>
     </section>`;
   document.body.appendChild(gate);
   gate.querySelector('#atelierAuthForm').addEventListener('submit',async event=>{
@@ -138,6 +179,7 @@ async function loadAtelierConfiguration(user){
   if(typeof config.spaceId !== 'string' || config.spaceId.trim().length < 12) throw new Error("Le code d'espace enregistré dans Firebase est invalide.");
   atelierSpaceId = config.spaceId.trim();
   window.ATELIER_SPACE_ID = atelierSpaceId;
+  setAtelierFirebaseStatus(navigator.onLine);
   await hideAuthGate();
   if(!atelierReadyResolved){
     atelierReadyResolved = true;
@@ -148,6 +190,7 @@ async function loadAtelierConfiguration(user){
 auth.onAuthStateChanged(async user=>{
   if(!user){
     atelierSpaceId = '';
+    setAtelierFirebaseStatus(false);
     await showAuthGate();
     return;
   }
@@ -155,6 +198,7 @@ auth.onAuthStateChanged(async user=>{
     await loadAtelierConfiguration(user);
   }catch(error){
     atelierSpaceId = '';
+    setAtelierFirebaseStatus(false);
     if(user.uid !== ATELIER_ADMIN_UID){
       try{ await auth.signOut(); }catch(_e){}
     }
