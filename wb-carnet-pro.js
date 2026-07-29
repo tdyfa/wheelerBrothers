@@ -5,7 +5,7 @@
  * Elle ajoute le partage WB Carnet, sans modifier les rapports ni l'inventaire.
  */
 (function(){
-  const VERSION = 1;
+  const VERSION = 2;
   const CLIENT_URL = 'https://tdyfa.github.io/wheelerBrothers-carnet/';
   const INVITE_MS = 24 * 60 * 60 * 1000;
   const COLLECTIONS = {
@@ -132,9 +132,8 @@
   }
 
   async function writeOwnProfile(){
-    const user = auth.currentUser;
-    if(!user) return;
-    await db.collection(COLLECTIONS.users).doc(user.uid).set({uid:user.uid,phone:user.phoneNumber || '',updatedAt:serverTimestamp(),lastSeenAt:serverTimestamp()},{merge:true});
+    /* Le compte atelier utilise l'authentification e-mail et n'est pas un compte WB Carnet classique. */
+    return;
   }
 
   function signInModal(){
@@ -180,9 +179,12 @@
   }
 
   async function ensureSignedIn(){
-    if(auth.currentUser){ await writeOwnProfile(); return auth.currentUser; }
-    await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-    return signInModal();
+    await window.atelierReady;
+    const user = auth.currentUser;
+    if(!user || user.uid !== ATELIER_ADMIN_UID){
+      throw new Error("Le compte atelier unique n'est pas connecté.");
+    }
+    return user;
   }
 
   async function saveProOnly(){
@@ -204,7 +206,7 @@
       createdBy:user.uid,mergedInto:null,mergedFrom:[],createdAt:serverTimestamp(),updatedAt:serverTimestamp()
     });
     batch.set(memberRef(ref.id,user.uid),{
-      uid:user.uid,phone:user.phoneNumber || '',role:'atelier_admin',status:'active',activatedAt:serverTimestamp(),updatedAt:serverTimestamp()
+      uid:user.uid,phone:'',role:'atelier_admin',status:'active',activatedAt:serverTimestamp(),updatedAt:serverTimestamp()
     });
     batch.set(userVehicleRef(user.uid,ref.id),{
       uid:user.uid,vehicleId:ref.id,role:'atelier_admin',status:'active',plateKey,addedAt:serverTimestamp(),updatedAt:serverTimestamp()
@@ -375,17 +377,17 @@
   function drawLinkedPanel(vehicle,panel,members,invites){
     if(!panel || !document.body.contains(panel)) return;
     const user=auth.currentUser;
-    const admin=members.find(member=>member.id===user?.uid && member.status==='active' && member.role==='atelier_admin');
+    const admin=Boolean(user && user.uid===ATELIER_ADMIN_UID);
     const people=members.filter(member=>member.status==='active' && member.role!=='atelier_admin');
     const pending=invites.filter(invite=>inviteStatus(invite)==='pending').sort((a,b)=>toMillis(b.createdAt)-toMillis(a.createdAt));
     const recentOther=invites.filter(invite=>inviteStatus(invite)!=='pending' && inviteStatus(invite)!=='used').sort((a,b)=>toMillis(b.createdAt)-toMillis(a.createdAt)).slice(0,4);
     const activeHtml=people.map(member=>`<div class="wbc-pro-access"><div class="wbc-pro-access-main"><div class="wbc-pro-phone">${escapeHtml(formatPhone(member.phone))}</div><div class="wbc-pro-meta">Accès actif${member.activatedAt?` depuis le ${escapeHtml(formatDateTime(member.activatedAt))}`:''}</div></div><div class="wbc-pro-access-actions"><span class="wbc-pro-badge ok">Actif</span><button class="btn danger-outline wbc-pro-small" data-wbc-revoke="${escapeHtml(member.id)}" type="button">Révoquer</button></div></div>`).join('');
     const pendingHtml=pending.map(invite=>`<div class="wbc-pro-access"><div class="wbc-pro-access-main"><div class="wbc-pro-phone">${escapeHtml(formatPhone(invite.phone))}</div><div class="wbc-pro-meta">Expire le ${escapeHtml(formatDateTime(invite.expiresAt))}</div></div><div class="wbc-pro-access-actions"><span class="wbc-pro-badge wait">En attente</span><button class="btn ghost wbc-pro-small" data-wbc-copy="${escapeHtml(invite.id)}" type="button">Copier</button><button class="btn danger-outline wbc-pro-small" data-wbc-cancel="${escapeHtml(invite.id)}" type="button">Annuler</button></div></div>`).join('');
     const otherHtml=recentOther.map(invite=>{const status=inviteStatus(invite);return `<div class="wbc-pro-access"><div class="wbc-pro-access-main"><div class="wbc-pro-phone">${escapeHtml(formatPhone(invite.phone))}</div><div class="wbc-pro-meta">${escapeHtml(statusLabel(status))}</div></div><div class="wbc-pro-access-actions"><span class="wbc-pro-badge ${status==='revoked'?'err':''}">${escapeHtml(statusLabel(status))}</span><button class="btn ghost wbc-pro-small" data-wbc-resend="${escapeHtml(invite.phone)}" type="button">Renvoyer</button></div></div>`}).join('');
-    panel.innerHTML=`<div class="wbc-pro-head"><div><h3>Accès WB Carnet</h3><p>Partage du carnet commun de ce véhicule</p></div><span class="wbc-pro-badge ok">Fiche liée</span></div><div class="wbc-pro-body"><div class="wbc-pro-grid"><div><span>Propriétaire transmis</span><strong>${escapeHtml(vehicle.owner || 'Non renseigné')}</strong></div><div><span>Immatriculation</span><strong>${escapeHtml(vehicle.plate || 'Non renseignée')}</strong></div></div>${admin?`<div class="wbc-pro-actions"><button class="btn wbc-pro-small" id="wbcInviteButton" type="button">Inviter un proche</button><button class="btn ghost wbc-pro-small" id="wbcSyncButton" type="button">Synchroniser les opérations</button></div><div class="wbc-pro-list">${activeHtml}${pendingHtml}${otherHtml}${!activeHtml&&!pendingHtml&&!otherHtml?'<p class="wbc-pro-note">Aucun proche n’a encore accès à cette fiche.</p>':''}</div><div class="wbc-pro-status">${people.length?`${people.length} accès actif${people.length>1?'s':''}.`:''} Les opérations WheelerBrothers sont partagées sans temps passé ni rémunération.</div>`:`<p class="wbc-pro-note">Connecte le numéro administrateur utilisé lors de la création de ce partage.</p><button class="btn wbc-pro-small" id="wbcReconnect" type="button">Se connecter</button><div class="wbc-pro-status"></div>`}</div>`;
+    panel.innerHTML=`<div class="wbc-pro-head"><div><h3>Accès WB Carnet</h3><p>Partage du carnet commun de ce véhicule</p></div><span class="wbc-pro-badge ok">Fiche liée</span></div><div class="wbc-pro-body"><div class="wbc-pro-grid"><div><span>Propriétaire transmis</span><strong>${escapeHtml(vehicle.owner || 'Non renseigné')}</strong></div><div><span>Immatriculation</span><strong>${escapeHtml(vehicle.plate || 'Non renseignée')}</strong></div></div>${admin?`<div class="wbc-pro-actions"><button class="btn wbc-pro-small" id="wbcInviteButton" type="button">Inviter un proche</button><button class="btn ghost wbc-pro-small" id="wbcSyncButton" type="button">Synchroniser les opérations</button></div><div class="wbc-pro-list">${activeHtml}${pendingHtml}${otherHtml}${!activeHtml&&!pendingHtml&&!otherHtml?'<p class="wbc-pro-note">Aucun proche n’a encore accès à cette fiche.</p>':''}</div><div class="wbc-pro-status">${people.length?`${people.length} accès actif${people.length>1?'s':''}.`:''} Les opérations WheelerBrothers sont partagées sans temps passé ni rémunération.</div>`:`<p class="wbc-pro-note">Reconnecte-toi avec le code atelier depuis l’accueil WheelerBrothers.</p><button class="btn wbc-pro-small" id="wbcReconnect" type="button">Retour à l’accueil</button><div class="wbc-pro-status"></div>`}</div>`;
     panel.querySelector('#wbcInviteButton')?.addEventListener('click',()=>openInviteModal(vehicle));
     panel.querySelector('#wbcSyncButton')?.addEventListener('click',async event=>{const status=panel.querySelector('.wbc-pro-status');event.currentTarget.disabled=true;status.textContent='Synchronisation…';try{await syncVehicle(vehicle);status.className='wbc-pro-status ok';status.textContent='Fiche et opérations synchronisées.';}catch(error){status.className='wbc-pro-status err';status.textContent=firebaseMessage(error);}finally{event.currentTarget.disabled=false;}});
-    panel.querySelector('#wbcReconnect')?.addEventListener('click',async()=>{try{await ensureSignedIn();closeAccessListeners();renderPanel();}catch(_e){}});
+    panel.querySelector('#wbcReconnect')?.addEventListener('click',()=>{ location.href='index.html'; });
     panel.querySelectorAll('[data-wbc-revoke]').forEach(button=>button.addEventListener('click',async()=>{const member=people.find(item=>item.id===button.dataset.wbcRevoke);if(member)try{await revokeMember(vehicle.wbCarnet.vehicleId,member);}catch(error){alert(firebaseMessage(error));}}));
     panel.querySelectorAll('[data-wbc-copy]').forEach(button=>button.addEventListener('click',()=>copyText(inviteLink(button.dataset.wbcCopy))));
     panel.querySelectorAll('[data-wbc-cancel]').forEach(button=>button.addEventListener('click',async()=>{try{await cancelInvitation(button.dataset.wbcCancel);}catch(error){alert(firebaseMessage(error));}}));
@@ -416,8 +418,8 @@
 
   const main=document.getElementById('main');
   if(main){ new MutationObserver(()=>renderPanel()).observe(main,{childList:true,subtree:false}); }
-  auth.onAuthStateChanged(()=>{closeAccessListeners();renderPanel();});
+  auth.onAuthStateChanged(()=>{closeAccessListeners(); if(window.ATELIER_SPACE_ID) renderPanel();});
   window.addEventListener('online',scheduleSyncAll);
-  renderPanel();
+  window.atelierReady.then(()=>renderPanel()).catch(error=>console.error('WB Carnet Pro',error));
   console.info(`WB Carnet Pro v${VERSION} chargé.`);
 })();

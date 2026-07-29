@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="Outils Atelier">
 <meta name="theme-color" content="#0f1216">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <style>
@@ -43,11 +44,11 @@
     <a class="tool secondary" href="atelier.html">Carnet d'atelier</a>
     <a class="tool secondary" href="rapport.html">Générateur de rapport</a>
     <a class="tool secondary" href="inventaire.html">Inventaire</a>
-    <button type="button" id="btnResetCode" style="background:none;border:none;color:var(--muted);font-size:11.5px;text-decoration:underline;cursor:pointer;padding:0;margin-top:4px;">Changer le code d'atelier</button>
-    <div class="version">Version 48</div>
+    <button type="button" id="btnSignOut" style="background:none;border:none;color:var(--muted);font-size:11.5px;text-decoration:underline;cursor:pointer;padding:0;margin-top:4px;">Se déconnecter</button>
+    <div class="version">Version 49</div>
   </div>
 <script>
-  document.getElementById('btnResetCode').addEventListener('click', resetSharedCode);
+  document.getElementById('btnSignOut').addEventListener('click', atelierSignOut);
 </script>
 <script>
 if('serviceWorker' in navigator){
