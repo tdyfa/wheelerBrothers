@@ -4,15 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Inventaire — Wheeler Brothers</title>
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json?v=49.3">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=49.3">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#f2f4f7">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
-<script src="firebase-config.js"></script>
+<script src="firebase-config.js?v=49.3"></script>
 <style>
 :root{--ink:#111418;--muted:#667085;--line:#dfe4ea;--bg:#eef1f5;--card:#fff;--danger:#b42318;}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -81,7 +81,7 @@ textarea{min-height:74px;resize:vertical}
 <header>
   <div class="head">
     <a class="back" href="index.html" aria-label="Accueil">‹</a>
-    <div class="title"><h1>Inventaire</h1><div class="sub">Version 48</div><div id="syncWarn" class="sync">Synchronisation indisponible</div></div>
+    <div class="title"><h1>Inventaire</h1><div class="sub">Version 49.3</div><div id="syncWarn" class="sync">Synchronisation indisponible</div></div>
     <button type="button" id="addBtn" class="primary">＋ Ajouter</button>
   </div>
 </header>
@@ -268,7 +268,7 @@ $('importFile').onchange=e=>{
 loadData();
 </script>
 <script>
-if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js?v=49.3',{updateViaCache:'none'}).catch(()=>{}));
 </script>
 </body>
 </html>
