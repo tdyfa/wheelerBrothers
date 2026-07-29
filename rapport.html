@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=49.4">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=49.4">
+<link rel="manifest" href="manifest.json?v=49.5">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=49.5">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -15,8 +15,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 
-<script src="firebase-config.js?v=49.4"></script>
-<script src="html2pdf.bundle.min.js?v=49.4"></script>
+<script src="firebase-config.js?v=49.5"></script>
+<script src="html2pdf.bundle.min.js?v=49.5"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -427,7 +427,7 @@
     <div class="app-bar-top">
       <div class="app-bar-title">
         <h1>🛠️ Rapport d'intervention</h1>
-        <span class="sub">Version 49.4</span>
+        <span class="sub">Version 49.5</span>
       </div>
       <div class="app-bar-notices">
         <span id="saveWarn" style="display:none; font-size:12px; color:#ffd27a; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
@@ -2588,7 +2588,7 @@ setMobileView('editor');
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=49.4',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=49.5',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>

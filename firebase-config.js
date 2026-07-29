@@ -71,6 +71,7 @@ async function ensureAuthGate(){
       #atelierAuthGate button:disabled{opacity:.55;cursor:default}
       #atelierAuthGate .auth-status{min-height:18px;margin-top:12px;font-size:12.5px;color:#6b7280}
       #atelierAuthGate .auth-status.error{color:#b42318}
+      #atelierAuthGate .auth-version{margin-top:16px;font-size:11.5px;color:#6b7280;font-weight:600}
     </style>
     <section class="auth-card" role="dialog" aria-modal="true" aria-label="Connexion à l'atelier">
       <img src="report-cover-logo.png" alt="Wheeler Brothers">
@@ -82,6 +83,7 @@ async function ensureAuthGate(){
         <button id="atelierAuthButton" type="submit">Accéder à l’atelier</button>
         <div id="atelierAuthStatus" class="auth-status"></div>
       </form>
+      <div class="auth-version">Version 49.5</div>
     </section>`;
   document.body.appendChild(gate);
   gate.querySelector('#atelierAuthForm').addEventListener('submit',async event=>{
