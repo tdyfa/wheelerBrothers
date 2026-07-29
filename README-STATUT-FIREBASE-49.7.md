@@ -1,4 +1,4 @@
-# WheelerBrothers v49.7 — statut Firebase
+# WheelerBrothers v49.8 — statut Firebase
 
 Cette version ajoute une icône de statut en haut de chaque outil :
 
