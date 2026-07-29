@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=49.9">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=49.9">
+<link rel="manifest" href="manifest.json?v=49.10">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=49.10">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -15,8 +15,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 
-<script src="firebase-config.js?v=49.9"></script>
-<script src="html2pdf.bundle.min.js?v=49.9"></script>
+<script src="firebase-config.js?v=49.10"></script>
+<script src="html2pdf.bundle.min.js?v=49.10"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -400,7 +400,7 @@
   .atelier-meta-modal .modal-error{min-height:18px;color:#b3261e;font-size:12px;font-weight:600;margin-top:8px}
 </style>
 
-<style id="header-harmonisation-v49-9">
+<style id="header-harmonisation-v49-10">
   .app-bar{
     position:sticky;top:0;z-index:50;padding:calc(12px + env(safe-area-inset-top)) 16px 12px;
     background:#0f1216;color:#fff;
@@ -419,8 +419,11 @@
     border:2px solid rgba(255,255,255,.92);box-shadow:0 0 0 1px rgba(0,0,0,.35)
   }
   .app-bar-notices{margin-left:auto;color:#d1d5db}
-  .app-bar-sync{color:#d1d5db}
-  .app-bar-sync input{accent-color:#fff}
+  .app-bar-sync{
+    display:inline-flex;align-items:center;gap:5px;margin-left:8px;
+    color:#d1d5db;font-size:11.5px;font-weight:600;line-height:1;white-space:nowrap;
+  }
+  .app-bar-sync input{accent-color:#fff;margin:0;width:14px;height:14px}
   .app-bar #saveWarn{color:#ffb4ac!important}
   .app-bar #sizeIndicator{color:#9aa3b2!important}
   .app-bar-actions .btn{background:#242a33;color:#fff;border:1px solid #3a4350}
@@ -436,7 +439,6 @@
     .app-bar-title{width:auto;flex:1}
     .app-bar h1{font-size:18px}
     .app-bar-notices{order:3;width:100%;margin-left:38px;display:flex;flex-wrap:wrap}
-    .app-bar-sync{margin-left:0}
   }
 </style>
 </head>
@@ -472,20 +474,21 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=49.9" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=49.10" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 49.9</span>
+          <span class="sub">Version 49.10</span>
+          <label class="app-bar-sync">
+            <input type="checkbox" id="syncAtelierOnSave" checked> MàJ Carnet
+          </label>
         </div>
       </div>
       <div class="app-bar-notices">
         <span id="saveWarn" style="display:none; font-size:12px; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
         <span id="sizeIndicator" style="font-size:11.5px; font-weight:600;"></span>
-        <label class="app-bar-sync">
-          <input type="checkbox" id="syncAtelierOnSave" checked> MàJ Carnet
-        </label>
+
       </div>
     </div>
     <div class="app-bar-actions">
@@ -2639,7 +2642,7 @@ setMobileView('editor');
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=49.9',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=49.10',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
