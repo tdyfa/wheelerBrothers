@@ -174,6 +174,8 @@ async function atelierSignOut(){
   location.reload();
 }
 window.atelierSignOut = atelierSignOut;
+// Compatibilité avec les anciennes pages qui appelaient encore resetSharedCode().
+window.resetSharedCode = atelierSignOut;
 
 function sharedDocRef(toolName){
   return db.collection('spaces').doc(ensureSharedCode()).collection('tools').doc(toolName);
