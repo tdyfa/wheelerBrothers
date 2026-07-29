@@ -1,4 +1,4 @@
-const CACHE_NAME = 'outils-atelier-v49';
+const CACHE_NAME = 'outils-atelier-v49.1';
 const ASSETS = [
   './',
   './index.html',

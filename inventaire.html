@@ -10,7 +10,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#f2f4f7">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="firebase-config.js"></script>
@@ -82,7 +81,7 @@ textarea{min-height:74px;resize:vertical}
 <header>
   <div class="head">
     <a class="back" href="index.html" aria-label="Accueil">‹</a>
-    <div class="title"><h1>Inventaire</h1><div class="sub">Version 49</div><div id="syncWarn" class="sync">Synchronisation indisponible</div></div>
+    <div class="title"><h1>Inventaire</h1><div class="sub">Version 48</div><div id="syncWarn" class="sync">Synchronisation indisponible</div></div>
     <button type="button" id="addBtn" class="primary">＋ Ajouter</button>
   </div>
 </header>
@@ -266,10 +265,7 @@ $('importFile').onchange=e=>{
     e.target.value='';
   };r.readAsText(f);
 };
-atelierReady.then(loadData).catch(error=>{
-  console.error(error);
-  setSyncError(true);
-});
+loadData();
 </script>
 <script>
 if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
