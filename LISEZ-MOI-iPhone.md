@@ -1,3 +1,7 @@
+> **Important — version 48 / WB Carnet**  
+> Les instructions Firebase historiques ci-dessous décrivent l'installation initiale de WheelerBrothers.  
+> Pour activer le partage WB Carnet et l'authentification par SMS, utilise d'abord `CONFIGURATION-WB-CARNET.md` et les règles du dossier `Firebase` du paquet complet. Le forfait Blaze est requis pour les vrais SMS de vérification.
+
 # Outils Atelier — installation sur iPhone (app perso, hors App Store)
 
 Contenu du dossier :

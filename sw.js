@@ -1,4 +1,4 @@
-const CACHE_NAME = 'outils-atelier-v47';
+const CACHE_NAME = 'outils-atelier-v48';
 const ASSETS = [
   './',
   './index.html',
@@ -11,7 +11,9 @@ const ASSETS = [
   './icon-192.png',
   './icon-512.png',
   './report-cover-logo.png',
-  './html2pdf.bundle.min.js'
+  './html2pdf.bundle.min.js',
+  './wb-carnet-pro.css',
+  './wb-carnet-pro.js'
 ];
 
 self.addEventListener('install', (event) => {

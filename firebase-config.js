@@ -1,11 +1,10 @@
 /* ============================================================
-   CONFIGURATION FIREBASE — à remplir une seule fois
+   CONFIGURATION FIREBASE DU PROJET WHEELERBROTHERS
    ============================================================
-   1. Va sur https://console.firebase.google.com
-   2. Crée un projet gratuit (Spark plan), ajoute une "Web App".
-   3. Copie ici les valeurs affichées dans "Config du SDK".
-   4. Active Firestore Database (mode production), puis colle les
-      règles de sécurité fournies dans LISEZ-MOI-iPhone.md.
+   La configuration ci-dessous est déjà renseignée pour le projet.
+   La version 48 ajoute Firebase Authentication par téléphone dans
+   atelier.html. Les étapes nécessaires sont décrites dans :
+   CONFIGURATION-WB-CARNET.md
    ============================================================ */
 
 const FIREBASE_CONFIG = {
