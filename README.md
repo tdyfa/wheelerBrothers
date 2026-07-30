@@ -1,7 +1,10 @@
 <!--
 HISTORIQUE DES VERSIONS
 
-v50.1
+v50.2
+- Correction renforcée du débordement du champ Date sur Safari iPhone dans « Ajouter une intervention ».
+
+v50.2
 - Correction de la carte « Accès WB Carnet » qui pouvait rester bloquée sur « Chargement des accès » après l’ajout ou la modification d’une intervention.
 - Correction du débordement du champ Date dans « Ajouter une intervention » sur mobile.
 - Suppression du trait de séparation au-dessus de la carte « Accès WB Carnet ».

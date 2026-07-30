@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Carnet d'atelier</title>
-<link rel="manifest" href="manifest.json?v=50.1">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=50.1">
+<link rel="manifest" href="manifest.json?v=50.2">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=50.2">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Carnet d'atelier">
@@ -173,6 +173,24 @@
   .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;}
   .grid2 > *, .grid3 > *{min-width:0;}
   input[type=date]{display:block; width:100%; max-width:100%; min-width:0;}
+  /* iPhone / Safari : neutralise la largeur intrinsèque du sélecteur de date. */
+  .date-field{min-width:0; max-width:100%; overflow:hidden;}
+  .date-field input[type=date]{
+    display:block !important;
+    width:100% !important;
+    inline-size:100% !important;
+    max-width:100% !important;
+    max-inline-size:100% !important;
+    min-width:0 !important;
+    min-inline-size:0 !important;
+    box-sizing:border-box !important;
+    -webkit-appearance:none;
+    appearance:none;
+  }
+  .date-field input[type=date]::-webkit-date-and-time-value{
+    min-width:0;
+    text-align:center;
+  }
   @media (max-width:560px){.grid2,.grid3{grid-template-columns:1fr;}}
   .form-actions{display:flex; gap:10px; margin-top:4px; flex-wrap:wrap;}
   .status-msg{font-size:12px; margin-top:8px; min-height:14px; font-weight:600;}
@@ -277,7 +295,7 @@
     .history-op-notes{font-size:9.5pt; color:#444; white-space:pre-wrap}
   }
 </style>
-<link rel="stylesheet" href="wb-carnet-pro.css?v=50.1">
+<link rel="stylesheet" href="wb-carnet-pro.css?v=50.2">
 
 <style id="header-harmonisation-v50-1">
   .app-bar{
@@ -318,12 +336,12 @@
 
 <div class="app-bar">
   <div class="app-bar-inner">
-    <a class="app-back" href="index.html?v=50.1" aria-label="Accueil">‹</a>
+    <a class="app-back" href="index.html?v=50.2" aria-label="Accueil">‹</a>
     <div class="app-bar-title">
       <h1>Carnet d'atelier</h1>
       <div class="app-version-line">
         <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-        <span class="sub">Version 50.1</span>
+        <span class="sub">Version 50.2</span>
         <span id="syncWarn" style="display:none;"></span>
       </div>
     </div>
@@ -366,7 +384,7 @@
 
 <div id="historyPrint" aria-hidden="true"></div>
 
-<script src="firebase-config.js?v=50.1"></script>
+<script src="firebase-config.js?v=50.2"></script>
 <script>
 const STORE_KEY = 'carnet_atelier_vehicules';
 let DATA = { vehicles: [] };
@@ -1019,7 +1037,7 @@ function renderMain(){
       <div class="form-box">
         <h3>${editingOpId ? "Modifier l'intervention" : "Ajouter une intervention"}</h3>
         <div class="grid3">
-          <div class="field"><label for="opDate">Date</label><input type="date" id="opDate" value="${editOpValues.date}"></div>
+          <div class="field date-field"><label for="opDate">Date</label><input type="date" id="opDate" value="${editOpValues.date}"></div>
           <div class="field"><label for="opKm">Kilométrage</label><input type="number" id="opKm" placeholder="ex. 98000" value="${editOpValues.km ?? ''}"></div>
           <div class="field"><label for="opTemps">Temps passé (h)</label><input type="number" step="0.25" id="opTemps" placeholder="ex. 2.5" value="${editOpValues.temps ?? ''}"></div>
         </div>
@@ -1256,12 +1274,12 @@ window.atelierReady
     flagSyncError(error?.message || "Initialisation impossible.");
   });
 </script>
-<script src="wb-carnet-pro.js?v=50.1"></script>
+<script src="wb-carnet-pro.js?v=50.2"></script>
 
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=50.1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=50.2',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
