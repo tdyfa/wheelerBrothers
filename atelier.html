@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Carnet d'atelier</title>
-<link rel="manifest" href="manifest.json?v=49.10">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=49.10">
+<link rel="manifest" href="manifest.json?v=50">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=50">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Carnet d'atelier">
@@ -275,9 +275,9 @@
     .history-op-notes{font-size:9.5pt; color:#444; white-space:pre-wrap}
   }
 </style>
-<link rel="stylesheet" href="wb-carnet-pro.css?v=49.10">
+<link rel="stylesheet" href="wb-carnet-pro.css?v=50">
 
-<style id="header-harmonisation-v49-10">
+<style id="header-harmonisation-v50">
   .app-bar{
     position:sticky; top:0; z-index:50; display:block;
     padding:calc(12px + env(safe-area-inset-top)) 16px 12px;
@@ -316,12 +316,12 @@
 
 <div class="app-bar">
   <div class="app-bar-inner">
-    <a class="app-back" href="index.html?v=49.10" aria-label="Accueil">‹</a>
+    <a class="app-back" href="index.html?v=50" aria-label="Accueil">‹</a>
     <div class="app-bar-title">
       <h1>Carnet d'atelier</h1>
       <div class="app-version-line">
         <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-        <span class="sub">Version 49.10</span>
+        <span class="sub">Version 50</span>
         <span id="syncWarn" style="display:none;"></span>
       </div>
     </div>
@@ -364,7 +364,7 @@
 
 <div id="historyPrint" aria-hidden="true"></div>
 
-<script src="firebase-config.js?v=49.10"></script>
+<script src="firebase-config.js?v=50"></script>
 <script>
 const STORE_KEY = 'carnet_atelier_vehicules';
 let DATA = { vehicles: [] };
@@ -1254,12 +1254,12 @@ window.atelierReady
     flagSyncError(error?.message || "Initialisation impossible.");
   });
 </script>
-<script src="wb-carnet-pro.js?v=49.10"></script>
+<script src="wb-carnet-pro.js?v=50"></script>
 
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=49.10',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=50',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>

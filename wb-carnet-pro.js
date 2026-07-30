@@ -5,7 +5,7 @@
  * Elle ajoute le partage WB Carnet, sans modifier les rapports ni l'inventaire.
  */
 (function(){
-  const VERSION = 2;
+  const VERSION = 3;
   const CLIENT_URL = 'https://tdyfa.github.io/wheelerBrothers-carnet/';
   const INVITE_MS = 24 * 60 * 60 * 1000;
   const COLLECTIONS = {
@@ -81,7 +81,8 @@
   }
   function vehicleRef(id){ return db.collection(COLLECTIONS.vehicles).doc(id); }
   function memberRef(vehicleId,uid){ return vehicleRef(vehicleId).collection('members').doc(uid); }
-  function userVehicleRef(uid,vehicleId){ return db.collection(COLLECTIONS.users).doc(uid).collection('vehicles').doc(vehicleId); }
+  function userRef(uid){ return db.collection(COLLECTIONS.users).doc(uid); }
+  function userVehicleRef(uid,vehicleId){ return userRef(uid).collection('vehicles').doc(vehicleId); }
   function inviteRef(token){ return db.collection(COLLECTIONS.invitations).doc(token); }
   function inviteLink(token){ return `${CLIENT_URL.replace(/\/?$/,'/')}?invite=${encodeURIComponent(token)}`; }
   function inviteStatus(invite){
@@ -336,15 +337,67 @@
   }
 
   async function revokeMember(vehicleId,member){
-    if(!confirm(`Révoquer l’accès de ${formatPhone(member.phone)} ?`)) return;
+    if(!confirm(`Retirer à ${formatPhone(member.phone)} l’accès à cette fiche uniquement ?`)) return;
     const batch=db.batch();
     batch.update(memberRef(vehicleId,member.id),{status:'revoked',revokedAt:serverTimestamp(),revokedBy:auth.currentUser.uid,updatedAt:serverTimestamp()});
     batch.delete(userVehicleRef(member.id,vehicleId));
     await batch.commit();
     const invites=await db.collection(COLLECTIONS.invitations).where('vehicleId','==',vehicleId).get();
     const updates=[];
-    invites.docs.forEach(doc=>{ if(doc.data().usedByUid===member.id) updates.push(batch2=>batch2.update(doc.ref,{status:'revoked',revokedAt:serverTimestamp(),updatedAt:serverTimestamp()})); });
+    invites.docs.forEach(doc=>{ if(doc.data().usedByUid===member.id) updates.push(batch2=>batch2.update(doc.ref,{status:'revoked',revokedAt:serverTimestamp(),revokedBy:auth.currentUser.uid,updatedAt:serverTimestamp()})); });
     if(updates.length) await commitChunks(updates);
+  }
+
+  async function disableCarnetAccount(member){
+    const user=await ensureSignedIn();
+    const phone=formatPhone(member.phone);
+    const confirmed=confirm(
+      `Désactiver entièrement le compte WB Carnet de ${phone} ?\n\n` +
+      `Cette personne perdra l’accès à tous ses véhicules et ne pourra plus créer de fiche ni d’opération. ` +
+      `Une nouvelle invitation créée depuis WheelerBrothers pourra réactiver son compte.`
+    );
+    if(!confirmed) return;
+
+    const uid=member.id;
+    const [pointersSnap,invitesSnap]=await Promise.all([
+      userRef(uid).collection('vehicles').get(),
+      db.collection(COLLECTIONS.invitations).where('usedByUid','==',uid).get()
+    ]);
+
+    const actions=[];
+    actions.push(batch=>batch.set(userRef(uid),{
+      uid,
+      phone:member.phone || '',
+      status:'disabled',
+      disabledAt:serverTimestamp(),
+      disabledBy:user.uid,
+      updatedAt:serverTimestamp()
+    },{merge:true}));
+
+    pointersSnap.docs.forEach(pointerDoc=>{
+      const vehicleId=pointerDoc.id;
+      actions.push(batch=>batch.set(memberRef(vehicleId,uid),{
+        uid,
+        phone:member.phone || '',
+        status:'revoked',
+        revokedAt:serverTimestamp(),
+        revokedBy:user.uid,
+        updatedAt:serverTimestamp()
+      },{merge:true}));
+      actions.push(batch=>batch.delete(pointerDoc.ref));
+    });
+
+    invitesSnap.docs.forEach(inviteDoc=>{
+      actions.push(batch=>batch.update(inviteDoc.ref,{
+        status:'revoked',
+        revokedAt:serverTimestamp(),
+        revokedBy:user.uid,
+        updatedAt:serverTimestamp()
+      }));
+    });
+
+    await commitChunks(actions);
+    alert(`Le compte WB Carnet de ${phone} est désactivé.`);
   }
 
   function panelContainer(){
@@ -381,7 +434,7 @@
     const people=members.filter(member=>member.status==='active' && member.role!=='atelier_admin');
     const pending=invites.filter(invite=>inviteStatus(invite)==='pending').sort((a,b)=>toMillis(b.createdAt)-toMillis(a.createdAt));
     const recentOther=invites.filter(invite=>inviteStatus(invite)!=='pending' && inviteStatus(invite)!=='used').sort((a,b)=>toMillis(b.createdAt)-toMillis(a.createdAt)).slice(0,4);
-    const activeHtml=people.map(member=>`<div class="wbc-pro-access"><div class="wbc-pro-access-main"><div class="wbc-pro-phone">${escapeHtml(formatPhone(member.phone))}</div><div class="wbc-pro-meta">Accès actif${member.activatedAt?` depuis le ${escapeHtml(formatDateTime(member.activatedAt))}`:''}</div></div><div class="wbc-pro-access-actions"><span class="wbc-pro-badge ok">Actif</span><button class="btn danger-outline wbc-pro-small" data-wbc-revoke="${escapeHtml(member.id)}" type="button">Révoquer</button></div></div>`).join('');
+    const activeHtml=people.map(member=>`<div class="wbc-pro-access"><div class="wbc-pro-access-main"><div class="wbc-pro-phone">${escapeHtml(formatPhone(member.phone))}</div><div class="wbc-pro-meta">Accès actif${member.activatedAt?` depuis le ${escapeHtml(formatDateTime(member.activatedAt))}`:''}</div></div><div class="wbc-pro-access-actions"><span class="wbc-pro-badge ok">Actif</span><button class="btn danger-outline wbc-pro-small" data-wbc-revoke="${escapeHtml(member.id)}" type="button">Retirer cette fiche</button><button class="btn danger wbc-pro-small" data-wbc-disable-account="${escapeHtml(member.id)}" type="button">Désactiver le compte</button></div></div>`).join('');
     const pendingHtml=pending.map(invite=>`<div class="wbc-pro-access"><div class="wbc-pro-access-main"><div class="wbc-pro-phone">${escapeHtml(formatPhone(invite.phone))}</div><div class="wbc-pro-meta">Expire le ${escapeHtml(formatDateTime(invite.expiresAt))}</div></div><div class="wbc-pro-access-actions"><span class="wbc-pro-badge wait">En attente</span><button class="btn ghost wbc-pro-small" data-wbc-copy="${escapeHtml(invite.id)}" type="button">Copier</button><button class="btn danger-outline wbc-pro-small" data-wbc-cancel="${escapeHtml(invite.id)}" type="button">Annuler</button></div></div>`).join('');
     const otherHtml=recentOther.map(invite=>{const status=inviteStatus(invite);return `<div class="wbc-pro-access"><div class="wbc-pro-access-main"><div class="wbc-pro-phone">${escapeHtml(formatPhone(invite.phone))}</div><div class="wbc-pro-meta">${escapeHtml(statusLabel(status))}</div></div><div class="wbc-pro-access-actions"><span class="wbc-pro-badge ${status==='revoked'?'err':''}">${escapeHtml(statusLabel(status))}</span><button class="btn ghost wbc-pro-small" data-wbc-resend="${escapeHtml(invite.phone)}" type="button">Renvoyer</button></div></div>`}).join('');
     panel.innerHTML=`<div class="wbc-pro-head"><div><h3>Accès WB Carnet</h3><p>Partage du carnet commun de ce véhicule</p></div><span class="wbc-pro-badge ok">Fiche liée</span></div><div class="wbc-pro-body"><div class="wbc-pro-grid"><div><span>Propriétaire transmis</span><strong>${escapeHtml(vehicle.owner || 'Non renseigné')}</strong></div><div><span>Immatriculation</span><strong>${escapeHtml(vehicle.plate || 'Non renseignée')}</strong></div></div>${admin?`<div class="wbc-pro-actions"><button class="btn wbc-pro-small" id="wbcInviteButton" type="button">Inviter un proche</button><button class="btn ghost wbc-pro-small" id="wbcSyncButton" type="button">Synchroniser les opérations</button></div><div class="wbc-pro-list">${activeHtml}${pendingHtml}${otherHtml}${!activeHtml&&!pendingHtml&&!otherHtml?'<p class="wbc-pro-note">Aucun proche n’a encore accès à cette fiche.</p>':''}</div><div class="wbc-pro-status">${people.length?`${people.length} accès actif${people.length>1?'s':''}.`:''} Les opérations WheelerBrothers sont partagées sans temps passé ni rémunération.</div>`:`<p class="wbc-pro-note">Reconnecte-toi avec le code atelier depuis l’accueil WheelerBrothers.</p><button class="btn wbc-pro-small" id="wbcReconnect" type="button">Retour à l’accueil</button><div class="wbc-pro-status"></div>`}</div>`;
@@ -389,6 +442,7 @@
     panel.querySelector('#wbcSyncButton')?.addEventListener('click',async event=>{const status=panel.querySelector('.wbc-pro-status');event.currentTarget.disabled=true;status.textContent='Synchronisation…';try{await syncVehicle(vehicle);status.className='wbc-pro-status ok';status.textContent='Fiche et opérations synchronisées.';}catch(error){status.className='wbc-pro-status err';status.textContent=firebaseMessage(error);}finally{event.currentTarget.disabled=false;}});
     panel.querySelector('#wbcReconnect')?.addEventListener('click',()=>{ location.href='index.html'; });
     panel.querySelectorAll('[data-wbc-revoke]').forEach(button=>button.addEventListener('click',async()=>{const member=people.find(item=>item.id===button.dataset.wbcRevoke);if(member)try{await revokeMember(vehicle.wbCarnet.vehicleId,member);}catch(error){alert(firebaseMessage(error));}}));
+    panel.querySelectorAll('[data-wbc-disable-account]').forEach(button=>button.addEventListener('click',async()=>{const member=people.find(item=>item.id===button.dataset.wbcDisableAccount);if(member)try{await disableCarnetAccount(member);}catch(error){alert(firebaseMessage(error));}}));
     panel.querySelectorAll('[data-wbc-copy]').forEach(button=>button.addEventListener('click',()=>copyText(inviteLink(button.dataset.wbcCopy))));
     panel.querySelectorAll('[data-wbc-cancel]').forEach(button=>button.addEventListener('click',async()=>{try{await cancelInvitation(button.dataset.wbcCancel);}catch(error){alert(firebaseMessage(error));}}));
     panel.querySelectorAll('[data-wbc-resend]').forEach(button=>button.addEventListener('click',()=>openInviteModal(vehicle,button.dataset.wbcResend)));
