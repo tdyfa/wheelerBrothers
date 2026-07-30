@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Carnet d'atelier</title>
-<link rel="manifest" href="manifest.json?v=50">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=50">
+<link rel="manifest" href="manifest.json?v=50.1">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=50.1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Carnet d'atelier">
@@ -117,7 +117,7 @@
   .vehicle-fact{display:flex; align-items:center; gap:8px;}
   .vehicle-fact strong{color:var(--ink);}
   .vehicle-km{margin-top:12px; font-size:18px; font-weight:800; color:var(--ink);}
-  .vehicle-actions{display:flex; gap:10px; flex-wrap:wrap; padding:14px 20px 16px; border-bottom:1px solid var(--line);}
+  .vehicle-actions{display:flex; gap:10px; flex-wrap:wrap; padding:14px 20px 16px; border-bottom:0;}
   .vehicle-actions .btn{flex:0 1 auto;}
   .operations-heading{padding:18px 20px 6px; font-size:14px; font-weight:800; color:var(--ink-soft);}
   @media (max-width:560px){
@@ -171,6 +171,8 @@
   .form-box h3{font-size:14px; margin:0 0 12px; color:var(--ink-soft);}
   .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
   .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;}
+  .grid2 > *, .grid3 > *{min-width:0;}
+  input[type=date]{display:block; width:100%; max-width:100%; min-width:0;}
   @media (max-width:560px){.grid2,.grid3{grid-template-columns:1fr;}}
   .form-actions{display:flex; gap:10px; margin-top:4px; flex-wrap:wrap;}
   .status-msg{font-size:12px; margin-top:8px; min-height:14px; font-weight:600;}
@@ -275,9 +277,9 @@
     .history-op-notes{font-size:9.5pt; color:#444; white-space:pre-wrap}
   }
 </style>
-<link rel="stylesheet" href="wb-carnet-pro.css?v=50">
+<link rel="stylesheet" href="wb-carnet-pro.css?v=50.1">
 
-<style id="header-harmonisation-v50">
+<style id="header-harmonisation-v50-1">
   .app-bar{
     position:sticky; top:0; z-index:50; display:block;
     padding:calc(12px + env(safe-area-inset-top)) 16px 12px;
@@ -316,12 +318,12 @@
 
 <div class="app-bar">
   <div class="app-bar-inner">
-    <a class="app-back" href="index.html?v=50" aria-label="Accueil">‹</a>
+    <a class="app-back" href="index.html?v=50.1" aria-label="Accueil">‹</a>
     <div class="app-bar-title">
       <h1>Carnet d'atelier</h1>
       <div class="app-version-line">
         <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-        <span class="sub">Version 50</span>
+        <span class="sub">Version 50.1</span>
         <span id="syncWarn" style="display:none;"></span>
       </div>
     </div>
@@ -364,7 +366,7 @@
 
 <div id="historyPrint" aria-hidden="true"></div>
 
-<script src="firebase-config.js?v=50"></script>
+<script src="firebase-config.js?v=50.1"></script>
 <script>
 const STORE_KEY = 'carnet_atelier_vehicules';
 let DATA = { vehicles: [] };
@@ -1254,12 +1256,12 @@ window.atelierReady
     flagSyncError(error?.message || "Initialisation impossible.");
   });
 </script>
-<script src="wb-carnet-pro.js?v=50"></script>
+<script src="wb-carnet-pro.js?v=50.1"></script>
 
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=50',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=50.1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>

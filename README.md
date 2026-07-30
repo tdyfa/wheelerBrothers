@@ -1,6 +1,11 @@
 <!--
 HISTORIQUE DES VERSIONS
 
+v50.1
+- Correction de la carte « Accès WB Carnet » qui pouvait rester bloquée sur « Chargement des accès » après l’ajout ou la modification d’une intervention.
+- Correction du débordement du champ Date dans « Ajouter une intervention » sur mobile.
+- Suppression du trait de séparation au-dessus de la carte « Accès WB Carnet ».
+
 v50
 - Ajout de deux actions distinctes pour les accès WB Carnet : retrait d’une fiche et désactivation globale du compte.
 - La désactivation globale retire tous les véhicules du compte et bloque toute création de fiche ou d’opération.

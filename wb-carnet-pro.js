@@ -5,7 +5,7 @@
  * Elle ajoute le partage WB Carnet, sans modifier les rapports ni l'inventaire.
  */
 (function(){
-  const VERSION = 3;
+  const VERSION = '3.1';
   const CLIENT_URL = 'https://tdyfa.github.io/wheelerBrothers-carnet/';
   const INVITE_MS = 24 * 60 * 60 * 1000;
   const COLLECTIONS = {
@@ -463,6 +463,14 @@
         let panel=document.getElementById('wbcProPanel') || panelContainer();
         if(!panel) return;
         if(!vehicle.wbCarnet?.vehicleId){closeAccessListeners();drawUnlinkedPanel(vehicle,panel);return;}
+        const vehicleId=vehicle.wbCarnet.vehicleId;
+        const listenersAlreadyActive=(
+          currentPanelVehicleId===vehicleId
+          && currentPanelElement===panel
+          && document.body.contains(panel)
+          && accessUnsubs.length>0
+        );
+        if(listenersAlreadyActive) return;
         panel.innerHTML=`<div class="wbc-pro-head"><div><h3>Accès WB Carnet</h3><p>Chargement des accès…</p></div></div><div class="wbc-pro-body"><div class="wbc-pro-status">Connexion à WB Carnet…</div></div>`;
         if(!auth.currentUser){drawLinkedPanel(vehicle,panel,[],[]);return;}
         await startAccessListeners(vehicle,panel);
