@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=51">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=51">
+<link rel="manifest" href="manifest.json?v=52">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -15,8 +15,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 
-<script src="firebase-config.js?v=51"></script>
-<script src="html2pdf.bundle.min.js?v=51"></script>
+<script src="firebase-config.js?v=52"></script>
+<script src="html2pdf.bundle.min.js?v=52"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -110,6 +110,7 @@
   }
   input:focus, textarea:focus, select:focus{outline:none; border-color:#9aa3b2; background:#fff}
   textarea{resize:vertical; min-height:72px; line-height:1.45}
+  textarea.is-invalid{border-color:#b3261e; box-shadow:0 0 0 3px rgba(179,38,30,.12); background:#fff8f7}
   .field{margin-bottom:12px}
   .field:last-child{margin-bottom:0}
   .hint{font-size:11px; color:var(--muted); margin-top:5px}
@@ -474,12 +475,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=51" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=52" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 51</span>
+          <span class="sub">Version 52</span>
           <label class="app-bar-sync">
             <input type="checkbox" id="syncAtelierOnSave" checked> MàJ Carnet
           </label>
@@ -548,8 +549,9 @@
           <div class="field"><label>1ère mise en circulation</label><input type="text" id="f_reg" placeholder="29/09/2003"></div>
         </div>
         <div class="field"><label>Kilométrage</label><input type="text" id="f_km" placeholder="145 000 km"></div>
-        <div class="field"><label>Résumé (optionnel)</label>
-          <textarea id="f_summary" placeholder="Ex : Entretien complet des transmissions + boîte automatique"></textarea>
+        <div class="field"><label>Résumé <span aria-hidden="true" style="color:#b3261e">*</span></label>
+          <textarea id="f_summary" required aria-required="true" placeholder="Ex : Entretien complet des transmissions + boîte automatique"></textarea>
+          <div class="hint">Obligatoire — utilisé comme intitulé de l’opération dans le Carnet d’atelier.</div>
         </div>
         <div class="field">
           <label>Photo de vue d'ensemble du véhicule</label>
@@ -988,6 +990,7 @@ function save(){
 }
 
 async function saveNow(){
+  if(!requireReportSummary()) return;
   const btn = document.getElementById('btnSaveNow');
   const original = btn.textContent;
   btn.disabled = true;
@@ -1788,23 +1791,52 @@ function cleanKm(value){
 }
 
 function reportOperationTitle(){
-  const titles = (state.sections||[]).map(s=>String(s.title||'').trim()).filter(Boolean);
-  if(titles.length) return titles.join(' + ');
-  return String(state.summary||state.title||"Intervention atelier").trim();
+  return String(state.summary||'').trim() || 'Intervention atelier';
+}
+
+function reportNoteDetailLines(value){
+  return String(value||'')
+    .split(/\r?\n/)
+    .map(line=>line.trim())
+    .filter(Boolean);
 }
 
 function reportOperationNotes(){
-  const parts = [];
-  if(state.summary) parts.push(String(state.summary).trim());
-  (state.sections||[]).forEach(sec=>{
+  const lines = [];
+  (state.sections||[]).forEach((sec,index)=>{
     const title = String(sec.title||'').trim();
-    const desc = String(sec.desc||'').trim();
-    if(title && desc) parts.push(`${title} : ${desc}`);
-    else if(desc) parts.push(desc);
+    const details = reportNoteDetailLines(sec.desc);
+    if(!title && !details.length) return;
+    lines.push(`• ${title || `Prestation ${index+1}`}`);
+    details.forEach(detail=>lines.push(`  – ${detail}`));
   });
-  if(state.closing) parts.push(`Recommandations : ${String(state.closing).trim()}`);
-  parts.push(`Rapport lié : ${currentReportId}`);
-  return parts.filter(Boolean).join(' — ');
+  const recommendations = reportNoteDetailLines(state.closing);
+  if(recommendations.length){
+    lines.push('• Recommandations');
+    recommendations.forEach(detail=>lines.push(`  – ${detail}`));
+  }
+  return lines.join('\n');
+}
+
+function requireReportSummary(){
+  const field = document.getElementById('f_summary');
+  const value = String(field?.value ?? state.summary ?? '').trim();
+  if(value){
+    state.summary = value;
+    if(field){
+      field.classList.remove('is-invalid');
+      field.removeAttribute('aria-invalid');
+    }
+    return true;
+  }
+  if(field){
+    field.classList.add('is-invalid');
+    field.setAttribute('aria-invalid','true');
+    field.scrollIntoView({behavior:'smooth',block:'center'});
+    setTimeout(()=>field.focus(),250);
+  }
+  alert('Le résumé est obligatoire. Il sera utilisé comme intitulé de l’opération dans le Carnet d’atelier.');
+  return false;
 }
 
 async function getAtelierMetadataDefaults(){
@@ -2474,6 +2506,7 @@ async function renderReportPdfPages(options={}){
 }
 
 async function generatePdf(){
+  if(!requireReportSummary()) return;
   const btn=document.getElementById('btnPdf');
   const original=btn.textContent;
   btn.disabled=true;btn.textContent='⏳ Génération…';
@@ -2558,6 +2591,15 @@ function bindAll(){
   bind('f_brand','brand'); bind('f_model','model'); bind('f_engine','engine');
   bind('f_reg','reg'); bind('f_km','km'); bind('f_summary','summary'); bind('f_closing','closing');
   bind('f_gendate','genDate'); bind('f_baieTitle','baieTitle');
+  const summaryField=document.getElementById('f_summary');
+  if(summaryField){
+    summaryField.addEventListener('input',()=>{
+      if(summaryField.value.trim()){
+        summaryField.classList.remove('is-invalid');
+        summaryField.removeAttribute('aria-invalid');
+      }
+    });
+  }
 }
 
 /* ---------- adaptation mobile : bascule éditeur/aperçu + échelle de l'aperçu ---------- */
@@ -2697,7 +2739,7 @@ setMobileView('editor');
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=51',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=52',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>

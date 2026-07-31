@@ -1,6 +1,15 @@
 <!--
 HISTORIQUE DES VERSIONS
 
+v52
+- Le champ Résumé du Générateur de rapport devient obligatoire.
+- Le Résumé devient l’intitulé de l’opération créée ou mise à jour dans le Carnet d’atelier.
+- Les prestations et leurs descriptions sont enregistrées dans les Notes sous forme de liste à puces.
+- Les Notes du Carnet d’atelier acceptent et affichent désormais plusieurs lignes.
+
+v52
+- Ajout de la mention « Rapport lié » sur chaque intervention associée à un rapport dans le Carnet d’atelier.
+
 v51
 - Partage des rapports liés aux opérations vers WB Carnet, sans enregistrer de PDF.
 - Ajout des références reportId et reportSpaceId aux opérations synchronisées.
@@ -20,7 +29,7 @@ v49
 - Intégration du partage vers WheelerBrothers Carnet.
 -->
 
-# WheelerBrothers Atelier — version 51
+# WheelerBrothers Atelier — version 52
 
 Application comprenant le Carnet d’atelier, le Générateur de rapports, l’Inventaire et le partage sécurisé vers WheelerBrothers Carnet.
 
@@ -34,6 +43,19 @@ Lorsqu’une opération provient du Générateur de rapport et que le véhicule 
 - aucun fichier PDF n’est envoyé dans Firebase Storage.
 
 Le PDF est généré à la demande sur l’appareil du proche à partir du rapport Firestore et des photos déjà présentes dans Storage.
+
+## Liaison rapport → Carnet d’atelier
+
+Le champ **Résumé** est obligatoire lors de la sauvegarde et de la génération du PDF. Il devient l’intitulé de l’intervention créée dans le Carnet d’atelier.
+
+Les prestations sont enregistrées dans les Notes sous cette forme :
+
+```text
+• Intitulé de la prestation
+  – Description ou détails de la prestation
+```
+
+Une sauvegarde ultérieure du même rapport met à jour l’opération existante grâce au `reportId`.
 
 ## Déploiement
 
