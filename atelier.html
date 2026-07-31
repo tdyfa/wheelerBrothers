@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Carnet d'atelier</title>
-<link rel="manifest" href="manifest.json?v=52">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52">
+<link rel="manifest" href="manifest.json?v=52.1">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Carnet d'atelier">
@@ -165,7 +165,8 @@
   .op-name{font-weight:700;}
   .op-notes{font-size:12px; color:var(--muted); margin-top:5px; white-space:pre-wrap; line-height:1.45;}
   .op-report-badge{
-    display:inline-flex; align-items:center; margin-top:6px; padding:3px 8px;
+    display:inline-flex; align-items:center; align-self:flex-start;
+    width:max-content; max-width:100%; margin-top:6px; padding:3px 8px;
     border-radius:999px; border:1px solid rgba(47,143,87,.35);
     background:rgba(47,143,87,.10); color:#267a49;
     font-size:10.5px; line-height:1.2; font-weight:800; white-space:nowrap;
@@ -302,7 +303,7 @@
     .history-op-notes{font-size:9.5pt; color:#444; white-space:pre-wrap}
   }
 </style>
-<link rel="stylesheet" href="wb-carnet-pro.css?v=52">
+<link rel="stylesheet" href="wb-carnet-pro.css?v=52.1">
 
 <style id="header-harmonisation-v50-1">
   .app-bar{
@@ -343,12 +344,12 @@
 
 <div class="app-bar">
   <div class="app-bar-inner">
-    <a class="app-back" href="index.html?v=52" aria-label="Accueil">‹</a>
+    <a class="app-back" href="index.html?v=52.1" aria-label="Accueil">‹</a>
     <div class="app-bar-title">
       <h1>Carnet d'atelier</h1>
       <div class="app-version-line">
         <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-        <span class="sub">Version 52</span>
+        <span class="sub">Version 52.1</span>
         <span id="syncWarn" style="display:none;"></span>
       </div>
     </div>
@@ -391,7 +392,7 @@
 
 <div id="historyPrint" aria-hidden="true"></div>
 
-<script src="firebase-config.js?v=52"></script>
+<script src="firebase-config.js?v=52.1"></script>
 <script>
 const STORE_KEY = 'carnet_atelier_vehicules';
 let DATA = { vehicles: [] };
@@ -1282,12 +1283,12 @@ window.atelierReady
     flagSyncError(error?.message || "Initialisation impossible.");
   });
 </script>
-<script src="wb-carnet-pro.js?v=52"></script>
+<script src="wb-carnet-pro.js?v=52.1"></script>
 
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=52',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=52.1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>

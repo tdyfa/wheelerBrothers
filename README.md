@@ -1,6 +1,9 @@
 <!--
 HISTORIQUE DES VERSIONS
 
+v52.1
+- Correction iPhone : la pastille « Rapport lié » s’ajuste désormais à la largeur du texte.
+
 v52
 - Le champ Résumé du Générateur de rapport devient obligatoire.
 - Le Résumé devient l’intitulé de l’opération créée ou mise à jour dans le Carnet d’atelier.
