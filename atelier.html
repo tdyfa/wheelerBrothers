@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Carnet d'atelier</title>
-<link rel="manifest" href="manifest.json?v=50.2">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=50.2">
+<link rel="manifest" href="manifest.json?v=51">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=51">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Carnet d'atelier">
@@ -295,7 +295,7 @@
     .history-op-notes{font-size:9.5pt; color:#444; white-space:pre-wrap}
   }
 </style>
-<link rel="stylesheet" href="wb-carnet-pro.css?v=50.2">
+<link rel="stylesheet" href="wb-carnet-pro.css?v=51">
 
 <style id="header-harmonisation-v50-1">
   .app-bar{
@@ -336,12 +336,12 @@
 
 <div class="app-bar">
   <div class="app-bar-inner">
-    <a class="app-back" href="index.html?v=50.2" aria-label="Accueil">‹</a>
+    <a class="app-back" href="index.html?v=51" aria-label="Accueil">‹</a>
     <div class="app-bar-title">
       <h1>Carnet d'atelier</h1>
       <div class="app-version-line">
         <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-        <span class="sub">Version 50.2</span>
+        <span class="sub">Version 51</span>
         <span id="syncWarn" style="display:none;"></span>
       </div>
     </div>
@@ -384,7 +384,7 @@
 
 <div id="historyPrint" aria-hidden="true"></div>
 
-<script src="firebase-config.js?v=50.2"></script>
+<script src="firebase-config.js?v=51"></script>
 <script>
 const STORE_KEY = 'carnet_atelier_vehicules';
 let DATA = { vehicles: [] };
@@ -1274,12 +1274,12 @@ window.atelierReady
     flagSyncError(error?.message || "Initialisation impossible.");
   });
 </script>
-<script src="wb-carnet-pro.js?v=50.2"></script>
+<script src="wb-carnet-pro.js?v=51"></script>
 
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=50.2',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=51',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>

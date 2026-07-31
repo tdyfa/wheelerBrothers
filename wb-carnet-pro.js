@@ -5,7 +5,7 @@
  * Elle ajoute le partage WB Carnet, sans modifier les rapports ni l'inventaire.
  */
 (function(){
-  const VERSION = '3.1';
+  const VERSION = '4.0';
   const CLIENT_URL = 'https://tdyfa.github.io/wheelerBrothers-carnet/';
   const INVITE_MS = 24 * 60 * 60 * 1000;
   const COLLECTIONS = {
@@ -250,15 +250,32 @@
     const keep=new Set();const actions=[];
     for(const operation of (vehicle.ops || [])){
       const id=safeOperationId(operation.id);keep.add(id);
+      const linkedReportId=(operation.source==='rapport' && operation.reportId) ? String(operation.reportId) : '';
       actions.push(batch=>batch.set(ref.collection('operations').doc(id),{
-        source:'atelier',sourceVehicleId:vehicle.id,sourceOperationId:String(operation.id || ''),
+        source:'atelier',sourceType:linkedReportId?'rapport':'atelier',sourceVehicleId:vehicle.id,sourceOperationId:String(operation.id || ''),
         date:operation.date || '',mileage:Number(operation.km) || null,title:operation.operation || 'Intervention',
         details:operation.notes || '',performedBy:'WheelerBrothers',createdBy:auth.currentUser.uid,
+        reportId:linkedReportId || null,reportSpaceId:linkedReportId?ensureSharedCode():null,
         updatedAt:serverTimestamp(),createdAt:existingAtelier.has(id)?(existingAtelier.get(id).data().createdAt || serverTimestamp()):serverTimestamp()
       },{merge:true}));
     }
     for(const [id] of existingAtelier){ if(!keep.has(id)) actions.push(batch=>batch.delete(ref.collection('operations').doc(id))); }
     if(actions.length) await commitChunks(actions);
+
+    const reportIds=[...new Set((vehicle.ops || [])
+      .filter(operation=>operation && operation.source==='rapport' && operation.reportId)
+      .map(operation=>String(operation.reportId)))];
+    for(const reportId of reportIds){
+      const reportRef=sharedCollectionRef('reports').doc(reportId);
+      const reportSnap=await reportRef.get();
+      if(!reportSnap.exists) continue;
+      await reportRef.set({
+        sharedReport:true,
+        sharedVehicleId:vehicleId,
+        sourceVehicleId:vehicle.id,
+        sharedUpdatedAt:serverTimestamp()
+      },{merge:true});
+    }
   }
 
   function scheduleSyncAll(){
@@ -482,6 +499,6 @@
   if(main){ new MutationObserver(()=>renderPanel()).observe(main,{childList:true,subtree:false}); }
   auth.onAuthStateChanged(()=>{closeAccessListeners(); if(window.ATELIER_SPACE_ID) renderPanel();});
   window.addEventListener('online',scheduleSyncAll);
-  window.atelierReady.then(()=>renderPanel()).catch(error=>console.error('WB Carnet Pro',error));
+  window.atelierReady.then(()=>{ renderPanel(); scheduleSyncAll(); }).catch(error=>console.error('WB Carnet Pro',error));
   console.info(`WB Carnet Pro v${VERSION} chargé.`);
 })();

@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=50.2">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=50.2">
+<link rel="manifest" href="manifest.json?v=51">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=51">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -15,8 +15,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 
-<script src="firebase-config.js?v=50.2"></script>
-<script src="html2pdf.bundle.min.js?v=50.2"></script>
+<script src="firebase-config.js?v=51"></script>
+<script src="html2pdf.bundle.min.js?v=51"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -474,12 +474,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=50.2" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=51" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 50.2</span>
+          <span class="sub">Version 51</span>
           <label class="app-bar-sync">
             <input type="checkbox" id="syncAtelierOnSave" checked> MàJ Carnet
           </label>
@@ -808,7 +808,7 @@ async function patchReportField(reportId, key, oldDataUrl, newUrl){
       subtitle: [parsed.brand, parsed.model].filter(Boolean).join(' '),
       updatedAt: Date.now(),
       writerId: SYNC_CLIENT_ID
-    });
+    },{merge:true});
   }catch(e){ console.warn('Correction différée du rapport impossible', e); }
 }
 
@@ -841,7 +841,7 @@ async function patchReportArrayItem(reportId, itemId, oldDataUrl, newUrl){
       subtitle: [parsed.brand, parsed.model].filter(Boolean).join(' '),
       updatedAt: Date.now(),
       writerId: SYNC_CLIENT_ID
-    });
+    },{merge:true});
   }catch(e){ console.warn('Correction différée du rapport impossible', e); }
 }
 
@@ -939,7 +939,7 @@ function doFirestoreSave(reportId, payloadJson, meta){
       subtitle: meta.subtitle,
       updatedAt: Date.now(),
       writerId: SYNC_CLIENT_ID
-    }).then(()=> clearSyncError())
+    },{merge:true}).then(()=> clearSyncError())
       .catch((e)=>{ console.error('Erreur de synchronisation', e); flagSyncError(); });
   }catch(e){ console.error('Erreur de synchronisation', e); flagSyncError(); }
 }
@@ -1237,7 +1237,7 @@ async function migrateLegacySingleReport(){
       title: 'Rapport récupéré',
       subtitle: '',
       updatedAt: remote.updatedAt || Date.now()
-    });
+    },{merge:true});
     return id;
   }catch(e){
     console.error('Migration impossible', e);
@@ -1863,6 +1863,52 @@ async function askAtelierMetadata(){
   });
 }
 
+
+function wbCarnetSafeOperationId(id){
+  const raw=String(id || '').replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,120);
+  return `atelier_${raw || ('r'+Date.now().toString(36))}`;
+}
+
+async function syncLinkedReportToWBCarnet(vehicle,operation){
+  const vehicleId=vehicle?.wbCarnet?.vehicleId;
+  if(!vehicleId || !operation?.reportId || !auth.currentUser) return;
+  const reportId=String(operation.reportId);
+  const target=db.collection('wbCarnetVehicles').doc(vehicleId);
+  const operationId=wbCarnetSafeOperationId(operation.id);
+  const batch=db.batch();
+  batch.set(target,{
+    model:vehicle.modele || 'Véhicule',
+    engine:vehicle.motorisation || '',
+    plate:vehicle.plate || '',
+    plateKey:normalizePlate(vehicle.plate),
+    ownerName:vehicle.owner || '',
+    sourceVehicleId:vehicle.id,
+    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+  },{merge:true});
+  batch.set(target.collection('operations').doc(operationId),{
+    source:'atelier',
+    sourceType:'rapport',
+    sourceVehicleId:vehicle.id,
+    sourceOperationId:String(operation.id || ''),
+    date:operation.date || '',
+    mileage:Number(operation.km) || null,
+    title:operation.operation || 'Intervention',
+    details:operation.notes || '',
+    performedBy:'WheelerBrothers',
+    createdBy:auth.currentUser.uid,
+    reportId,
+    reportSpaceId:ensureSharedCode(),
+    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+  },{merge:true});
+  batch.set(reportDocRef(reportId),{
+    sharedReport:true,
+    sharedVehicleId:vehicleId,
+    sourceVehicleId:vehicle.id,
+    sharedUpdatedAt:firebase.firestore.FieldValue.serverTimestamp()
+  },{merge:true});
+  await batch.commit();
+}
+
 async function syncReportToAtelier(metadata){
   const plateKey = normalizePlate(state.plate);
   if(!plateKey) return {status:'skipped', message:"Aucune immatriculation : le carnet n'a pas été modifié."};
@@ -1870,6 +1916,8 @@ async function syncReportToAtelier(metadata){
 
   const atelierRef = sharedDocRef('atelier');
   let outcome = null;
+  let linkedVehicle = null;
+  let linkedOperation = null;
   await db.runTransaction(async tx=>{
     const snap = await tx.get(atelierRef);
     let data = {vehicles:[]};
@@ -1915,14 +1963,21 @@ Créer automatiquement la fiche « ${label} » dans le carnet atelier ?`);
     const existing = vehicle.ops.find(o=>o && o.source==='rapport' && o.reportId===currentReportId);
     if(existing){
       Object.assign(existing, opData);
+      linkedOperation=existing;
       outcome={status:'updated',message:`Opération mise à jour dans la fiche ${vehicle.plate || vehicle.modele}.`};
     }else{
-      vehicle.ops.push({id:'v'+Date.now()+Math.random().toString(16).slice(2,8), ...opData});
+      const created={id:'v'+Date.now()+Math.random().toString(16).slice(2,8), ...opData};
+      vehicle.ops.push(created);
+      linkedOperation=created;
       outcome={status:'created',message:`Opération ajoutée à la fiche ${vehicle.plate || vehicle.modele}.`};
     }
+    linkedVehicle=JSON.parse(JSON.stringify(vehicle));
     vehicle.updatedAt=Date.now();
     tx.set(atelierRef,{payload:JSON.stringify(data),updatedAt:Date.now()});
   });
+  if(linkedVehicle?.wbCarnet?.vehicleId && linkedOperation){
+    await syncLinkedReportToWBCarnet(linkedVehicle,linkedOperation);
+  }
   return outcome || {status:'skipped',message:'Rapport sauvegardé sans modification du carnet.'};
 }
 
@@ -2642,7 +2697,7 @@ setMobileView('editor');
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=50.2',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=51',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>

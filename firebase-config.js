@@ -124,7 +124,7 @@ async function ensureAuthGate(){
         <button id="atelierAuthButton" type="submit">Accéder à l’atelier</button>
         <div id="atelierAuthStatus" class="auth-status"></div>
       </form>
-      <div class="auth-version">Version 50.2</div>
+      <div class="auth-version">Version 51</div>
     </section>`;
   document.body.appendChild(gate);
   gate.querySelector('#atelierAuthForm').addEventListener('submit',async event=>{
