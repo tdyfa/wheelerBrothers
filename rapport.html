@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=52.1">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.1">
+<link rel="manifest" href="manifest.json?v=52.2">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.2">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -15,8 +15,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 
-<script src="firebase-config.js?v=52.1"></script>
-<script src="html2pdf.bundle.min.js?v=52.1"></script>
+<script src="firebase-config.js?v=52.2"></script>
+<script src="html2pdf.bundle.min.js?v=52.2"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -475,12 +475,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=52.1" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=52.2" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 52.1</span>
+          <span class="sub">Version 52.2</span>
           <label class="app-bar-sync">
             <input type="checkbox" id="syncAtelierOnSave" checked> MàJ Carnet
           </label>
@@ -2739,7 +2739,7 @@ setMobileView('editor');
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=52.1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=52.2',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>

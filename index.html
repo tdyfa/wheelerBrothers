@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>WheelerBrothers - Atelier</title>
-<link rel="manifest" href="manifest.json?v=52.1">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.1">
+<link rel="manifest" href="manifest.json?v=52.2">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.2">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Outils Atelier">
@@ -13,7 +13,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=52.1"></script>
+<script src="firebase-config.js?v=52.2"></script>
 <style>
   :root{--ink:#111418; --muted:#6b7280; --line:#e3e7ee; --bg:#eef1f5; --card:#ffffff;}
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -43,12 +43,12 @@
 <body>
   <div class="box">
     <img class="brand-logo" src="report-cover-logo.png" alt="Wheeler Brothers">
-    <a class="tool secondary" href="atelier.html?v=52.1">Carnet d'atelier</a>
-    <a class="tool secondary" href="rapport.html?v=52.1">Générateur de rapport</a>
-    <a class="tool secondary" href="inventaire.html?v=52.1">Inventaire</a>
+    <a class="tool secondary" href="atelier.html?v=52.2">Carnet d'atelier</a>
+    <a class="tool secondary" href="rapport.html?v=52.2">Générateur de rapport</a>
+    <a class="tool secondary" href="inventaire.html?v=52.2">Inventaire</a>
     <button type="button" id="btnResetCode" style="background:none;border:none;color:var(--muted);font-size:11.5px;text-decoration:underline;cursor:pointer;padding:0;margin-top:4px;">Changer le code d'atelier</button>
     <div id="refreshStatus" class="refresh-status" aria-live="polite"></div>
-    <div class="version">Version 52.1</div>
+    <div class="version">Version 52.2</div>
   </div>
 <script>
   document.getElementById('btnResetCode').addEventListener('click', async () => {
@@ -70,7 +70,7 @@
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('sw.js?v=52.1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=52.2',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>

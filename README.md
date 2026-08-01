@@ -1,6 +1,11 @@
 <!--
 HISTORIQUE DES VERSIONS
 
+v52.2
+- Correction du calcul du taux horaire moyen par véhicule et de la moyenne générale.
+- Les opérations dont le temps est égal à 0 ou dont la rémunération est égale à 0 sont exclues du calcul du taux moyen.
+- Les totaux de temps et de rémunération continuent à inclure toutes les opérations.
+
 v52.1
 - Correction iPhone : la pastille « Rapport lié » s’ajuste désormais à la largeur du texte.
 
@@ -32,7 +37,7 @@ v49
 - Intégration du partage vers WheelerBrothers Carnet.
 -->
 
-# WheelerBrothers Atelier — version 52
+# WheelerBrothers Atelier — version 52.2
 
 Application comprenant le Carnet d’atelier, le Générateur de rapports, l’Inventaire et le partage sécurisé vers WheelerBrothers Carnet.
 
