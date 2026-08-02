@@ -1,19 +1,19 @@
-const CACHE_NAME = 'outils-atelier-v52.2';
+const CACHE_NAME = 'outils-atelier-v52.3';
 const ASSETS = [
   './',
   './index.html',
-  './atelier.html?v=52.2',
-  './rapport.html?v=52.2',
-  './inventaire.html?v=52.2',
-  './manifest.json?v=52.2',
-  './firebase-config.js?v=52.2',
-  './apple-touch-icon.png?v=52.2',
+  './atelier.html?v=52.3',
+  './rapport.html?v=52.3',
+  './inventaire.html?v=52.3',
+  './manifest.json?v=52.3',
+  './firebase-config.js?v=52.3',
+  './apple-touch-icon.png?v=52.3',
   './icon-192.png',
   './icon-512.png',
   './report-cover-logo.png',
-  './html2pdf.bundle.min.js?v=52.2',
-  './wb-carnet-pro.css?v=52.2',
-  './wb-carnet-pro.js?v=52.2'
+  './html2pdf.bundle.min.js?v=52.3',
+  './wb-carnet-pro.css?v=52.3',
+  './wb-carnet-pro.js?v=52.3'
 ];
 
 self.addEventListener('install', (event) => {

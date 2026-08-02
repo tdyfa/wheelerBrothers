@@ -1,6 +1,12 @@
 <!--
 HISTORIQUE DES VERSIONS
 
+v52.3
+- Correction de l’export PDF de l’historique lorsqu’une opération est trop longue pour tenir sur une page.
+- Une opération longue commence désormais dans l’espace disponible puis continue sur la page suivante.
+- L’en-tête du tableau est répété sur chaque page de continuation.
+- La date et le kilométrage restent affichés uniquement au début de l’opération.
+
 v52.2
 - Correction du calcul du taux horaire moyen par véhicule et de la moyenne générale.
 - Les opérations dont le temps est égal à 0 ou dont la rémunération est égale à 0 sont exclues du calcul du taux moyen.
@@ -37,7 +43,7 @@ v49
 - Intégration du partage vers WheelerBrothers Carnet.
 -->
 
-# WheelerBrothers Atelier — version 52.2
+# WheelerBrothers Atelier — version 52.3
 
 Application comprenant le Carnet d’atelier, le Générateur de rapports, l’Inventaire et le partage sécurisé vers WheelerBrothers Carnet.
 

@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Carnet d'atelier</title>
-<link rel="manifest" href="manifest.json?v=52.2">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.2">
+<link rel="manifest" href="manifest.json?v=52.3">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.3">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Carnet d'atelier">
@@ -303,7 +303,7 @@
     .history-op-notes{font-size:9.5pt; color:#444; white-space:pre-wrap}
   }
 </style>
-<link rel="stylesheet" href="wb-carnet-pro.css?v=52.2">
+<link rel="stylesheet" href="wb-carnet-pro.css?v=52.3">
 
 <style id="header-harmonisation-v50-1">
   .app-bar{
@@ -344,12 +344,12 @@
 
 <div class="app-bar">
   <div class="app-bar-inner">
-    <a class="app-back" href="index.html?v=52.2" aria-label="Accueil">‹</a>
+    <a class="app-back" href="index.html?v=52.3" aria-label="Accueil">‹</a>
     <div class="app-bar-title">
       <h1>Carnet d'atelier</h1>
       <div class="app-version-line">
         <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-        <span class="sub">Version 52.2</span>
+        <span class="sub">Version 52.3</span>
         <span id="syncWarn" style="display:none;"></span>
       </div>
     </div>
@@ -392,7 +392,7 @@
 
 <div id="historyPrint" aria-hidden="true"></div>
 
-<script src="firebase-config.js?v=52.2"></script>
+<script src="firebase-config.js?v=52.3"></script>
 <script>
 const STORE_KEY = 'carnet_atelier_vehicules';
 let DATA = { vehicles: [] };
@@ -755,6 +755,11 @@ async function exportVehicleHistory(){
   const W = 1240, H = 1754;
   const margin = 82;
   const contentW = W - margin*2;
+  const pageBottom = H - 90;
+  const operationTextX = margin + 465;
+  const operationTextW = contentW - 485;
+  const rowTopPadding = 14;
+  const rowBottomPadding = 18;
   const pages = [];
   const firstDate = ops[0]?.date ? formatHistoryDate(ops[0].date) : '—';
   const lastDate = ops[ops.length-1]?.date ? formatHistoryDate(ops[ops.length-1].date) : '—';
@@ -784,6 +789,14 @@ async function exportVehicleHistory(){
     ctx.fillText('OPÉRATION ET DÉTAILS', margin+465, y);
     y += 38;
     ctx.fillRect(margin,y,contentW,3); y += 12;
+  };
+  const startContinuationPage = ()=>{
+    newPage();
+    ctx.font='bold 27px Arial';
+    ctx.fillStyle='#111';
+    ctx.fillText(`Historique — ${v.modele||'Véhicule'}`,margin,y);
+    y+=52;
+    drawTableHeader();
   };
 
   newPage();
@@ -819,27 +832,80 @@ async function exportVehicleHistory(){
     const title = o.operation || 'Intervention';
     const notes = cleanHistoryNotes(o.notes);
     ctx.font='bold 24px Arial';
-    const titleLines = historyTextLines(ctx,title,contentW-485);
+    const titleLines = historyTextLines(ctx,title,operationTextW);
     ctx.font='21px Arial';
-    const noteLines = notes ? historyTextLines(ctx,notes,contentW-485) : [];
-    const rowH = Math.max(78, 18 + titleLines.length*31 + (noteLines.length ? 8 + noteLines.length*28 : 0) + 18);
-    if(y + rowH > H - 90){
-      finishPage(); newPage();
-      ctx.font='bold 27px Arial'; ctx.fillText(`Historique — ${v.modele||'Véhicule'}`,margin,y); y+=52;
-      drawTableHeader();
+    const noteLines = notes ? historyTextLines(ctx,notes,operationTextW) : [];
+    const tokens = [
+      ...titleLines.map(text=>({text,font:'bold 24px Arial',color:'#111',lineHeight:31})),
+      ...(noteLines.length ? [
+        {gap:7},
+        ...noteLines.map(text=>({text,font:'21px Arial',color:'#444',lineHeight:28}))
+      ] : [])
+    ];
+
+    let tokenIndex = 0;
+    let firstSegment = true;
+    while(tokenIndex < tokens.length){
+      if(tokens[tokenIndex]?.gap) tokenIndex++;
+      if(tokenIndex >= tokens.length) break;
+
+      const nextLineHeight = tokens[tokenIndex].lineHeight || 28;
+      const minimumSegmentHeight = Math.max(78,rowTopPadding+nextLineHeight+rowBottomPadding);
+      if(pageBottom-y < minimumSegmentHeight){
+        finishPage();
+        startContinuationPage();
+        continue;
+      }
+
+      const segmentY = y;
+      const availableHeight = pageBottom-segmentY;
+      const drawItems = [];
+      let usedHeight = rowTopPadding;
+
+      while(tokenIndex < tokens.length){
+        const token = tokens[tokenIndex];
+        if(token.gap){
+          const following = tokens[tokenIndex+1];
+          if(!following){ tokenIndex++; continue; }
+          if(usedHeight+token.gap+following.lineHeight+rowBottomPadding > availableHeight) break;
+          usedHeight += token.gap;
+          tokenIndex++;
+          continue;
+        }
+        if(usedHeight+token.lineHeight+rowBottomPadding > availableHeight) break;
+        drawItems.push({token,top:segmentY+usedHeight});
+        usedHeight += token.lineHeight;
+        tokenIndex++;
+      }
+
+      if(drawItems.length === 0){
+        finishPage();
+        startContinuationPage();
+        continue;
+      }
+
+      const segmentHeight = Math.max(78,usedHeight+rowBottomPadding);
+      if(firstSegment){
+        ctx.fillStyle='#111'; ctx.font='bold 22px Arial';
+        ctx.fillText(formatHistoryDate(o.date),margin,segmentY+17);
+        ctx.font='22px Arial';
+        ctx.fillText(o.km ? `${o.km} km` : '—',margin+230,segmentY+17);
+      }
+      drawItems.forEach(({token,top})=>{
+        ctx.fillStyle=token.color;
+        ctx.font=token.font;
+        ctx.fillText(token.text,operationTextX,top);
+      });
+      ctx.strokeStyle='#d9dde4'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(margin,segmentY+segmentHeight); ctx.lineTo(W-margin,segmentY+segmentHeight); ctx.stroke();
+      y = segmentY+segmentHeight;
+      firstSegment = false;
+
+      if(tokenIndex < tokens.length){
+        finishPage();
+        startContinuationPage();
+      }
     }
-    ctx.fillStyle='#111'; ctx.font='bold 22px Arial';
-    ctx.fillText(formatHistoryDate(o.date),margin,y+17);
-    ctx.font='22px Arial'; ctx.fillText(o.km ? `${o.km} km` : '—',margin+230,y+17);
-    ctx.font='bold 24px Arial';
-    let textY = drawHistoryLines(ctx,titleLines,margin+465,y+14,31);
-    if(noteLines.length){
-      ctx.fillStyle='#444'; ctx.font='21px Arial';
-      drawHistoryLines(ctx,noteLines,margin+465,textY+7,28);
-    }
-    ctx.strokeStyle='#d9dde4'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(margin,y+rowH); ctx.lineTo(W-margin,y+rowH); ctx.stroke();
-    y += rowH;
   }
   finishPage();
 
@@ -1300,12 +1366,12 @@ window.atelierReady
     flagSyncError(error?.message || "Initialisation impossible.");
   });
 </script>
-<script src="wb-carnet-pro.js?v=52.2"></script>
+<script src="wb-carnet-pro.js?v=52.3"></script>
 
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=52.2',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=52.3',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
