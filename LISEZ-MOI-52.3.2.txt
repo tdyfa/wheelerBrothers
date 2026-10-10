@@ -1,0 +1,20 @@
+WHEELERBROTHERS ATELIER 52.3.2 — RETOURS À LA LIGNE
+
+Basé sur 52.3.1 : le correctif et le diagnostic des photos sont conservés.
+
+Le moteur ajoutait une ligne vide après chaque retour à la ligne saisi.
+Désormais :
+- Entrée : ligne suivante, avec l'interligne normal du rapport.
+- Deux Entrées : une vraie ligne vide entre les deux textes.
+- Les textes longs continuent à revenir automatiquement à la ligne.
+Le correctif concerne le résumé, les descriptions des prestations,
+les recommandations et les libellés de contrôle dans l'aperçu A4 et le PDF.
+Le texte enregistré n'est pas modifié. Logo et règles métier conservés.
+
+INSTALLATION
+Publier le dossier wheelerBrothers-main complet comme précédemment,
+puis recharger et vérifier « Version 52.3.2 » dans le générateur.
+Ouvrir le rapport existant : aucun besoin de ressaisir ses textes.
+
+La procédure LISEZ-MOI-52.3.1.txt reste valable pour réparer les factures
+en échec de FR-709-WZ. La 52.3.2 inclut tous les correctifs de la 52.3.1.
