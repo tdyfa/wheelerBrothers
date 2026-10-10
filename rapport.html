@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=52.3">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.3">
+<link rel="manifest" href="manifest.json?v=52.3.1">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.3.1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -15,8 +15,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 
-<script src="firebase-config.js?v=52.3"></script>
-<script src="html2pdf.bundle.min.js?v=52.3"></script>
+<script src="firebase-config.js?v=52.3.1"></script>
+<script src="html2pdf.bundle.min.js?v=52.3.1"></script>
+<script src="report-images.js?v=52.3.1"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -475,12 +476,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=52.3" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=52.3.1" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 52.3</span>
+          <span class="sub">Version 52.3.1</span>
           <label class="app-bar-sync">
             <input type="checkbox" id="syncAtelierOnSave" checked> MàJ Carnet
           </label>
@@ -2020,67 +2021,8 @@ function isFirebaseStorageDownloadUrl(value){
   }catch(e){ return false; }
 }
 
-function pdfRemoteBlob(url){
-  return fetch(url,{
-    method:'GET',
-    mode:'cors',
-    cache:'no-store',
-    credentials:'omit'
-  }).then(async response=>{
-    if(!response.ok){
-      const error=new Error(`Téléchargement image HTTP ${response.status}`);
-      error.code=response.status===404?'storage-object-not-found':
-        (response.status===401||response.status===403?'storage-read-denied':'storage-download-http');
-      throw error;
-    }
-    const blob=await response.blob();
-    if(!blob||!blob.size){
-      const error=new Error('Image distante vide');
-      error.code='storage-empty-image';
-      throw error;
-    }
-    return blob;
-  }).catch(error=>{
-    if(error&&error.code) throw error;
-    const wrapped=new Error('Le navigateur ne peut pas lire les octets de cette photo Firebase Storage.');
-    wrapped.code=isFirebaseStorageDownloadUrl(url)?'firebase-storage-cors':'remote-image-unreadable';
-    wrapped.cause=error;
-    throw wrapped;
-  });
-}
-
-async function pdfSourceAsBlob(src){
-  if(!src) return null;
-  if(typeof src!=='string'){
-    const error=new Error('Format de photo inconnu');
-    error.code='invalid-image-source';
-    throw error;
-  }
-  if(src.startsWith('data:')){
-    const response=await fetch(src);
-    if(!response.ok) throw new Error('Image intégrée illisible');
-    const blob=await response.blob();
-    if(!blob||!blob.size) throw new Error('Image intégrée vide');
-    return blob;
-  }
-  if(src.startsWith('blob:')){
-    const response=await fetch(src);
-    if(!response.ok) throw new Error('Image locale temporaire illisible');
-    return await response.blob();
-  }
-
-  let resolvedUrl=src;
-  if(storage && isFirebaseStorageDownloadUrl(src)){
-    try{
-      resolvedUrl=await storage.refFromURL(src).getDownloadURL();
-    }catch(error){
-      // Une ancienne URL munie d'un token peut rester parfaitement valable,
-      // même si refFromURL ne reconnaît plus le nom historique du bucket.
-      console.warn('URL Firebase non résolue par refFromURL, essai direct',error);
-    }
-  }
-  return await pdfRemoteBlob(resolvedUrl);
-}
+function pdfRemoteBlob(url){ return WBReportImages.remoteBlob(url); }
+async function pdfSourceAsBlob(src){ return WBReportImages.sourceAsBlob(src); }
 
 function reportPdfFilename(){
   const clean=value=>String(value||'')
@@ -2184,47 +2126,7 @@ function pdfDrawContain(ctx,img,x,y,w,h,{border=false,background='#fff'}={}){
   ctx.drawImage(img,x+(w-dw)/2,y+(h-dh)/2,dw,dh);
 }
 
-async function loadReportPdfImage(src,cache){
-  if(!src)return null;
-  if(cache.has(src))return cache.get(src);
-  const promise=(async()=>{
-    let lastError=null;
-    for(let attempt=0;attempt<2;attempt++){
-      try{
-        const blob=await pdfSourceAsBlob(src);
-        if(!blob||!blob.size) throw new Error('Image vide');
-        if('createImageBitmap' in window){
-          try{
-            const bitmap=await createImageBitmap(blob,{imageOrientation:'from-image'});
-            if(bitmap&&bitmap.width&&bitmap.height)return bitmap;
-          }catch(e){ lastError=e; }
-        }
-        const objectUrl=URL.createObjectURL(blob);
-        try{
-          return await new Promise((resolve,reject)=>{
-            const img=new Image();
-            img.onload=()=>resolve(img);
-            img.onerror=()=>reject(new Error('Décodage de l’image impossible'));
-            img.src=objectUrl;
-          });
-        }finally{
-          URL.revokeObjectURL(objectUrl);
-        }
-      }catch(e){
-        lastError=e;
-        if(attempt===0) await new Promise(r=>setTimeout(r,250));
-      }
-    }
-    console.error('Photo du rapport inaccessible pour le PDF :',src,lastError);
-    if(lastError&&lastError.code) throw lastError;
-    const error=new Error('Une photo du rapport n’a pas pu être chargée.');
-    error.code='report-image-load-failed';
-    error.cause=lastError;
-    throw error;
-  })();
-  cache.set(src,promise);
-  return promise;
-}
+async function loadReportPdfImage(src,cache){ return WBReportImages.load(src,cache); }
 
 function reportDateFr(value){
   const text=String(value||'');
@@ -2522,15 +2424,7 @@ async function generatePdf(){
     setTimeout(()=>URL.revokeObjectURL(url),60000);
   }catch(e){
     console.error('Génération du PDF impossible',e);
-    if(e&&e.code==='firebase-storage-cors'){
-      alert("Les photos Firebase sont accessibles et peuvent s'afficher, mais le navigateur n'est pas encore autorisé à lire leurs octets pour fabriquer le PDF.\n\nApplique une seule fois la configuration CORS fournie dans le fichier CONFIGURER-CORS-FIREBASE.md, puis recharge l'application.");
-    }else if(e&&(e.code==='storage-object-not-found')){
-      alert("Impossible de générer le PDF : au moins une photo enregistrée n'existe plus dans Firebase Storage.");
-    }else if(e&&(e.code==='storage-read-denied')){
-      alert("Impossible de lire au moins une photo dans Firebase Storage. Vérifie les règles Storage et le code d'atelier.");
-    }else{
-      alert("Impossible de générer le PDF : une image du rapport n'a pas pu être chargée. Consulte la console du navigateur pour le détail.");
-    }
+    alert('Impossible de générer le PDF.\n\n'+WBReportImages.message(e));
   }finally{
     btn.disabled=false;btn.textContent=original;
   }
@@ -2683,19 +2577,22 @@ async function refreshA4Preview(revision){
   }catch(error){
     if(revision!==reportPreviewRevision)return;
     console.error('Aperçu A4 impossible',error);
-    report.innerHTML='<div class="pdf-preview-message">L’aperçu A4 ne peut pas charger une image du rapport. Vérifie la connexion puis réessaie.</div>';
-    if(status)status.textContent='Aperçu A4 indisponible — une image n’a pas pu être chargée.';
+    WBReportImages.previewError(error);
+    if(status)status.textContent=error.imageLocations ? 'Aperçu A4 indisponible — '+(error.imageLocations[0]?.description||'image en échec') : 'Aperçu A4 — erreur de génération.';
     requestAnimationFrame(()=>updatePreviewScale());
   }
 }
 
 renderReport = function(force=false){
   reportPreviewRevision++;
+  const diagnostics=document.getElementById('imageDiagnostics');if(diagnostics)diagnostics.hidden=true;
   const revision=reportPreviewRevision;
   clearTimeout(reportPreviewTimer);
   if(!force&&!shouldRenderA4Preview())return;
   reportPreviewTimer=setTimeout(()=>refreshA4Preview(revision),320);
 };
+
+WBReportImages.install();
 
 window.addEventListener('resize', ()=>{ if(isMobile()) updatePreviewScale(); });
 document.getElementById('mviewEditor').addEventListener('click', ()=>setMobileView('editor'));
@@ -2739,7 +2636,7 @@ setMobileView('editor');
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=52.3',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=52.3.1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>

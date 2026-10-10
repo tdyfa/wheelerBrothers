@@ -1,0 +1,86 @@
+WHEELERBROTHERS ATELIER 52.3.1 — CORRECTIF IMAGES A4
+Base : archive Atelier v52.3 fournie. WB Carnet autonome non modifié.
+
+DIAGNOSTIC DU RAPPORT FR-709-WZ
+Contrôle du 10 octobre 2026, lecture seule des liens présents dans le JSON :
+- 69 objets Storage : HTTP 200, images décodées intégralement.
+- Logo intégré : PNG décodé, 900 x 379 pixels.
+- Facture 1 : VITO ABBAS facture autodoc.pdf
+  Position invoices[0].src ; identifiant s18.
+  Fichier invoices-s18-1791454538426.jpg
+- Facture 2 : VITO ABBAS filtre a huile.pdf
+  Position invoices[1].src ; identifiant s19.
+  Fichier invoices-s19-1791454538532.jpg
+Les deux liens de facture renvoient HTTP 403 « Permission denied. ».
+Les PDF originaux avaient été convertis en images JPEG par Atelier.
+Ce sont ces deux images, et non l'ensemble des photos, qui sont inaccessibles.
+Le 403 ne permet pas de déterminer à lui seul la cause : token invalidé,
+accès Storage bloqué ou autre restriction côté serveur. La session Atelier
+réelle n'a pas été utilisée pour ce contrôle. La lecture réseau hors navigateur
+ne valide pas la configuration CORS de l'origine réelle du site.
+
+INSTALLATION
+1. Garder une copie de l'archive actuelle et exporter le rapport en JSON.
+2. Publier le dossier wheelerBrothers-main comme pour la 52.3, en incluant
+   le nouveau fichier report-images.js et sw.js. Utiliser le même hébergement.
+3. Recharger l'application et vérifier « Version 52.3.1 » en haut du générateur.
+Le cache d'application est versionné pour recevoir le nouveau fichier.
+Les règles Firebase, la configuration métier et les logos sont conservés.
+
+RÉPARER FR-709-WZ
+1. Ouvrir le rapport existant dans « Mes rapports » et être connecté à Atelier.
+   Éviter de réimporter le JSON dans un autre rapport si l'original existe déjà.
+2. Cliquer sur « Vérifier les photos » dans l'aperçu. Toutes les images incluses
+   dans le document sont contrôlées, même celles situées après la première erreur.
+3. Si un lien actuel fonctionne, cliquer « Enregistrer le lien actuel ».
+   Le diagnostic et la récupération pour lecture ne modifient pas le rapport.
+4. Si les deux factures restent en 403, cliquer « Remplacer cette image »
+   sur chacune des lignes et choisir le PDF original d'une page, ou son JPG/PNG.
+   La nouvelle image est validée, envoyée à Storage, puis sa référence remplace
+   uniquement celle de la facture ciblée. ID, nom, ordre et autres données restent
+   identiques ; les anciens objets ne sont pas supprimés par ce remplacement.
+   En cas d'échec d'envoi, la référence existante n'est pas remplacée.
+5. Pour un PDF de plusieurs pages : utiliser le champ existant « Ajouter une ou
+   plusieurs factures », vérifier les nouvelles pages, puis retirer la référence
+   défaillante et remettre les pages dans l'ordre avec les flèches. Le bouton de
+   suppression existant tente également de supprimer l'ancien objet Storage.
+6. Cliquer sur « Réessayer », vérifier l'aperçu, puis générer le PDF et exporter
+   un nouveau JSON comme sauvegarde. Les modifications utilisent l'enregistrement
+   automatique habituel du générateur ; vérifier son statut de synchronisation.
+
+SOLUTION TEMPORAIRE
+Décoche « Inclure une (ou des) facture(s) à la fin du rapport » : l'aperçu et le
+PDF se génèrent sans les deux factures, tout en conservant leurs références.
+Cette action est enregistrée dans le rapport ; recocher après réparation.
+Le document obtenu temporairement ne contient donc pas les factures.
+
+CE QUE CHANGE LA 52.3.1
+- Erreur A4/PDF : emplacement, prestation, côté, photo, ID et chemin du fichier.
+- Distinction des erreurs HTTP observables 401/403/404, fichier vide, décodage,
+  source intégrée invalide et URL locale indisponible. Réseau/CORS est indiqué
+  comme indéterminé lorsque le navigateur ne permet pas de lire le statut HTTP.
+- Tentative de résolution du lien Storage actuel avec la session Atelier
+  après un échec du lien enregistré. Aucun changement des règles de sécurité.
+- Boutons « Réessayer », « Vérifier les photos » et export du diagnostic.
+- Remplacement ciblé d'une image après envoi réussi. Le logo est exclu du bouton
+  de remplacement du diagnostic ; son fonctionnement habituel reste inchangé.
+- Éviction des chargements en échec du cache : une erreur transitoire ne reste
+  plus bloquée jusqu'au rechargement de l'application.
+- Diagnostics sans tokens de téléchargement ni contenu des images.
+Le PDF continue à s'arrêter si une image requise est inaccessible : aucune photo
+n'est omise silencieusement pour fabriquer un rapport apparemment complet.
+
+VALIDATION
+Syntaxe des scripts vérifiée. Navigateur Edge isolé, Firebase simulé : 403 des
+deux factures, 404, corruption, réseau/CORS, URL locale périmée, lien Storage
+renouvelé, nouvel essai avec le même cache, remplacement ciblé, échec d'envoi
+et changement de rapport pendant l'envoi. Diagnostic sans écriture vérifié.
+Les 23 pages de ce rapport, avec les mêmes images de test substituées dans les
+deux versions, sont identiques octet pour octet entre 52.3 et 52.3.1.
+Logo PNG et constante du logo embarqué : identiques à l'archive originale.
+Pas de déploiement ni de modification du rapport réel effectués. La réparation
+finale demande la session Atelier ou les deux factures originales.
+
+Références Firebase :
+https://firebase.google.com/docs/storage/web/handle-errors
+https://firebase.google.com/docs/storage/web/download-files
