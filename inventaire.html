@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Inventaire — Wheeler Brothers</title>
-<link rel="manifest" href="manifest.json?v=52.3.2">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.3.2">
+<link rel="manifest" href="manifest.json?v=52.3.3">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.3.3">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#f2f4f7">
@@ -13,7 +13,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
-<script src="firebase-config.js?v=52.3.2"></script>
+<script src="firebase-config.js?v=52.3.3"></script>
 <style>
 :root{--ink:#111418;--muted:#667085;--line:#dfe4ea;--bg:#eef1f5;--card:#fff;--danger:#b42318;}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -46,6 +46,11 @@ button:active,.btn:active{background:#f2f4f7}
 .summary{font-size:13px;color:var(--muted);margin:4px 2px 12px}
 .list{display:grid;gap:10px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(16,24,40,.04)}
+/* Rupture de stock : signalement visuel uniquement, sans incidence sur les données. */
+.card.is-out-of-stock{background:#fff8f7;border-color:#e9aaa5;border-left:4px solid var(--danger);padding-left:11px;box-shadow:0 2px 10px rgba(180,35,24,.06)}
+.stock-warning{display:inline-flex;align-items:center;gap:6px;margin:2px 0 8px;padding:4px 8px;border-radius:7px;background:#fee4e2;color:#912018;font-size:11px;font-weight:800;letter-spacing:.02em;text-transform:uppercase}
+.stock-warning::before{content:"";width:7px;height:7px;border-radius:50%;background:#b42318;flex:0 0 7px}
+.card.is-out-of-stock .qty{color:var(--danger);background:#fee4e2;border-radius:7px;padding:4px 5px}
 .card-top{display:flex;gap:12px;align-items:flex-start}
 .card-main{flex:1;min-width:0}
 .cat{font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
@@ -90,7 +95,7 @@ textarea{min-height:74px;resize:vertical}
 <header>
   <div class="head">
     <a class="back" href="index.html" aria-label="Accueil">‹</a>
-    <div class="title"><h1>Inventaire</h1><div class="version-line"><span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span><div class="sub">Version 52.3.2</div></div><div id="syncWarn" class="sync">Synchronisation indisponible</div></div>
+    <div class="title"><h1>Inventaire</h1><div class="version-line"><span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span><div class="sub">Version 52.3.3</div></div><div id="syncWarn" class="sync">Synchronisation indisponible</div></div>
     <button type="button" id="addBtn" class="primary">＋ Ajouter</button>
   </div>
 </header>
@@ -187,13 +192,17 @@ function render(){
   renderFilters();
   const arr=filteredItems();
   const total=arr.reduce((s,x)=>s+(Number(x.quantite)||0),0);
-  $('summary').textContent=`${arr.length} référence${arr.length>1?'s':''} · ${total} pièce${total>1?'s':''} en stock`;
-  $('list').innerHTML=arr.length?arr.map(x=>`
-    <article class="card">
+  const outOfStockCount=arr.filter(x=>(Number(x.quantite)||0)===0).length;
+  $('summary').textContent=`${arr.length} référence${arr.length>1?'s':''} · ${total} pièce${total>1?'s':''} en stock${outOfStockCount?' · '+outOfStockCount+' en rupture':''}`;
+  $('list').innerHTML=arr.length?arr.map(x=>{
+    const isOutOfStock=(Number(x.quantite)||0)===0;
+    return `
+    <article class="card${isOutOfStock?' is-out-of-stock':''}">
       <div class="card-top">
         <div class="card-main">
           <div class="cat">${esc(x.categorie)}${x.sousCategorie?' · '+esc(x.sousCategorie):''}</div>
           <div class="name">${esc(x.marque||'Sans marque')}${x.reference?' — <span class="ref">'+esc(x.reference)+'</span>':''}</div>
+          ${isOutOfStock?'<div class="stock-warning">Rupture de stock</div>':''}
           <div class="meta">
             ${x.compatibilite?'<div><strong>Compatibilité :</strong> '+esc(x.compatibilite)+'</div>':''}
             ${x.motorisation?'<div><strong>Motorisation :</strong> '+esc(x.motorisation)+'</div>':''}
@@ -207,7 +216,8 @@ function render(){
         </div>
       </div>
       <div class="actions"><button type="button" data-edit="${esc(x.id)}">Modifier</button></div>
-    </article>`).join(''):'<div class="empty">Aucune pièce ne correspond à la recherche.</div>';
+    </article>`;
+  }).join(''):'<div class="empty">Aucune pièce ne correspond à la recherche.</div>';
   $('list').querySelectorAll('[data-delta]').forEach(b=>b.onclick=async()=>{
     const x=DATA.items.find(i=>i.id===b.dataset.id); if(!x)return;
     x.quantite=Math.max(0,(Number(x.quantite)||0)+Number(b.dataset.delta));
@@ -283,7 +293,7 @@ window.atelierReady
   });
 </script>
 <script>
-if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js?v=52.3.2',{updateViaCache:'none'}).catch(()=>{}));
+if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js?v=52.3.3',{updateViaCache:'none'}).catch(()=>{}));
 </script>
 </body>
 </html>

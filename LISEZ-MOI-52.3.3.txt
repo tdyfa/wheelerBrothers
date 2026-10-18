@@ -1,0 +1,25 @@
+WHEELERBROTHERS ATELIER v52.3.3 — INVENTAIRE : RUPTURE DE STOCK
+
+Version construite à partir de WheelerBrothers Atelier v52.3.2.
+Tous les correctifs de 52.3.1 et 52.3.2 (dont le diagnostic des images de
+rapports et les retours à la ligne des PDF) sont conservés.
+
+INVENTAIRE
+- Les références dont la quantité est exactement 0 sont automatiquement
+  mises en évidence (fond rouge très pâle, bordure rouge, badge « Rupture de stock »
+  et quantité rouge), sur ordinateur comme sur mobile.
+- La synthèse indique le nombre de références en rupture selon les filtres
+  et la recherche en cours, lorsqu'il est supérieur à 0.
+- Le marquage disparaît automatiquement dès que le stock repasse à 1 ou plus.
+- Aucun changement à l'enregistrement dans Firebase, à l'import/export JSON,
+  aux boutons de quantité, à la recherche ou aux filtres.
+
+AUTRES MODULES
+Carnet d'atelier et générateur de rapport inchangés sur le plan fonctionnel.
+Logo WheelerBrothers conservé. Aucun changement de règles Firestore ou Storage.
+WB Carnet reste indépendant : aucune mise à jour de ce dépôt requise.
+
+DÉPLOIEMENT
+Publier l'intégralité du dossier wheelerBrothers-main sur GitHub Pages,
+puis recharger la page et vérifier « Version 52.3.3 » dans l'inventaire.
+Le changement est purement visuel : aucune migration Firebase nécessaire.
