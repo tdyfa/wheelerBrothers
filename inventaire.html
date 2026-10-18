@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Inventaire — Wheeler Brothers</title>
-<link rel="manifest" href="manifest.json?v=52.3.4">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.3.4">
+<link rel="manifest" href="manifest.json?v=52.3.5">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.3.5">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#f2f4f7">
@@ -13,7 +13,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
-<script src="firebase-config.js?v=52.3.4"></script>
+<script src="firebase-config.js?v=52.3.5"></script>
 <style>
 :root{--ink:#111418;--muted:#667085;--line:#dfe4ea;--bg:#eef1f5;--card:#fff;--danger:#b42318;}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -44,7 +44,7 @@ button:active,.btn:active{background:#f2f4f7}
 .filter{white-space:nowrap;padding:8px 12px;font-size:13px}
 .filter.active{background:#111418;color:white;border-color:#111418}
 .summary{font-size:13px;color:var(--muted);margin:4px 2px 6px}
-.inventory-tools{display:flex;justify-content:flex-end;margin:0 0 12px}
+.inventory-tools{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin:0 0 12px}
 .inventory-tools button{padding:8px 11px;font-size:12px}
 .list{display:grid;gap:10px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(16,24,40,.04)}
@@ -110,6 +110,16 @@ textarea{min-height:74px;resize:vertical}
 .category-actions{position:sticky;bottom:-20px;padding:12px 0 2px;background:white;z-index:1}
 .category-actions button:disabled{opacity:.45;cursor:default}
 .category-backup{display:block;width:100%;font-size:12px;margin-top:10px}
+/* Ajout ponctuel d'une catégorie, réutilisable dans toute l'application. */
+.category-pick{display:flex;align-items:stretch;gap:7px;min-width:0}
+.category-pick select{flex:1;min-width:0}
+.category-add-btn{flex:0 0 45px;min-width:45px;padding:0;font-size:23px;line-height:1}
+.category-create-modal{z-index:40}
+.category-create-sheet{max-width:440px}
+.category-create-sheet p{font-size:13px;line-height:1.5;color:#475467;margin:0 0 18px}
+.category-create-sheet label{display:block;margin:0 0 7px}
+.category-create-error{min-height:18px;margin-top:8px;color:var(--danger);font-size:12px}
+.category-create-error:empty{display:none}
 @media(max-width:520px){.category-row{grid-template-columns:1fr;gap:10px}.category-sheet{padding-bottom:calc(20px + env(safe-area-inset-bottom))}}
 </style>
 </head>
@@ -117,7 +127,7 @@ textarea{min-height:74px;resize:vertical}
 <header>
   <div class="head">
     <a class="back" href="index.html" aria-label="Accueil">‹</a>
-    <div class="title"><h1>Inventaire</h1><div class="version-line"><span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span><div class="sub">Version 52.3.4</div></div><div id="syncWarn" class="sync">Synchronisation indisponible</div></div>
+    <div class="title"><h1>Inventaire</h1><div class="version-line"><span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span><div class="sub">Version 52.3.5</div></div><div id="syncWarn" class="sync">Synchronisation indisponible</div></div>
     <button type="button" id="addBtn" class="primary">＋ Ajouter</button>
   </div>
 </header>
@@ -128,7 +138,7 @@ textarea{min-height:74px;resize:vertical}
   </div>
   <div id="filters" class="filters"></div>
   <div id="summary" class="summary">Chargement…</div>
-  <div class="inventory-tools"><button type="button" id="recategorizeBtn">Réorganiser les catégories</button></div>
+  <div class="inventory-tools"><button type="button" id="createCategoryBtn">＋ Nouvelle catégorie</button><button type="button" id="recategorizeBtn">Réorganiser les catégories</button></div>
   <div id="list" class="list"></div>
   <div class="io">
     <button type="button" id="exportBtn">Exporter (.json)</button>
@@ -142,7 +152,7 @@ textarea{min-height:74px;resize:vertical}
     <h2 id="modalTitle">Ajouter une pièce</h2>
     <input type="hidden" id="itemId">
     <div class="grid">
-      <div class="field"><label for="categorie">Catégorie</label><select id="categorie" required><option value="" disabled selected>Choisir une catégorie…</option></select></div>
+      <div class="field"><label for="categorie">Catégorie</label><div class="category-pick"><select id="categorie" required><option value="" disabled selected>Choisir une catégorie…</option></select><button type="button" id="createCategoryFromItem" class="category-add-btn" title="Créer une catégorie" aria-label="Créer une catégorie">＋</button></div></div>
       <div class="field"><label for="sousCategorie">Sous-catégorie</label><input id="sousCategorie"></div>
       <div class="field"><label for="marque">Marque</label><input id="marque"></div>
       <div class="field"><label for="reference">Référence</label><input id="reference"></div>
@@ -165,6 +175,7 @@ textarea{min-height:74px;resize:vertical}
     <p class="category-intro">Les nouvelles catégories sont proposées à partir des anciennes. Vérifie chaque correspondance et modifie-la si nécessaire. <strong>Rien n’est enregistré dans Firebase avant ta validation.</strong> Une sauvegarde JSON sera téléchargée avant chaque reclassement.</p>
     <div class="category-toolbar">
       <label class="category-toggle"><input type="checkbox" id="showAllCategories">Afficher aussi les articles déjà classés</label>
+      <button type="button" id="createCategoryFromRecat">＋ Nouvelle catégorie</button>
       <span id="recategorizeCount" class="category-count" aria-live="polite"></span>
     </div>
     <div id="recategorizeList" class="category-rows"></div>
@@ -176,6 +187,20 @@ textarea{min-height:74px;resize:vertical}
       <button type="button" id="recategorizeBackup" class="category-backup">Exporter une sauvegarde (.json)</button>
     </div>
   </div>
+</div>
+
+<div id="categoryCreateModal" class="modal category-create-modal" role="dialog" aria-modal="true" aria-labelledby="categoryCreateTitle">
+  <form id="categoryCreateForm" class="sheet category-create-sheet">
+    <h2 id="categoryCreateTitle">Nouvelle catégorie</h2>
+    <p>Cette catégorie sera conservée dans Firebase et proposée dans les listes de l’inventaire, même si aucune pièce n’y est encore associée.</p>
+    <label for="newCategoryName">Nom de la catégorie</label>
+    <input id="newCategoryName" type="text" required maxlength="60" autocomplete="off" placeholder="Ex. : Accessoires et équipements">
+    <div id="categoryCreateError" class="category-create-error" aria-live="polite"></div>
+    <div class="modal-actions">
+      <button type="button" id="cancelCategoryCreate">Annuler</button>
+      <button type="submit" id="submitCategoryCreate" class="primary">Créer</button>
+    </div>
+  </form>
 </div>
 
 <script>
@@ -259,7 +284,7 @@ const CATEGORY_ALIASES = {
   'outillage': 'Outillage et consommables'
 };
 
-let DATA={items:[]};
+let DATA={items:[],customCategories:[]};
 let selectedCategory='Toutes';
 let unsubscribe=null;
 const $=id=>document.getElementById(id);
@@ -268,6 +293,23 @@ const esc=s=>(s??'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','
 const uid=()=> 'i'+Date.now()+Math.random().toString(16).slice(2,8);
 
 const categoryKey=s=>normalize(s).replace(/[^a-z0-9]+/g,' ').trim();
+const compareCategoryNames=(a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'});
+function customCategories(data=DATA){
+  return Array.isArray(data.customCategories)
+    ? data.customCategories.filter(c=>typeof c==='string' && c.trim())
+    : [];
+}
+function categoryOptions(data=DATA){
+  const known=new Map();
+  [...CATEGORY_OPTIONS,...customCategories(data)].forEach(value=>{
+    if(typeof value!=='string')return;
+    const name=value.replace(/\s+/g,' ').trim();
+    const key=categoryKey(name);
+    if(key&&!known.has(key))known.set(key,name);
+  });
+  return [...known.values()].sort(compareCategoryNames);
+}
+function isKnownCategory(value){return categoryOptions().includes(value);}
 function proposedCategory(item){
   const old=categoryKey(item.categorie);
   const sub=categoryKey(item.sousCategorie);
@@ -276,17 +318,17 @@ function proposedCategory(item){
      /(?:cylindre emetteur|cylindre recepteur|but[ée]e|embrayage)/.test(sub)){
     return 'Embrayage';
   }
-  return CATEGORY_OPTIONS.find(c=>categoryKey(c)===old) || CATEGORY_ALIASES[old] || null;
+  return categoryOptions().find(c=>categoryKey(c)===old) || CATEGORY_ALIASES[old] || null;
 }
 function populateCategorySelect(item){
   const select=$('categorie');
   const current=(item?.categorie||'').trim();
   let html='<option value="" disabled>Choisir une catégorie…</option>';
   // Préservation d'une ancienne catégorie si l'on modifie seulement un autre champ.
-  if(current && !CATEGORY_OPTIONS.includes(current)){
+  if(current && !isKnownCategory(current)){
     html+=`<option value="${esc(current)}">Ancienne catégorie : ${esc(current)}</option>`;
   }
-  html+=CATEGORY_OPTIONS.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  html+=categoryOptions().map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   select.innerHTML=html;
   select.value=current || '';
 }
@@ -308,10 +350,11 @@ function categoryDraftChoice(item){
 }
 function categoryChanges(){
   if(!recategorizeDraft)return [];
+  const choices=categoryOptions();
   return DATA.items.filter(item=>{
     const draft=recategorizeDraft.get(item.id);
     return draft && draft.choice!=='__keep__' &&
-      CATEGORY_OPTIONS.includes(draft.choice) && draft.choice!==item.categorie;
+      choices.includes(draft.choice) && draft.choice!==item.categorie;
   });
 }
 function updateRecategorizeStatus(){
@@ -326,7 +369,8 @@ function updateRecategorizeStatus(){
 function renderRecategorization(){
   if(!recategorizeDraft)return;
   const showAll=$('showAllCategories').checked;
-  const items=DATA.items.filter(item=>showAll || !CATEGORY_OPTIONS.includes(item.categorie));
+  const available=new Set(categoryOptions());
+  const items=DATA.items.filter(item=>showAll || !available.has(item.categorie));
   $('recategorizeList').innerHTML=items.length ? items.map(item=>{
     const draft=recategorizeDraft.get(item.id);
     const unknown=!proposedCategory(item);
@@ -339,7 +383,7 @@ function renderRecategorization(){
       <label for="recat-${esc(item.id)}">Nouvelle catégorie
         <select id="recat-${esc(item.id)}" data-recategory-id="${esc(item.id)}">
           <option value="__keep__"${draft.choice==='__keep__'?' selected':''}>${unknown?'À classer — ':''}Conserver l’actuelle</option>
-          ${CATEGORY_OPTIONS.map(c=>`<option value="${esc(c)}"${draft.choice===c?' selected':''}>${esc(c)}</option>`).join('')}
+          ${categoryOptions().map(c=>`<option value="${esc(c)}"${draft.choice===c?' selected':''}>${esc(c)}</option>`).join('')}
         </select>
       </label>
     </div>`;
@@ -365,6 +409,84 @@ function closeRecategorize(){
 }
 
 
+/* La catégorie est ajoutée par transaction afin de préserver les autres données
+   de l'inventaire lors d'une création simultanée sur un autre appareil. */
+async function addCustomCategory(label){
+  const ref=sharedDocRef('inventaire');
+  return db.runTransaction(async transaction=>{
+    const snapshot=await transaction.get(ref);
+    if(!snapshot.exists)throw new Error('Inventaire indisponible dans Firebase.');
+    const current=JSON.parse(snapshot.data().payload||'{"items":[]}');
+    if(!current || !Array.isArray(current.items))throw new Error('Inventaire Firebase invalide.');
+    const existing=categoryOptions(current).find(c=>categoryKey(c)===categoryKey(label));
+    if(existing)return {name:existing,created:false};
+    current.customCategories=[...customCategories(current),label];
+    transaction.update(ref,{payload:JSON.stringify(current),updatedAt:Date.now()});
+    return {name:label,created:true};
+  });
+}
+let categoryCreateOrigin='inventory';
+let creatingCategory=false;
+function openCategoryCreate(origin='inventory'){
+  categoryCreateOrigin=origin;
+  $('categoryCreateForm').reset();
+  $('categoryCreateError').textContent='';
+  $('submitCategoryCreate').disabled=false;
+  $('categoryCreateModal').classList.add('open');
+  setTimeout(()=>$('newCategoryName').focus(),50);
+}
+function closeCategoryCreate(){
+  if(creatingCategory)return;
+  $('categoryCreateModal').classList.remove('open');
+  if(categoryCreateOrigin==='item')$('categorie').focus();
+}
+$('categoryCreateForm').onsubmit=async event=>{
+  event.preventDefault();
+  if(creatingCategory)return;
+  const label=$('newCategoryName').value.replace(/\s+/g,' ').trim();
+  if(!label || !categoryKey(label)){
+    $('categoryCreateError').textContent='Indique un nom de catégorie valide.';
+    return;
+  }
+  if(label.length>60){
+    $('categoryCreateError').textContent='Le nom ne doit pas dépasser 60 caractères.';
+    return;
+  }
+  creatingCategory=true;
+  $('categoryCreateError').textContent='';
+  $('submitCategoryCreate').disabled=true;
+  try{
+    const result=await addCustomCategory(label);
+    // La catégorie peut déjà exister dans Firebase mais ne pas encore être dans le cache local.
+    if(!isKnownCategory(result.name)){
+      DATA.customCategories=[...customCategories(),result.name];
+    }
+    if(categoryCreateOrigin==='item'){
+      populateCategorySelect({categorie:result.name});
+    }
+    if(categoryCreateOrigin==='recat')renderRecategorization();
+    render();
+    $('categoryCreateModal').classList.remove('open');
+    setSyncError(false);
+    if(categoryCreateOrigin==='item')$('categorie').focus();
+    else if(categoryCreateOrigin==='inventory')alert(result.created
+      ? `La catégorie « ${result.name} » est enregistrée et disponible pour les prochaines pièces.`
+      : `La catégorie « ${result.name} » existe déjà.`);
+  }catch(error){
+    console.error('Création de catégorie',error);
+    $('categoryCreateError').textContent='Enregistrement Firebase impossible. Vérifie la connexion et réessaie.';
+    setSyncError(true);
+  }finally{
+    creatingCategory=false;
+    $('submitCategoryCreate').disabled=false;
+  }
+};
+$('createCategoryBtn').onclick=()=>openCategoryCreate();
+$('createCategoryFromItem').onclick=()=>openCategoryCreate('item');
+$('createCategoryFromRecat').onclick=()=>openCategoryCreate('recat');
+$('cancelCategoryCreate').onclick=closeCategoryCreate;
+$('categoryCreateModal').onclick=e=>{if(e.target===$('categoryCreateModal'))closeCategoryCreate();};
+
 function setSyncError(show){
   $('syncWarn').style.display=show?'block':'none';
 }
@@ -385,15 +507,16 @@ function loadData(){
     if(snap.exists){
       try{ DATA=JSON.parse(snap.data().payload||'{"items":[]}'); }catch{ DATA={items:[]}; }
       if(!Array.isArray(DATA.items)) DATA.items=[];
+      if(!Array.isArray(DATA.customCategories)) DATA.customCategories=[];
     }else{
-      DATA={items:SEED_ITEMS.map(x=>({...x}))};
+      DATA={items:SEED_ITEMS.map(x=>({...x})),customCategories:[]};
       await saveData();
     }
     render();
-  },e=>{console.error(e);setSyncError(true);DATA={items:SEED_ITEMS.map(x=>({...x}))};render();});
+  },e=>{console.error(e);setSyncError(true);DATA={items:SEED_ITEMS.map(x=>({...x})),customCategories:[]};render();});
 }
 function categories(){
-  return [...new Set(DATA.items.map(x=>x.categorie).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
+  return [...new Set(DATA.items.map(x=>x.categorie).filter(Boolean))].sort(compareCategoryNames);
 }
 function filteredItems(){
   const q=normalize($('search').value);
@@ -413,7 +536,8 @@ function renderFilters(){
   $('filters').querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{selectedCategory=b.dataset.cat;render();});
 }
 function render(){
-  const legacyCount=DATA.items.filter(item=>!CATEGORY_OPTIONS.includes(item.categorie)).length;
+  const available=new Set(categoryOptions());
+  const legacyCount=DATA.items.filter(item=>!available.has(item.categorie)).length;
   $('recategorizeBtn').textContent='Réorganiser les catégories'+(legacyCount?` (${legacyCount})`:'');
   renderFilters();
   const arr=filteredItems();
@@ -533,6 +657,8 @@ $('importFile').onchange=e=>{
     try{
       const p=JSON.parse(r.result);if(!p||!Array.isArray(p.items))throw new Error();
       if(confirm(`Remplacer l'inventaire actuel par les ${p.items.length} référence(s) du fichier ?`)){
+        // Un ancien export ne doit pas effacer les catégories créées dans l'application.
+        if(!Array.isArray(p.customCategories))p.customCategories=customCategories();
         DATA=p;render();await saveData();
       }
     }catch{alert('Fichier inventaire invalide.');}
@@ -548,7 +674,7 @@ window.atelierReady
   });
 </script>
 <script>
-if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js?v=52.3.4',{updateViaCache:'none'}).catch(()=>{}));
+if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js?v=52.3.5',{updateViaCache:'none'}).catch(()=>{}));
 </script>
 </body>
 </html>
