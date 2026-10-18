@@ -1,4 +1,4 @@
-/* Atelier 52.3.3 — chargement et diagnostic des images, sans changement du PDF. */
+/* Atelier 52.3.4 — chargement et diagnostic des images, sans changement du PDF. */
 const WBReportImages = (() => {
   const refreshed = new Map();
   const failure = (code, message, extra={}) => Object.assign(new Error(message), {code}, extra);

@@ -1,0 +1,42 @@
+WHEELERBROTHERS ATELIER v52.3.4 — INVENTAIRE : CATÉGORIES
+
+Base : Atelier v52.3.3. Les correctifs précédents (dont l'aperçu PDF et
+la mise en évidence des articles à stock 0) sont conservés.
+
+NOUVELLES PIÈCES
+- La catégorie est désormais sélectionnée dans un menu déroulant.
+- 28 catégories standardisées, dont Boîte de vitesses, Allumage et
+  préchauffage, Filtres, Pneus, Freinage, Huiles et fluides,
+  Suspension et bras, Amortissement, Échappement, Moteur,
+  Courroies/chaînes/galets, Électricité, Refroidissement, Climatisation,
+  Injection, etc.
+- La sous-catégorie reste une saisie libre.
+
+PIÈCES EXISTANTES (FIREBASE)
+- Aucune modification automatique des articles stockés dans Firebase.
+- Bouton « Réorganiser les catégories » dans l'inventaire.
+- Propositions de reclassement des anciennes catégories (Filtration ->
+  Filtres, Essuie glace -> Essuyage et lave-glace, etc.).
+- Chaque proposition peut être modifiée via un menu déroulant.
+- Les anciennes catégories inconnues sont conservées par défaut et
+  signalées « À classer manuellement ».
+- L'option « Afficher aussi les articles déjà classés » permet de
+  corriger manuellement n'importe quelle référence.
+- Une confirmation explicite et une sauvegarde JSON automatique
+  précèdent l'enregistrement dans Firestore.
+- La sauvegarde peut être réimportée via « Importer (.json) ».
+- L'édition d'un article ancien conserve sa catégorie initiale sauf
+  changement volontaire de l'utilisateur.
+- Une nouvelle installation utilise les catégories standardisées pour
+  ses exemples initiaux.
+
+AUTRES MODULES
+Aucun changement métier dans le Carnet d'atelier et le Générateur de
+rapport ; logo WheelerBrothers conservé. Aucune modification des règles
+Firebase, de la structure des documents, ni des quantités en stock.
+WB Carnet reste en v8.3.
+
+DÉPLOIEMENT
+Déployer le dossier wheelerBrothers-main, puis recharger l'application.
+La version doit afficher 52.3.4. L'inventaire déjà en ligne n'est pas
+reclassé tant que tu n'as pas validé l'action correspondante.
