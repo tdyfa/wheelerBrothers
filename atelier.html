@@ -302,6 +302,16 @@
     .history-op-title{font-weight:800; margin-bottom:3px}
     .history-op-notes{font-size:9.5pt; color:#444; white-space:pre-wrap}
   }
+
+/* iOS Safari: avoid automatic zoom on focused form controls. */
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 </style>
 <link rel="stylesheet" href="wb-carnet-pro.css?v=52.3.7">
 

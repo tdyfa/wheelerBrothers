@@ -38,6 +38,16 @@
   .refresh-status{min-height:16px;margin-top:7px;font-size:11.5px;color:var(--muted);}
   .refresh-status.error{color:#84251e;}
   .version{font-size:11.5px; color:var(--muted); font-weight:600; margin-top:12px;}
+
+/* iOS Safari: avoid automatic zoom on focused form controls. */
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 </style>
 </head>
 <body>

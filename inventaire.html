@@ -121,6 +121,16 @@ textarea{min-height:74px;resize:vertical}
 .category-create-error{min-height:18px;margin-top:8px;color:var(--danger);font-size:12px}
 .category-create-error:empty{display:none}
 @media(max-width:520px){.category-row{grid-template-columns:1fr;gap:10px}.category-sheet{padding-bottom:calc(20px + env(safe-area-inset-bottom))}}
+
+/* iOS Safari: avoid automatic zoom on focused form controls. */
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 </style>
 </head>
 <body>
