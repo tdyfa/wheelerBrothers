@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=52.3.6">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.3.6">
+<link rel="manifest" href="manifest.json?v=52.3.7">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.3.7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -15,10 +15,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 
-<script src="firebase-config.js?v=52.3.6"></script>
-<script src="html2pdf.bundle.min.js?v=52.3.6"></script>
-<script src="report-images.js?v=52.3.6"></script>
-<script src="vehicle-info.js?v=52.3.6"></script>
+<script src="firebase-config.js?v=52.3.7"></script>
+<script src="html2pdf.bundle.min.js?v=52.3.7"></script>
+<script src="report-images.js?v=52.3.7"></script>
+<script src="vehicle-info.js?v=52.3.7"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -80,6 +80,29 @@
   .wrap{display:flex; gap:24px; align-items:flex-start; padding:24px; max-width:1500px; margin:0 auto}
   @media (max-width:1100px){ .wrap{flex-direction:column} }
 
+  /* Accueil : aucun rapport ni aperçu chargé avant un choix explicite. */
+  body:not([data-report-view="editor"]) .wrap,
+  body:not([data-report-view="editor"]) .mobile-toggle,
+  body:not([data-report-view="editor"]) .app-bar-actions,
+  body:not([data-report-view="editor"]) .app-bar-sync,
+  body:not([data-report-view="editor"]) #sizeIndicator{display:none !important}
+  body:not([data-report-view="editor"]) .app-bar-top{margin-bottom:0}
+  body[data-report-view="editor"] .report-home{display:none}
+  .report-home{min-height:calc(100dvh - 100px);display:flex;align-items:center;justify-content:center;padding:28px 18px}
+  .report-home-card{width:min(600px,100%);padding:36px 30px;background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);text-align:center}
+  .report-home-mark{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:15px;background:var(--field);color:var(--ink-soft);margin-bottom:16px}
+  .report-home h2{margin:0 0 10px;font-size:25px;letter-spacing:-.4px}
+  .report-home p{margin:0;color:var(--muted);font-size:14px;line-height:1.6}
+  .report-home-actions{display:grid;gap:12px;margin-top:25px}
+  .report-home-actions .btn{min-height:50px;font-size:14px;padding:13px 16px}
+  .report-home-actions .btn.secondary{background:var(--field);color:var(--ink);border:1px solid #cdd4df}
+  .report-home-actions .btn.secondary:hover{background:#e9eef5}
+  .report-home-actions .btn:focus-visible{outline:3px solid #64748b;outline-offset:3px}
+  .report-home-actions .btn:disabled{opacity:.55;cursor:wait}
+  #reportHomeStatus{min-height:22px;margin-top:18px;font-size:12px}
+  #reportHomeStatus[data-kind="error"]{color:#b3261e}
+  @media(max-width:700px){.report-home{min-height:calc(100dvh - 90px);padding:20px 14px}.report-home-card{padding:28px 20px}.report-home h2{font-size:23px}}
+
   /* ---------- Editor ---------- */
   .editor{flex:0 0 460px; max-width:460px; width:100%}
   /* Sur grand écran, le volet de gauche reste visible pendant le scroll de l'aperçu.
@@ -116,6 +139,9 @@
   .plate-lookup-status[data-kind="success"]{color:#19713d}
   .plate-lookup-status[data-kind="warning"]{color:#875612}
   .plate-lookup-status[data-kind="error"]{color:#b3261e}
+  .mileage-status{line-height:1.5;overflow-wrap:anywhere}
+  .mileage-status[data-kind="warning"]{padding:10px 12px;background:#fff6e5;border:1px solid #e9c17b;border-radius:9px;color:#805000;font-size:12px;font-weight:600}
+  #f_km.has-mileage-warning{border-color:#b77913;background:#fffaf0;box-shadow:0 0 0 2px rgba(183,121,19,.1)}
   label{display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin:0 0 5px}
   input[type=text], input[type=date], textarea, select{
     width:100%; border:1px solid var(--line); background:var(--field);
@@ -456,7 +482,7 @@
   }
 </style>
 </head>
-<body>
+<body data-report-view="home">
 <div class="atelier-meta-overlay" id="atelierMetaOverlay" role="dialog" aria-modal="true" aria-labelledby="atelierMetaTitle">
   <div class="atelier-meta-modal">
     <h3 id="atelierMetaTitle">Informations pour le carnet atelier</h3>
@@ -488,12 +514,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=52.3.6" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=52.3.7" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 52.3.6</span>
+          <span class="sub">Version 52.3.7</span>
           <label class="app-bar-sync">
             <input type="checkbox" id="syncAtelierOnSave" checked> MàJ Carnet
           </label>
@@ -516,6 +542,21 @@
     <input type="file" id="importFile" accept="application/json">
   </div>
 </div>
+
+<main id="reportHome" class="report-home no-print" aria-labelledby="reportHomeTitle">
+  <section class="report-home-card">
+    <div class="report-home-mark" aria-hidden="true">
+      <svg width="28" height="32" viewBox="0 0 28 32" fill="none"><path d="M6 2h10l7 7v21H5V2h1Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M16 2v8h7M9 16h10M9 21h10M9 26h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+    </div>
+    <h2 id="reportHomeTitle">Générateur de rapport</h2>
+    <p>Sélectionne un rapport existant ou crée un nouveau rapport vierge.</p>
+    <div class="report-home-actions">
+      <button class="btn secondary" id="btnHomeSelect" type="button" disabled>Sélectionner un rapport</button>
+      <button class="btn" id="btnHomeCreate" type="button" disabled>Créer un nouveau rapport</button>
+    </div>
+    <p id="reportHomeStatus" role="status" aria-live="polite">Connexion à l’atelier…</p>
+  </section>
+</main>
 
 <div class="mobile-toggle">
   <button id="mviewEditor" class="active" type="button">✏️ Éditer</button>
@@ -561,14 +602,18 @@
               <input type="text" id="f_plate" placeholder="GC-705-LH" autocapitalize="characters" spellcheck="false" aria-describedby="plateLookupStatus">
               <button class="btn ghost" type="button" id="btnLookupVehicle" title="Rechercher cette plaque dans le carnet d’atelier">Vérifier</button>
             </div>
-            <div class="hint plate-lookup-status" id="plateLookupStatus" role="status" aria-live="polite">Recherche automatique dans le carnet à la sortie du champ.</div>
+            <div class="hint plate-lookup-status" id="plateLookupStatus" role="status" aria-live="polite">Clique sur « Vérifier » pour rechercher la fiche et compléter les champs.</div>
           </div>
           <div class="field"><label>Marque</label><input type="text" id="f_brand" placeholder="Porsche"></div>
           <div class="field"><label>Modèle</label><input type="text" id="f_model" placeholder="Cayenne"></div>
           <div class="field"><label>Motorisation</label><input type="text" id="f_engine" placeholder="3.0 V6 TDI"></div>
           <div class="field"><label>1ère mise en circulation</label><input type="text" id="f_reg" placeholder="29/09/2003"></div>
         </div>
-        <div class="field"><label>Kilométrage</label><input type="text" id="f_km" placeholder="145 000 km"></div>
+        <div class="field">
+          <label for="f_km">Kilométrage</label>
+          <input type="text" id="f_km" placeholder="145 000 km" inputmode="numeric" aria-describedby="mileageStatus">
+          <div class="hint mileage-status" id="mileageStatus" role="status" aria-live="polite">Clique sur « Vérifier » pour comparer avec le dernier kilométrage du carnet.</div>
+        </div>
         <div class="field"><label>Résumé <span aria-hidden="true" style="color:#b3261e">*</span></label>
           <textarea id="f_summary" required aria-required="true" placeholder="Ex : Entretien complet des transmissions + boîte automatique"></textarea>
           <div class="hint">Obligatoire — utilisé comme intitulé de l’opération dans le Carnet d’atelier.</div>
@@ -961,7 +1006,7 @@ function doFirestoreSave(reportId, payloadJson, meta){
       subtitle: meta.subtitle,
       updatedAt: Date.now(),
       writerId: SYNC_CLIENT_ID
-    },{merge:true}).then(()=> clearSyncError())
+    },{merge:true}).then(()=>{forgetLocalDraft(reportId,payloadJson);clearSyncError();})
       .catch((e)=>{ console.error('Erreur de synchronisation', e); flagSyncError(); });
   }catch(e){ console.error('Erreur de synchronisation', e); flagSyncError(); }
 }
@@ -989,9 +1034,10 @@ function updateSizeIndicator(bytes){
 }
 
 function save(){
+  if(!currentReportId || document.body.dataset.reportView!=='editor') return;
   const payloadNow = JSON.stringify(state);
   updateSizeIndicator(payloadNow.length);
-  try{ localStorage.setItem('rapport_state', payloadNow); }catch(e){ flagQuota(); }
+  cacheReportLocally(currentReportId,payloadNow);
   if(_applyingRemoteUpdate) return; // ne pas ré-émettre ce qu'on vient de recevoir
 
   // on fige la cible (rapport + contenu) tout de suite, pour ne jamais
@@ -1010,6 +1056,7 @@ function save(){
 }
 
 async function saveNow(){
+  if(!currentReportId || document.body.dataset.reportView!=='editor') return;
   if(!requireReportSummary()) return;
   const btn = document.getElementById('btnSaveNow');
   const original = btn.textContent;
@@ -1048,17 +1095,62 @@ async function saveNow(){
   }
 }
 
-function load(){
+/* Copies locales non confirmées par Firebase : ne pas perdre un brouillon
+   en choisissant un nouveau rapport depuis l'accueil. Aucune écriture réseau ici. */
+const LOCAL_REPORT_DRAFTS_KEY='rapport_pending_drafts_v1';
+let localReportDrafts=(()=>{
   try{
-    const s = localStorage.getItem('rapport_state');
-    if(s){ Object.assign(state, JSON.parse(s)); return true; }
+    const data=JSON.parse(localStorage.getItem(LOCAL_REPORT_DRAFTS_KEY)||'{}');
+    return data && typeof data==='object' && !Array.isArray(data) ? data : {};
+  }catch(e){return {};}
+})();
+function persistLocalDrafts(){
+  try{localStorage.setItem(LOCAL_REPORT_DRAFTS_KEY,JSON.stringify(localReportDrafts));}
+  catch(e){flagQuota();}
+}
+function preserveLegacyLocalDraft(){
+  try{
+    const payload=localStorage.getItem('rapport_state');
+    if(!payload)return;
+    const parsed=JSON.parse(payload);
+    if(!parsed || typeof parsed!=='object' || Array.isArray(parsed))return;
+    const id=localStorage.getItem('current_report_id')||newReportId();
+    if(!localReportDrafts[id]){
+      localReportDrafts[id]={payload,updatedAt:0};
+      persistLocalDrafts();
+    }
   }catch(e){}
-  return false;
+}
+function cacheReportLocally(id,payload,pending=true){
+  if(!id)return;
+  if(pending){localReportDrafts[id]={payload,updatedAt:Date.now()};persistLocalDrafts();}
+  try{
+    localStorage.setItem('rapport_state',payload);
+    localStorage.setItem('current_report_id',id);
+  }catch(e){flagQuota();}
+}
+function forgetLocalDraft(id,payload){
+  if(!localReportDrafts[id])return;
+  if(payload!==undefined && localReportDrafts[id].payload!==payload)return;
+  delete localReportDrafts[id];persistLocalDrafts();
+}
+function restoreLocalReport(id){
+  const draft=localReportDrafts[id];
+  if(!draft)return;
+  try{
+    const parsed=JSON.parse(draft.payload);
+    if(!parsed || typeof parsed!=='object' || Array.isArray(parsed))throw new Error('invalid-draft');
+    if(!confirm('Ouvrir cette copie locale ? Si une version synchronisée existe, elle sera remplacée lors de tes prochaines modifications ou de la sauvegarde.'))return;
+    subscribeToReport(id,{localDraft:parsed});
+    closeArchive();
+  }catch(e){alert('Cette copie locale est illisible. Aucun rapport n’a été modifié.');}
 }
 
 /* ---------- archive multi-rapports ---------- */
 let currentReportId = null;
 let _unsubReport = null;
+let reportSubscriptionRevision = 0;
+let reportLoadTimer = null;
 
 function reportDocRef(id){
   return sharedCollectionRef('reports').doc(id);
@@ -1117,52 +1209,113 @@ function refreshEditorFromState(){
   updateSizeIndicator(JSON.stringify(state).length);
 }
 
-function subscribeToReport(id){
-  flushPendingSave(); // écrit d'abord tout changement en attente dans le rapport qu'on quitte
-  if(_unsubReport) _unsubReport();
-  currentReportId = id;
+function setReportView(view, message='', kind=''){
+  document.body.dataset.reportView=view;
+  const status=document.getElementById('reportHomeStatus');
+  status.textContent=message;
+  status.dataset.kind=kind;
+  if(view!=='editor'){
+    clearTimeout(reportPreviewTimer);
+    reportPreviewRevision++;
+    document.getElementById('report').innerHTML='';
+  }
+}
+
+function resetReportViewport(){
+  mobileScrollPositions.editor=0;
+  mobileScrollPositions.preview=0;
+  const editor=document.querySelector('.editor');
+  if(editor)editor.scrollTop=0;
+  setMobileView('editor');
+  window.scrollTo(0,0);
+}
+
+function showReportHome(message='Aucun rapport n’est ouvert.',kind=''){
+  flushPendingSave();
+  reportSubscriptionRevision++;
+  clearTimeout(reportLoadTimer);
+  if(_unsubReport){_unsubReport();_unsubReport=null;}
+  currentReportId=null;
   resetVehicleLookup();
-  try{ localStorage.setItem('current_report_id', id); }catch(e){}
+  setReportView('home',message,kind);
+}
 
-  // Le premier snapshot doit toujours être appliqué pour charger un rapport
-  // existant. Les snapshots suivants provenant de cette même session sont
-  // simplement l'écho de nos sauvegardes : l'état local est déjà à jour et il
-  // ne faut surtout pas reconstruire les champs de prestation en cours de saisie.
-  let initialSnapshotHandled = false;
-  _unsubReport = reportDocRef(id).onSnapshot((snap)=>{
-    clearSyncError();
-    const isInitialSnapshot = !initialSnapshotHandled;
-    initialSnapshotHandled = true;
+function subscribeToReport(id, {isNew=false, localDraft=null}={}){
+  if(!id)return;
+  flushPendingSave(); // figer l'ancien rapport AVANT de changer d'identifiant ou de contenu
+  clearTimeout(reportLoadTimer);
+  if(_unsubReport){_unsubReport();_unsubReport=null;}
+  const revision=++reportSubscriptionRevision;
+  document.activeElement?.blur();
+  currentReportId=id;
+  resetVehicleLookup();
+  const isCurrent=()=>revision===reportSubscriptionRevision && currentReportId===id;
+  Object.keys(state).forEach(k=>delete state[k]);
+  Object.assign(state,blankState(),localDraft||{});
+  setReportView(isNew||localDraft?'editor':'loading','Ouverture du rapport…');
+  resetReportViewport();
+  if(isNew||localDraft)refreshEditorFromState();
+  else{
+    // Pas de vue de l'ancien rapport ni d'éditeur vide actif pendant le chargement.
+    reportLoadTimer=setTimeout(()=>{
+      if(isCurrent())showReportHome('Le rapport ne peut pas être chargé pour le moment. Vérifie la connexion puis réessaie.','error');
+    },12000);
+  }
 
-    if(!snap.exists) return; // nouveau rapport pas encore écrit, rien à charger
-    const remote = snap.data();
-    if(!remote || !remote.payload) return;
-
-    if(!isInitialSnapshot && (
-      (snap.metadata && snap.metadata.hasPendingWrites) ||
-      remote.writerId === SYNC_CLIENT_ID
-    )){
+  let initialSnapshotHandled=false;
+  let localDraftPending=Boolean(localDraft);
+  _unsubReport=reportDocRef(id).onSnapshot((snap)=>{
+    if(!isCurrent())return;
+    const isInitialSnapshot=!initialSnapshotHandled;
+    initialSnapshotHandled=true;
+    if(!snap.exists){
+      if(isNew||localDraft)return;
+      // Un cache incomplet n'est pas la preuve que le document a disparu.
+      if(snap.metadata?.fromCache)return;
+      showReportHome('Ce rapport est introuvable. Sélectionne un autre rapport ou crée-en un nouveau.','error');
       return;
     }
-
+    const remote=snap.data();
     let parsed;
-    try{ parsed = JSON.parse(remote.payload); }catch(e){ return; }
-    _applyingRemoteUpdate = true;
-    Object.keys(state).forEach(k=>delete state[k]);
-    Object.assign(state, parsed);
-    refreshEditorFromState();
-    try{ localStorage.setItem('rapport_state', JSON.stringify(state)); }catch(e){}
-    _applyingRemoteUpdate = false;
-    migrateEmbeddedImages(); // bascule discrètement toute image encore en base64 vers Storage
-  }, (err)=>{ console.error('Synchronisation impossible', err); flagSyncError(); });
+    try{
+      parsed=JSON.parse(remote?.payload||'');
+      if(!parsed || typeof parsed!=='object' || Array.isArray(parsed))throw new Error('invalid-report');
+    }catch(error){
+      if(document.body.dataset.reportView==='loading')showReportHome('Ce rapport est illisible. Aucun document n’a été modifié.','error');
+      return;
+    }
+    clearTimeout(reportLoadTimer);
+    clearSyncError();
+    if(localDraftPending){
+      // Protéger la récupération jusqu'à sa première sauvegarde confirmée,
+      // puis reprendre la synchronisation distante normale.
+      if(remote.writerId===SYNC_CLIENT_ID && remote.payload===JSON.stringify(state))localDraftPending=false;
+      return;
+    }
+    if(!isInitialSnapshot && ((snap.metadata && snap.metadata.hasPendingWrites) || remote.writerId===SYNC_CLIENT_ID))return;
+    // Un nouveau rapport peut avoir été saisi avant l'arrivée du premier écho.
+    if(isNew && remote.writerId===SYNC_CLIENT_ID)return;
+    _applyingRemoteUpdate=true;
+    try{
+      Object.keys(state).forEach(k=>delete state[k]);
+      Object.assign(state,blankState(),parsed);
+      setReportView('editor');
+      refreshEditorFromState();
+      cacheReportLocally(id,JSON.stringify(state),false);
+    }finally{_applyingRemoteUpdate=false;}
+    migrateEmbeddedImages();
+  },(err)=>{
+    if(!isCurrent())return;
+    clearTimeout(reportLoadTimer);
+    console.error('Synchronisation impossible',err);
+    if(document.body.dataset.reportView==='loading')showReportHome('Impossible d’ouvrir ce rapport. Vérifie la connexion et l’accès à l’atelier.','error');
+    else flagSyncError();
+  });
 }
 
 function startNewReport(){
-  if(!confirm('Créer un nouveau rapport ? Le rapport actuel reste enregistré dans "Mes rapports".')) return;
-  Object.keys(state).forEach(k=>delete state[k]);
-  Object.assign(state, blankState());
-  refreshEditorFromState();
-  subscribeToReport(newReportId());
+  if(currentReportId && !confirm('Créer un nouveau rapport ? Le rapport actuel reste enregistré dans « Mes rapports ».'))return;
+  subscribeToReport(newReportId(),{isNew:true});
   closeArchive();
 }
 
@@ -1171,23 +1324,21 @@ function openReport(id){
   closeArchive();
 }
 
-async function deleteReport(id, evt){
+async function deleteReport(id,evt){
   evt.stopPropagation();
-  if(!confirm('Supprimer définitivement ce rapport (et ses photos) ?')) return;
+  if(!confirm('Supprimer définitivement ce rapport (et ses photos) ?'))return;
   try{
+    if(id===currentReportId)flushPendingSave();
     await reportDocRef(id).delete();
-    deleteStorageFolder(`reports/${id}`); // best-effort, ne bloque pas la suppression du rapport
-    if(id === currentReportId) startNewReportSilent();
-  }catch(e){
-    alert("Échec de la suppression, réessaie.");
-  }
-}
-
-function startNewReportSilent(){
-  Object.keys(state).forEach(k=>delete state[k]);
-  Object.assign(state, blankState());
-  refreshEditorFromState();
-  subscribeToReport(newReportId());
+    forgetLocalDraft(id);
+    try{
+      if(localStorage.getItem('current_report_id')===id){
+        localStorage.removeItem('current_report_id');localStorage.removeItem('rapport_state');
+      }
+    }catch(e){}
+    deleteStorageFolder(`reports/${id}`);
+    if(id===currentReportId)showReportHome('Rapport supprimé. Sélectionne un rapport ou crée-en un nouveau.');
+  }catch(e){alert('Échec de la suppression, réessaie.');}
 }
 
 function fmtArchiveDate(ts){
@@ -1198,52 +1349,73 @@ function fmtArchiveDate(ts){
 }
 
 function renderArchiveList(docs){
-  const list = document.getElementById('archiveList');
-  if(!list) return;
-  if(docs.length === 0){
-    list.innerHTML = '<div style="padding:20px; color:#6b7280; font-size:13px; text-align:center;">Aucun rapport enregistré pour l\'instant.</div>';
-    return;
-  }
-  list.innerHTML = docs.map(d=>{
-    const data = d.data();
-    const isCurrent = d.id === currentReportId;
-    const title = (data.title || 'Sans titre').replace(/</g,'&lt;');
-    const subtitle = (data.subtitle || '').replace(/</g,'&lt;');
-    return `
-      <div data-id="${d.id}" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 8px; border-bottom:1px solid #eef1f5; cursor:pointer; ${isCurrent ? 'background:#f6f8fb;' : ''}">
-        <div style="min-width:0;">
-          <div style="font-weight:700; font-size:14px; ${isCurrent ? '' : ''}">${title}${isCurrent ? ' <span style="font-weight:600;color:#6b7280;font-size:11px;">(ouvert)</span>' : ''}</div>
-          <div style="font-size:11.5px; color:#6b7280;">${subtitle}${subtitle ? ' · ' : ''}${fmtArchiveDate(data.updatedAt)}</div>
-        </div>
-        <button class="btn-del-report" data-id="${d.id}" style="border:none; background:none; color:#b3261e; font-size:11.5px; text-decoration:underline; cursor:pointer; flex-shrink:0;">supprimer</button>
-      </div>`;
+  const list=document.getElementById('archiveList');
+  if(!list)return;
+  const escape=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  // Une copie identique au serveur n'a pas à apparaître deux fois.
+  docs.forEach(doc=>{
+    if(localReportDrafts[doc.id]?.payload===doc.data().payload)forgetLocalDraft(doc.id,doc.data().payload);
+  });
+  const localRows=Object.entries(localReportDrafts).flatMap(([id,draft])=>{
+    try{
+      const data=JSON.parse(draft.payload);
+      return [`<div class="archive-report-row" data-report-action="local" data-id="${escape(id)}" style="padding:12px 8px;border-bottom:1px solid #eef1f5;">
+        <button class="btn-open-report" type="button" style="display:block;width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;color:inherit;">
+          <span style="display:block;font-weight:700;font-size:14px;">${escape(data.plate||data.model||data.title||'Sans titre')}</span>
+          <span style="display:block;font-size:11.5px;color:#875612;">Copie locale à récupérer${draft.updatedAt?' · '+escape(fmtArchiveDate(draft.updatedAt)):''}</span>
+        </button>
+      </div>`];
+    }catch(e){return [];}
   }).join('');
-
-  list.querySelectorAll('[data-id]').forEach(row=>{
-    row.addEventListener('click', (e)=>{
-      if(e.target.classList.contains('btn-del-report')) return;
-      openReport(row.dataset.id);
+  const rows=docs.map(doc=>{
+    const data=doc.data(),isCurrent=doc.id===currentReportId;
+    return `<div class="archive-report-row" data-report-action="open" data-id="${escape(doc.id)}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 8px;border-bottom:1px solid #eef1f5;${isCurrent?'background:#f6f8fb;':''}">
+      <button class="btn-open-report" type="button" style="flex:1;min-width:0;padding:0;border:0;background:none;text-align:left;cursor:pointer;color:inherit;">
+        <span style="display:block;font-weight:700;font-size:14px;">${escape(data.title||'Sans titre')}${isCurrent?' <span style="font-weight:600;color:#6b7280;font-size:11px;">(ouvert)</span>':''}</span>
+        <span style="display:block;font-size:11.5px;color:#6b7280;">${escape(data.subtitle||'')}${data.subtitle?' · ':''}${escape(fmtArchiveDate(data.updatedAt))}</span>
+      </button>
+      <button class="btn-del-report" type="button" style="border:none;background:none;color:#b3261e;font-size:11.5px;text-decoration:underline;cursor:pointer;flex-shrink:0;">supprimer</button>
+    </div>`;
+  }).join('');
+  const notice=_archiveError?'Impossible de charger les rapports. Ferme cette fenêtre puis réessaie.'
+    : _archiveLoading?'Chargement des rapports…'
+    : !docs.length&&!localRows?'Aucun rapport enregistré pour l’instant.':'';
+  list.innerHTML=(notice?`<div role="status" style="padding:20px;color:${_archiveError?'#b3261e':'#6b7280'};font-size:13px;text-align:center;">${notice}</div>`:'')+localRows+rows;
+  list.querySelectorAll('.archive-report-row').forEach(row=>{
+    row.querySelector('.btn-open-report').addEventListener('click',()=>{
+      if(row.dataset.reportAction==='local')restoreLocalReport(row.dataset.id);
+      else openReport(row.dataset.id);
     });
-  });
-  list.querySelectorAll('.btn-del-report').forEach(btn=>{
-    btn.addEventListener('click', (e)=> deleteReport(btn.dataset.id, e));
+    row.querySelector('.btn-del-report')?.addEventListener('click',event=>deleteReport(row.dataset.id,event));
   });
 }
 
-let _archiveDocsCache = [];
+let _archiveDocsCache=[];
+let _unsubReportsList=null;
+let _archiveLoading=false;
+let _archiveError=false;
+let _legacyMigrationChecked=false;
 function subscribeReportsList(){
-  sharedCollectionRef('reports').orderBy('updatedAt', 'desc').limit(200).onSnapshot((snap)=>{
-    _archiveDocsCache = snap.docs;
+  if(_unsubReportsList)return;
+  _archiveLoading=true;_archiveError=false;
+  _unsubReportsList=sharedCollectionRef('reports').orderBy('updatedAt','desc').limit(200).onSnapshot(snap=>{
+    _archiveLoading=false;_archiveError=false;
+    _archiveDocsCache=snap.docs;
     renderArchiveList(_archiveDocsCache);
-  }, (err)=>{ console.error('Liste des rapports indisponible', err); });
+  },err=>{
+    console.error('Liste des rapports indisponible',err);
+    _archiveLoading=false;_archiveError=true;_unsubReportsList=null;
+    renderArchiveList(_archiveDocsCache);
+  });
 }
-
 function openArchive(){
-  document.getElementById('archiveOverlay').style.display = 'flex';
+  document.getElementById('archiveOverlay').style.display='flex';
+  subscribeReportsList();
   renderArchiveList(_archiveDocsCache);
+  if(!_legacyMigrationChecked){_legacyMigrationChecked=true;migrateLegacySingleReport();}
 }
 function closeArchive(){
-  document.getElementById('archiveOverlay').style.display = 'none';
+  document.getElementById('archiveOverlay').style.display='none';
 }
 
 /* migration ponctuelle : reprend l'ancien rapport unique (avant l'archive) s'il existe */
@@ -1815,45 +1987,62 @@ const vehicleLookupFields = [
   {key:'reg',id:'f_reg',label:'1ère mise en circulation'}
 ];
 let vehicleLookupRevision=0;
-let vehicleLookupLastKey='';
-let vehicleLookupAutofill=null;
+let vehicleMileageReference=null;
 
 function setVehicleLookupStatus(message,kind=''){
   const status=document.getElementById('plateLookupStatus');
   if(status){status.textContent=message;status.dataset.kind=kind;}
 }
+function setMileageStatus(message,kind=''){
+  const status=document.getElementById('mileageStatus');
+  if(status){status.textContent=message;status.dataset.kind=kind;}
+  document.getElementById('f_km')?.classList.toggle('has-mileage-warning',kind==='warning');
+}
 function resetVehicleLookup(){
   vehicleLookupRevision++;
-  vehicleLookupLastKey='';
-  vehicleLookupAutofill=null;
+  vehicleMileageReference=null;
   const button=document.getElementById('btnLookupVehicle');
   if(button){button.disabled=false;button.textContent='Vérifier';}
-  setVehicleLookupStatus('Recherche automatique dans le carnet à la sortie du champ.');
+  setVehicleLookupStatus('Clique sur « Vérifier » pour rechercher la fiche et compléter les champs.');
+  setMileageStatus('Clique sur « Vérifier » pour comparer avec le dernier kilométrage du carnet.');
 }
 function vehicleLookupPlateChanged(){
-  // Retirer uniquement les valeurs automatiques de l'ancienne plaque, jamais
-  // une valeur retouchée manuellement. Ne pas mélanger deux véhicules.
-  const previous=vehicleLookupAutofill;
-  const plateKey=normalizePlate(state.plate);
-  let changed=false;
-  if(previous && previous.reportId===currentReportId && previous.plateKey!==plateKey){
-    vehicleLookupFields.forEach(field=>{
-      const value=previous.values[field.key];
-      const input=document.getElementById(field.id);
-      if(value && state[field.key]===value && input.value===value){
-        state[field.key]='';input.value='';changed=true;
-      }
-    });
-  }
+  // Seul le résultat de vérification est invalidé. Aucune valeur du rapport
+  // n'est complétée, effacée ou remplacée avant un nouveau clic sur « Vérifier ».
   resetVehicleLookup();
-  if(previous && previous.reportId===currentReportId && previous.plateKey===plateKey)vehicleLookupAutofill=previous;
-  if(changed){renderReport();save();}
 }
-async function lookupAtelierVehicle(manual=false){
+function latestAtelierMileage(vehicle){
+  // Même règle que la fiche Atelier : dernière opération DATÉE avec un km,
+  // et non le maximum de l'historique (utile après un remplacement de compteur).
+  const latest=(Array.isArray(vehicle.ops)?vehicle.ops:[])
+    .filter(op=>op && op.km!=='' && op.km!=null)
+    .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))[0];
+  if(!latest)return null;
+  const km=Number(latest.km);
+  return Number.isFinite(km) && km>=0 ? {km,date:String(latest.date||'')} : null;
+}
+function updateMileageWarning(){
+  const reference=vehicleMileageReference;
+  if(!reference || reference.reportId!==currentReportId || reference.plateKey!==normalizePlate(state.plate))return;
+  if(reference.km==null){
+    setMileageStatus('Fiche trouvée, mais aucun kilométrage connu n’est renseigné dans le carnet.');return;
+  }
+  const known=reference.km.toLocaleString('fr-FR');
+  const date=WBVehicleInfo.formatDate(reference.date);
+  const suffix=date?` (intervention du ${date})`:'';
+  const entered=cleanKm(document.getElementById('f_km').value);
+  if(entered!=='' && Number(entered)<reference.km){
+    setMileageStatus(`⚠ Kilométrage à vérifier : ${Number(entered).toLocaleString('fr-FR')} km saisis, inférieurs aux ${known} km connus dans le carnet${suffix}. Vérifie la saisie ou la date de l’intervention. Cet avertissement n’empêche ni la sauvegarde ni le PDF.`,'warning');
+  }else{
+    setMileageStatus(`Dernier kilométrage connu : ${known} km${suffix}.`);
+  }
+}
+async function lookupAtelierVehicle(){
+  if(!currentReportId || document.body.dataset.reportView!=='editor')return;
   const plateKey=normalizePlate(document.getElementById('f_plate').value);
   if(!plateKey){setVehicleLookupStatus('Saisis une immatriculation pour rechercher une fiche.');return;}
-  if(!manual && vehicleLookupLastKey===plateKey)return;
-  const revision=++vehicleLookupRevision;
+  resetVehicleLookup();
+  const revision=vehicleLookupRevision;
   const reportId=currentReportId;
   const startingValues=Object.fromEntries(vehicleLookupFields.map(field=>[field.key,state[field.key]||'']));
   const isCurrent=()=>revision===vehicleLookupRevision && reportId===currentReportId
@@ -1872,12 +2061,17 @@ async function lookupAtelierVehicle(manual=false){
     const data=snap.exists ? JSON.parse(snap.data().payload||'{"vehicles":[]}') : {vehicles:[]};
     if(!data || !Array.isArray(data.vehicles))throw new Error('lookup-invalid-data');
     const matches=data.vehicles.filter(vehicle=>vehicle && normalizePlate(vehicle.plate)===plateKey);
-    vehicleLookupLastKey=plateKey;
-    if(!matches.length){setVehicleLookupStatus('Aucune fiche trouvée pour cette plaque. Tu peux saisir les informations manuellement.');return;}
+    if(!matches.length){
+      setVehicleLookupStatus('Aucune fiche trouvée pour cette plaque. Tu peux saisir les informations manuellement.');
+      setMileageStatus('Aucune fiche trouvée : le kilométrage ne peut pas être comparé.');return;
+    }
     if(matches.length>1){
-      setVehicleLookupStatus(`${matches.length} fiches portent cette plaque. Aucun remplissage automatique : vérifie les doublons dans le carnet.`, 'warning');return;
+      setVehicleLookupStatus(`${matches.length} fiches portent cette plaque. Aucun remplissage automatique : vérifie les doublons dans le carnet.`, 'warning');
+      setMileageStatus('Plusieurs fiches correspondent : le kilométrage ne peut pas être comparé sans ambiguïté.');return;
     }
     const vehicle=matches[0], info=WBVehicleInfo.fromVehicle(vehicle);
+    vehicleMileageReference={plateKey,reportId,km:null,date:'',...latestAtelierMileage(vehicle)};
+    updateMileageWarning();
     const available=vehicleLookupFields.filter(field=>info[field.key]);
     const editedDuringLookup=field=>(state[field.key]||'')!==startingValues[field.key];
     const sameValue=(field,current,value)=>field.key==='reg'
@@ -1886,14 +2080,12 @@ async function lookupAtelierVehicle(manual=false){
     const conflicts=available.filter(field=>!editedDuringLookup(field) && String(state[field.key]||'').trim()
       && !sameValue(field,state[field.key],info[field.key]));
     let replace=false;
-    if(manual && conflicts.length){
+    if(conflicts.length){
       replace=confirm('Fiche trouvée : '+(vehicle.modele||vehicle.plate)+'.\n\nRemplacer les informations déjà saisies ci-dessous par celles du carnet ?\n'
         +conflicts.map(field=>`• ${field.label} : ${info[field.key]}`).join('\n')
         +'\n\nAnnuler conserve tes valeurs ; les champs vides seront tout de même complétés.');
     }
     if(!isCurrent())return;
-    const tracked=vehicleLookupAutofill && vehicleLookupAutofill.plateKey===plateKey
-      && vehicleLookupAutofill.reportId===reportId ? vehicleLookupAutofill.values : {};
     const filled=[], preserved=[];
     available.forEach(field=>{
       const current=state[field.key]||'', value=info[field.key];
@@ -1901,10 +2093,9 @@ async function lookupAtelierVehicle(manual=false){
       if(String(current).trim() && !sameValue(field,current,value) && !replace){preserved.push(field.label);return;}
       if(current!==value){
         state[field.key]=value;document.getElementById(field.id).value=value;
-        tracked[field.key]=value;filled.push(field.label);
+        filled.push(field.label);
       }
     });
-    vehicleLookupAutofill={plateKey,reportId,values:tracked};
     const missing=vehicleLookupFields.filter(field=>!info[field.key]).map(field=>field.label);
     const messages=[filled.length ? `Fiche trouvée — ${filled.length} champ${filled.length>1?'s':''} renseigné${filled.length>1?'s':''}.` : 'Fiche trouvée.'];
     if(preserved.length)messages.push('Saisie conservée : '+preserved.join(', ')+'. Utilise « Vérifier » pour confirmer un remplacement.');
@@ -1914,7 +2105,8 @@ async function lookupAtelierVehicle(manual=false){
     if(filled.length){renderReport();save();}
   }catch(error){
     if(!isCurrent())return;
-    vehicleLookupLastKey='';
+    vehicleMileageReference=null;
+    setMileageStatus('Vérification indisponible : aucun kilométrage du carnet n’a pu être confirmé.');
     console.warn('Recherche de la fiche véhicule impossible',error);
     const code=String(error?.code||'');
     setVehicleLookupStatus(code.includes('permission-denied')
@@ -1928,20 +2120,14 @@ async function lookupAtelierVehicle(manual=false){
   }
 }
 function installVehicleLookup(){
-  const plate=document.getElementById('f_plate');
-  plate.addEventListener('input',vehicleLookupPlateChanged);
-  plate.addEventListener('blur',event=>{
-    if(event.relatedTarget?.id!=='btnLookupVehicle')lookupAtelierVehicle(false);
-  });
-  plate.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();lookupAtelierVehicle(true);}});
-  document.getElementById('btnLookupVehicle').addEventListener('click',()=>lookupAtelierVehicle(true));
-  vehicleLookupFields.forEach(field=>document.getElementById(field.id).addEventListener('input',()=>{
-    if(vehicleLookupAutofill)delete vehicleLookupAutofill.values[field.key];
-  }));
+  document.getElementById('f_plate').addEventListener('input',vehicleLookupPlateChanged);
+  // Aucun appel sur input, blur, change, Entrée dans la plaque, chargement ou ouverture.
+  document.getElementById('btnLookupVehicle').addEventListener('click',lookupAtelierVehicle);
+  document.getElementById('f_km').addEventListener('input',updateMileageWarning);
 }
 
 function cleanKm(value){
-  const digits = String(value||'').replace(/[^0-9]/g,'');
+  const digits = String(value??'').replace(/[^0-9]/g,'');
   return digits || '';
 }
 
@@ -2570,6 +2756,7 @@ async function renderReportPdfPages(options={}){
 }
 
 async function generatePdf(){
+  if(!currentReportId || document.body.dataset.reportView!=='editor')return;
   if(!requireReportSummary()) return;
   const btn=document.getElementById('btnPdf');
   const original=btn.textContent;
@@ -2691,7 +2878,7 @@ function setMobileView(view){
 function updatePreviewScale(){
   const report = document.getElementById('report');
   const shell = document.querySelector('.report-shell');
-  if(!report || !shell) return;
+  if(!report || !shell || document.body.dataset.reportView!=='editor') return;
   if(isMobile()){
     const avail = document.querySelector('.wrap').clientWidth; // largeur dispo
     const scale = Math.min(1, avail / 794);
@@ -2714,13 +2901,14 @@ let reportPreviewTimer = null;
 let reportPreviewRevision = 0;
 
 function shouldRenderA4Preview(){
-  return !isMobile() || document.body.getAttribute('data-mview') === 'preview';
+  return currentReportId && document.body.dataset.reportView==='editor'
+    && (!isMobile() || document.body.getAttribute('data-mview')==='preview');
 }
 
 async function refreshA4Preview(revision){
   const report=document.getElementById('report');
   const status=document.getElementById('previewStatus');
-  if(!report)return;
+  if(!report || !currentReportId || document.body.dataset.reportView!=='editor')return;
   if(status)status.textContent='Aperçu A4 — génération en cours…';
   if(!report.children.length)report.innerHTML='<div class="pdf-preview-message">⏳ Préparation des pages A4…</div>';
   try{
@@ -2751,6 +2939,7 @@ renderReport = function(force=false){
   const diagnostics=document.getElementById('imageDiagnostics');if(diagnostics)diagnostics.hidden=true;
   const revision=reportPreviewRevision;
   clearTimeout(reportPreviewTimer);
+  if(!currentReportId || document.body.dataset.reportView!=='editor')return;
   if(!force&&!shouldRenderA4Preview())return;
   reportPreviewTimer=setTimeout(()=>refreshA4Preview(revision),320);
 };
@@ -2758,6 +2947,11 @@ renderReport = function(force=false){
 WBReportImages.install();
 
 window.addEventListener('resize', ()=>{ if(isMobile()) updatePreviewScale(); });
+window.addEventListener('pagehide',flushPendingSave);
+window.addEventListener('pageshow',event=>{
+  if(event.persisted){closeArchive();showReportHome();window.scrollTo(0,0);}
+});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushPendingSave();});
 document.getElementById('mviewEditor').addEventListener('click', ()=>setMobileView('editor'));
 document.getElementById('mviewPreview').addEventListener('click', ()=>setMobileView('preview'));
 // vue par défaut sur mobile : éditeur
@@ -2765,9 +2959,7 @@ setMobileView('editor');
 
 (async function start(){
   await window.atelierReady;
-  const had = load(); // cache local instantané (hors-ligne / affichage immédiat)
-  state.sections.forEach(normSection); normChecklist();
-  if(!had && state.sections.length===0){ addSection(); }
+  preserveLegacyLocalDraft(); // conserver le cache, sans ouvrir ni écrire de rapport Firebase
   bindAll();
   installVehicleLookup();
   initFields();
@@ -2775,32 +2967,26 @@ setMobileView('editor');
   buildBaie();
   buildChecklist();
   buildInvoices();
-  renderReport();
+  showReportHome();
 
-  subscribeReportsList();
-
-  let id = null;
-  try{ id = localStorage.getItem('current_report_id'); }catch(e){}
-  if(!id){
-    id = await migrateLegacySingleReport(); // récupère l'ancien rapport unique si présent
-  }
-  if(!id) id = newReportId();
-  subscribeToReport(id);
-
-  document.getElementById('btnArchive').addEventListener('click', openArchive);
-  document.getElementById('btnCloseArchive').addEventListener('click', closeArchive);
-  document.getElementById('archiveOverlay').addEventListener('click', (e)=>{
-    if(e.target.id === 'archiveOverlay') closeArchive();
+  document.getElementById('btnArchive').addEventListener('click',openArchive);
+  document.getElementById('btnHomeSelect').addEventListener('click',openArchive);
+  document.getElementById('btnHomeCreate').addEventListener('click',startNewReport);
+  document.getElementById('btnCloseArchive').addEventListener('click',closeArchive);
+  document.getElementById('archiveOverlay').addEventListener('click',e=>{
+    if(e.target.id==='archiveOverlay')closeArchive();
   });
-  document.getElementById('btnNewReport').addEventListener('click', startNewReport);
-  document.getElementById('btnSaveNow').addEventListener('click', saveNow);
+  document.getElementById('btnNewReport').addEventListener('click',startNewReport);
+  document.getElementById('btnSaveNow').addEventListener('click',saveNow);
+  document.getElementById('btnHomeSelect').disabled=false;
+  document.getElementById('btnHomeCreate').disabled=false;
 })();
 </script>
 
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=52.3.6',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=52.3.7',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
