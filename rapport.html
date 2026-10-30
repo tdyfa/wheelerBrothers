@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=52.3.5">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.3.5">
+<link rel="manifest" href="manifest.json?v=52.3.6">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=52.3.6">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -15,9 +15,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 
-<script src="firebase-config.js?v=52.3.5"></script>
-<script src="html2pdf.bundle.min.js?v=52.3.5"></script>
-<script src="report-images.js?v=52.3.5"></script>
+<script src="firebase-config.js?v=52.3.6"></script>
+<script src="html2pdf.bundle.min.js?v=52.3.6"></script>
+<script src="report-images.js?v=52.3.6"></script>
+<script src="vehicle-info.js?v=52.3.6"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -104,6 +105,17 @@
   .card > h2{font-size:13px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin:0; padding:14px 16px; border-bottom:1px solid var(--line); background:#fafbfd}
   .card .body{padding:16px}
   .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  .plate-lookup-controls{display:flex;gap:7px;align-items:stretch;min-width:0}
+  .plate-lookup-controls input{min-width:0;flex:1 1 0}
+  .plate-lookup-controls .btn{flex:0 0 auto;padding:9px 10px;font-size:12px;white-space:nowrap}
+  #btnLookupVehicle{background:var(--field);color:var(--ink);border:1px solid var(--line)}
+  #btnLookupVehicle:hover{background:#e9eef5;border-color:#9aa3b2}
+  #btnLookupVehicle:focus-visible{outline:2px solid #475569;outline-offset:2px}
+  #btnLookupVehicle:disabled{opacity:.6;cursor:wait}
+  .plate-lookup-status{line-height:1.45;overflow-wrap:anywhere}
+  .plate-lookup-status[data-kind="success"]{color:#19713d}
+  .plate-lookup-status[data-kind="warning"]{color:#875612}
+  .plate-lookup-status[data-kind="error"]{color:#b3261e}
   label{display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin:0 0 5px}
   input[type=text], input[type=date], textarea, select{
     width:100%; border:1px solid var(--line); background:var(--field);
@@ -476,12 +488,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=52.3.5" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=52.3.6" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 52.3.5</span>
+          <span class="sub">Version 52.3.6</span>
           <label class="app-bar-sync">
             <input type="checkbox" id="syncAtelierOnSave" checked> MàJ Carnet
           </label>
@@ -543,7 +555,14 @@
         </div>
         <div class="grid2">
           <div class="field"><label>Date d'intervention</label><input type="date" id="f_date"></div>
-          <div class="field"><label>Immatriculation</label><input type="text" id="f_plate" placeholder="GC-705-LH"></div>
+          <div class="field">
+            <label for="f_plate">Immatriculation</label>
+            <div class="plate-lookup-controls">
+              <input type="text" id="f_plate" placeholder="GC-705-LH" autocapitalize="characters" spellcheck="false" aria-describedby="plateLookupStatus">
+              <button class="btn ghost" type="button" id="btnLookupVehicle" title="Rechercher cette plaque dans le carnet d’atelier">Vérifier</button>
+            </div>
+            <div class="hint plate-lookup-status" id="plateLookupStatus" role="status" aria-live="polite">Recherche automatique dans le carnet à la sortie du champ.</div>
+          </div>
           <div class="field"><label>Marque</label><input type="text" id="f_brand" placeholder="Porsche"></div>
           <div class="field"><label>Modèle</label><input type="text" id="f_model" placeholder="Cayenne"></div>
           <div class="field"><label>Motorisation</label><input type="text" id="f_engine" placeholder="3.0 V6 TDI"></div>
@@ -1023,7 +1042,7 @@ async function saveNow(){
   }catch(e){
     console.error('Sauvegarde ou synchronisation du carnet impossible', e);
     btn.textContent = '⚠️ Carnet non mis à jour';
-    alert("Le rapport a été sauvegardé, mais le carnet atelier n'a pas pu être mis à jour.");
+    alert("Le rapport a été sauvegardé, mais le carnet atelier n'a pas pu être mis à jour."+(e?.message?'\n\n'+e.message:''));
   }finally{
     setTimeout(()=>{ btn.textContent = original; btn.disabled = false; }, 1400);
   }
@@ -1102,6 +1121,7 @@ function subscribeToReport(id){
   flushPendingSave(); // écrit d'abord tout changement en attente dans le rapport qu'on quitte
   if(_unsubReport) _unsubReport();
   currentReportId = id;
+  resetVehicleLookup();
   try{ localStorage.setItem('current_report_id', id); }catch(e){}
 
   // Le premier snapshot doit toujours être appliqué pour charger un rapport
@@ -1786,6 +1806,140 @@ function normalizePlate(value){
   return String(value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
 }
 
+
+/* ---------- préremplissage véhicule depuis le carnet atelier ---------- */
+const vehicleLookupFields = [
+  {key:'brand',id:'f_brand',label:'marque'},
+  {key:'model',id:'f_model',label:'modèle'},
+  {key:'engine',id:'f_engine',label:'motorisation'},
+  {key:'reg',id:'f_reg',label:'1ère mise en circulation'}
+];
+let vehicleLookupRevision=0;
+let vehicleLookupLastKey='';
+let vehicleLookupAutofill=null;
+
+function setVehicleLookupStatus(message,kind=''){
+  const status=document.getElementById('plateLookupStatus');
+  if(status){status.textContent=message;status.dataset.kind=kind;}
+}
+function resetVehicleLookup(){
+  vehicleLookupRevision++;
+  vehicleLookupLastKey='';
+  vehicleLookupAutofill=null;
+  const button=document.getElementById('btnLookupVehicle');
+  if(button){button.disabled=false;button.textContent='Vérifier';}
+  setVehicleLookupStatus('Recherche automatique dans le carnet à la sortie du champ.');
+}
+function vehicleLookupPlateChanged(){
+  // Retirer uniquement les valeurs automatiques de l'ancienne plaque, jamais
+  // une valeur retouchée manuellement. Ne pas mélanger deux véhicules.
+  const previous=vehicleLookupAutofill;
+  const plateKey=normalizePlate(state.plate);
+  let changed=false;
+  if(previous && previous.reportId===currentReportId && previous.plateKey!==plateKey){
+    vehicleLookupFields.forEach(field=>{
+      const value=previous.values[field.key];
+      const input=document.getElementById(field.id);
+      if(value && state[field.key]===value && input.value===value){
+        state[field.key]='';input.value='';changed=true;
+      }
+    });
+  }
+  resetVehicleLookup();
+  if(previous && previous.reportId===currentReportId && previous.plateKey===plateKey)vehicleLookupAutofill=previous;
+  if(changed){renderReport();save();}
+}
+async function lookupAtelierVehicle(manual=false){
+  const plateKey=normalizePlate(document.getElementById('f_plate').value);
+  if(!plateKey){setVehicleLookupStatus('Saisis une immatriculation pour rechercher une fiche.');return;}
+  if(!manual && vehicleLookupLastKey===plateKey)return;
+  const revision=++vehicleLookupRevision;
+  const reportId=currentReportId;
+  const startingValues=Object.fromEntries(vehicleLookupFields.map(field=>[field.key,state[field.key]||'']));
+  const isCurrent=()=>revision===vehicleLookupRevision && reportId===currentReportId
+    && normalizePlate(document.getElementById('f_plate').value)===plateKey;
+  const button=document.getElementById('btnLookupVehicle');
+  button.disabled=true;button.textContent='…';
+  setVehicleLookupStatus('Recherche dans le carnet d’atelier…');
+  let timeout;
+  try{
+    // Une lecture serveur évite d'annoncer une absence sur un ancien cache local.
+    const snap=await Promise.race([
+      sharedDocRef('atelier').get({source:'server'}),
+      new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('lookup-timeout')),12000);})
+    ]);
+    if(!isCurrent())return;
+    const data=snap.exists ? JSON.parse(snap.data().payload||'{"vehicles":[]}') : {vehicles:[]};
+    if(!data || !Array.isArray(data.vehicles))throw new Error('lookup-invalid-data');
+    const matches=data.vehicles.filter(vehicle=>vehicle && normalizePlate(vehicle.plate)===plateKey);
+    vehicleLookupLastKey=plateKey;
+    if(!matches.length){setVehicleLookupStatus('Aucune fiche trouvée pour cette plaque. Tu peux saisir les informations manuellement.');return;}
+    if(matches.length>1){
+      setVehicleLookupStatus(`${matches.length} fiches portent cette plaque. Aucun remplissage automatique : vérifie les doublons dans le carnet.`, 'warning');return;
+    }
+    const vehicle=matches[0], info=WBVehicleInfo.fromVehicle(vehicle);
+    const available=vehicleLookupFields.filter(field=>info[field.key]);
+    const editedDuringLookup=field=>(state[field.key]||'')!==startingValues[field.key];
+    const sameValue=(field,current,value)=>field.key==='reg'
+      ? WBVehicleInfo.isoDate(current)===WBVehicleInfo.isoDate(value)
+      : String(current||'').trim()===String(value||'').trim();
+    const conflicts=available.filter(field=>!editedDuringLookup(field) && String(state[field.key]||'').trim()
+      && !sameValue(field,state[field.key],info[field.key]));
+    let replace=false;
+    if(manual && conflicts.length){
+      replace=confirm('Fiche trouvée : '+(vehicle.modele||vehicle.plate)+'.\n\nRemplacer les informations déjà saisies ci-dessous par celles du carnet ?\n'
+        +conflicts.map(field=>`• ${field.label} : ${info[field.key]}`).join('\n')
+        +'\n\nAnnuler conserve tes valeurs ; les champs vides seront tout de même complétés.');
+    }
+    if(!isCurrent())return;
+    const tracked=vehicleLookupAutofill && vehicleLookupAutofill.plateKey===plateKey
+      && vehicleLookupAutofill.reportId===reportId ? vehicleLookupAutofill.values : {};
+    const filled=[], preserved=[];
+    available.forEach(field=>{
+      const current=state[field.key]||'', value=info[field.key];
+      if(editedDuringLookup(field)){preserved.push(field.label);return;}
+      if(String(current).trim() && !sameValue(field,current,value) && !replace){preserved.push(field.label);return;}
+      if(current!==value){
+        state[field.key]=value;document.getElementById(field.id).value=value;
+        tracked[field.key]=value;filled.push(field.label);
+      }
+    });
+    vehicleLookupAutofill={plateKey,reportId,values:tracked};
+    const missing=vehicleLookupFields.filter(field=>!info[field.key]).map(field=>field.label);
+    const messages=[filled.length ? `Fiche trouvée — ${filled.length} champ${filled.length>1?'s':''} renseigné${filled.length>1?'s':''}.` : 'Fiche trouvée.'];
+    if(preserved.length)messages.push('Saisie conservée : '+preserved.join(', ')+'. Utilise « Vérifier » pour confirmer un remplacement.');
+    if(missing.length)messages.push('Non renseigné dans la fiche : '+missing.join(', ')+'.');
+    if(info.inferred)messages.push('Ancienne fiche : marque/modèle extraits du libellé, à vérifier.');
+    setVehicleLookupStatus(messages.join(' '),preserved.length||missing.length||info.inferred?'warning':'success');
+    if(filled.length){renderReport();save();}
+  }catch(error){
+    if(!isCurrent())return;
+    vehicleLookupLastKey='';
+    console.warn('Recherche de la fiche véhicule impossible',error);
+    const code=String(error?.code||'');
+    setVehicleLookupStatus(code.includes('permission-denied')
+      ? 'Accès au carnet refusé. Vérifie la connexion au compte atelier. Tes champs sont conservés.'
+      : error?.message==='lookup-invalid-data' || error instanceof SyntaxError
+        ? 'Le contenu du carnet est illisible. Aucun champ n’a été remplacé.'
+        : 'Impossible de vérifier la plaque pour le moment (connexion ou délai dépassé). Tes champs sont conservés ; réessaie avec « Vérifier ».','error');
+  }finally{
+    clearTimeout(timeout);
+    if(isCurrent()){button.disabled=false;button.textContent='Vérifier';}
+  }
+}
+function installVehicleLookup(){
+  const plate=document.getElementById('f_plate');
+  plate.addEventListener('input',vehicleLookupPlateChanged);
+  plate.addEventListener('blur',event=>{
+    if(event.relatedTarget?.id!=='btnLookupVehicle')lookupAtelierVehicle(false);
+  });
+  plate.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();lookupAtelierVehicle(true);}});
+  document.getElementById('btnLookupVehicle').addEventListener('click',()=>lookupAtelierVehicle(true));
+  vehicleLookupFields.forEach(field=>document.getElementById(field.id).addEventListener('input',()=>{
+    if(vehicleLookupAutofill)delete vehicleLookupAutofill.values[field.key];
+  }));
+}
+
 function cleanKm(value){
   const digits = String(value||'').replace(/[^0-9]/g,'');
   return digits || '';
@@ -1848,8 +2002,9 @@ async function getAtelierMetadataDefaults(){
     const snap=await sharedDocRef('atelier').get();
     if(!snap.exists) return defaults;
     const data=JSON.parse(snap.data().payload||'{"vehicles":[]}');
-    const vehicle=(data.vehicles||[]).find(v=>normalizePlate(v.plate)===plateKey);
-    if(!vehicle) return defaults;
+    const matches=(data.vehicles||[]).filter(v=>normalizePlate(v.plate)===plateKey);
+    if(matches.length!==1) return defaults;
+    const vehicle=matches[0];
     defaults.owner=String(vehicle.owner||'');
     const existing=(vehicle.ops||[]).find(o=>o && o.source==='rapport' && o.reportId===currentReportId);
     if(existing){
@@ -1959,7 +2114,9 @@ async function syncReportToAtelier(metadata){
     }
     if(!Array.isArray(data.vehicles)) data.vehicles=[];
 
-    let vehicle = data.vehicles.find(v=>normalizePlate(v.plate)===plateKey);
+    const matches = data.vehicles.filter(v=>normalizePlate(v.plate)===plateKey);
+    if(matches.length>1)throw new Error('Plusieurs fiches portent cette plaque : corrige les doublons dans le carnet avant sa mise à jour.');
+    let vehicle = matches[0];
     if(!vehicle){
       const label = [state.brand, state.model].filter(Boolean).join(' ').trim() || state.plate;
       const create = confirm(`Aucune fiche trouvée pour ${state.plate}.
@@ -1968,6 +2125,7 @@ Créer automatiquement la fiche « ${label} » dans le carnet atelier ?`);
       if(!create){ outcome={status:'skipped',message:'Rapport sauvegardé sans modification du carnet.'}; return; }
       vehicle = {
         id:'v'+Date.now()+Math.random().toString(16).slice(2,8),
+        ...WBVehicleInfo.fields(state.brand,state.model,state.reg),
         modele:label,
         motorisation:String(state.engine||'Non renseignée').trim(),
         plate:String(state.plate||'').trim().toUpperCase(),
@@ -1977,6 +2135,7 @@ Créer automatiquement la fiche « ${label} » dans le carnet atelier ?`);
       };
       data.vehicles.push(vehicle);
     }
+    WBVehicleInfo.enrichFromReport(vehicle,state);
     if(!Array.isArray(vehicle.ops)) vehicle.ops=[];
     vehicle.plate = String(state.plate||vehicle.plate||'').trim().toUpperCase();
     const ownerValue=String(metadata.owner||'').trim();
@@ -2010,6 +2169,9 @@ Créer automatiquement la fiche « ${label} » dans le carnet atelier ?`);
   });
   if(linkedVehicle?.wbCarnet?.vehicleId && linkedOperation){
     await syncLinkedReportToWBCarnet(linkedVehicle,linkedOperation);
+  }
+  if(outcome && outcome.status!=='skipped' && String(state.reg||'').trim() && !WBVehicleInfo.isoDate(state.reg)){
+    outcome.message += ' La 1ère mise en circulation n’a pas été enregistrée dans la fiche : indique une date complète au format JJ/MM/AAAA.';
   }
   return outcome || {status:'skipped',message:'Rapport sauvegardé sans modification du carnet.'};
 }
@@ -2472,6 +2634,7 @@ document.getElementById('btnReset').addEventListener('click', ()=>{
 
 /* ---------- init ---------- */
 function initFields(){
+  resetVehicleLookup();
   [['f_title','title'],['f_date','date'],['f_plate','plate'],['f_brand','brand'],
    ['f_model','model'],['f_engine','engine'],['f_reg','reg'],['f_km','km'],
    ['f_summary','summary'],['f_closing','closing'],['f_gendate','genDate'],
@@ -2606,6 +2769,7 @@ setMobileView('editor');
   state.sections.forEach(normSection); normChecklist();
   if(!had && state.sections.length===0){ addSection(); }
   bindAll();
+  installVehicleLookup();
   initFields();
   buildSections();
   buildBaie();
@@ -2636,7 +2800,7 @@ setMobileView('editor');
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=52.3.5',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=52.3.6',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
