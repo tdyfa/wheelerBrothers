@@ -1,0 +1,38 @@
+/* WheelerBrothers 53.1 — assistant photo, indépendant du rendu PDF. */
+.wb-ai-dialog{border:0;border-radius:16px;padding:0;width:min(920px,calc(100% - 24px));max-height:92dvh;color:#18202c;background:#fff;box-shadow:0 20px 80px #0005}
+.wb-ai-dialog::backdrop{background:#152233aa}
+.wb-ai-dialog[open]{display:flex;flex-direction:column}
+.wb-ai-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:17px 20px;border-bottom:1px solid #e3e7ee;flex:none}
+.wb-ai-head h2{font-size:19px;margin:0}.wb-ai-head button{min-width:42px;min-height:42px}
+.wb-ai-body{overflow-y:auto;padding:18px 20px;overscroll-behavior:contain}
+.wb-ai-body h3{font-size:16px;margin:20px 0 10px}.wb-ai-body p{line-height:1.5}
+.wb-ai-body label{display:block;font-size:13px;font-weight:650;margin:10px 0 5px}
+.wb-ai-body input:not([type=checkbox]),.wb-ai-body textarea,.wb-ai-body select{box-sizing:border-box;width:100%;font:inherit;font-size:16px;min-height:44px;border:1px solid #ccd2da;border-radius:8px;background:#fff;color:#152233;padding:9px 10px}
+.wb-ai-body textarea{min-height:110px;resize:vertical}.wb-ai-body input[type=file]{display:none}
+.wb-ai-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px}
+.wb-ai-muted{font-size:13px;color:#596474}.wb-ai-notice{background:#f2f5f8;padding:12px 14px;border-radius:9px;font-size:13px;line-height:1.5}
+.wb-ai-check{display:flex!important;align-items:flex-start;gap:10px;font-weight:450!important;line-height:1.5}.wb-ai-check input{flex:none;margin:4px 0 0;width:18px;height:18px}
+.wb-ai-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}.wb-ai-actions .btn{min-height:44px}
+.wb-ai-status{white-space:pre-wrap;font-size:14px;margin:14px 0;line-height:1.5}.wb-ai-status[data-kind=error]{color:#a52020;background:#fff0f0;padding:12px;border-radius:8px}
+.wb-ai-gallery{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
+.wb-ai-tile{border:1px solid #dce2e8;border-radius:10px;padding:7px;background:#fafbfc;min-width:0}
+.wb-ai-tile img{width:100%;height:140px;object-fit:contain;display:block;background:#edf0f3;border-radius:5px}
+.wb-ai-tile .wb-ai-name{font-size:11px;overflow-wrap:anywhere;margin:6px 0;line-height:1.3}
+.wb-ai-tile button{font-size:12px;min-height:34px;width:100%}.wb-ai-tile select{font-size:13px;padding:6px;min-height:38px}
+.wb-ai-tile[data-unassigned=true]{border:2px solid #d38a13;background:#fff8e7}
+.wb-ai-tile .wb-ai-reason{font-size:12px;color:#865507;line-height:1.4;margin:5px 0}
+.wb-ai-tile .wb-ai-cap{font-size:13px;min-height:56px}.wb-ai-tile .wb-ai-order{max-width:80px;font-size:14px}
+.wb-ai-section{border:1px solid #dce2e8;padding:12px;border-radius:10px;margin:10px 0;background:#fafbfc}.wb-ai-section textarea{min-height:68px}
+.wb-ai-problems{font-size:13px;line-height:1.5;white-space:pre-line;border-left:4px solid #d38a13;background:#fff8e7;padding:12px}
+.wb-ai-warnings{font-size:13px;white-space:pre-line;line-height:1.5}.wb-ai-usage{font-size:12px;color:#596474;margin:10px 0}
+.wb-ai-dialog [hidden]{display:none!important}.wb-ai-dialog button:disabled{opacity:.55;cursor:not-allowed}
+.wb-ai-resume{border:1px solid #d4dbe3;padding:12px;border-radius:9px;margin:14px 0}
+@media(max-width:600px){.wb-ai-dialog{width:calc(100% - 12px);max-height:96dvh}.wb-ai-head,.wb-ai-body{padding:14px}.wb-ai-gallery{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.wb-ai-grid{gap:0 10px}.wb-ai-tile img{height:125px}.wb-ai-tile select,.wb-ai-tile .wb-ai-cap,.wb-ai-tile .wb-ai-order{font-size:16px}.wb-ai-actions .btn{flex:1 1 100%}}
+@media print{.wb-ai-dialog,.wb-ai-entry{display:none!important}}
+/* Les boutons .ghost du générateur ont une couleur adaptée au bandeau sombre.
+   Dans ce dialogue clair, fixer explicitement leur contraste. */
+.wb-ai-dialog .btn{color:#fff;background:#424a57;border:1px solid #424a57}
+.wb-ai-dialog .btn.ghost{color:#334155;background:#fff;border-color:#bac4d2}
+.wb-ai-dialog label.filebtn{color:#334155;background:#f4f6fa;border:1px dashed #bac4d2}
+.wb-ai-dialog .btn:focus-visible,.wb-ai-dialog select:focus-visible{outline:3px solid #6f9bd3;outline-offset:2px}
+.wb-ai-head button{padding:8px;font-size:18px}

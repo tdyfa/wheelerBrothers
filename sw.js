@@ -1,21 +1,25 @@
-const CACHE_NAME = 'outils-atelier-v53.0-r2';
+const CACHE_NAME = 'outils-atelier-v53.1-r1';
 const ASSETS = [
   './',
   './index.html',
-  './atelier.html?v=53.0',
-  './rapport.html?v=53.0',
-  './inventaire.html?v=53.0',
-  './manifest.json?v=53.0',
-  './firebase-config.js?v=53.0',
-  './apple-touch-icon.png?v=53.0',
+  './atelier.html?v=53.1',
+  './rapport.html?v=53.1',
+  './inventaire.html?v=53.1',
+  './manifest.json?v=53.1',
+  './firebase-config.js?v=53.1',
+  './apple-touch-icon.png?v=53.1',
   './icon-192.png',
   './icon-512.png',
   './report-cover-logo.png',
-  './report-images.js?v=53.0',
-  './vehicle-info.js?v=53.0',
-  './html2pdf.bundle.min.js?v=53.0',
-  './wb-carnet-pro.css?v=53.0',
-  './wb-carnet-pro.js?v=53.0'
+  './report-ai.css?v=53.1',
+  './report-ai-config.js?v=53.1',
+  './report-ai-core.js?v=53.1',
+  './report-ai.js?v=53.1',
+  './report-images.js?v=53.1',
+  './vehicle-info.js?v=53.1',
+  './html2pdf.bundle.min.js?v=53.1',
+  './wb-carnet-pro.css?v=53.1',
+  './wb-carnet-pro.js?v=53.1'
 ];
 
 self.addEventListener('install', (event) => {
