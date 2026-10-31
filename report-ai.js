@@ -1,4 +1,4 @@
-/* WheelerBrothers 53.1 — préparation volontaire, relecture obligatoire, nouveau rapport uniquement. */
+/* WheelerBrothers 53.2 — préparation volontaire, relecture obligatoire, nouveau rapport uniquement. */
 (function(){
   'use strict';
   const C=window.WBReportAICore,H=window.WBReportAIHost,CFG=window.WB_REPORT_AI_CONFIG;
@@ -7,7 +7,7 @@
   const LIMIT=Math.min(C.MAX_IMAGES,CFG.maxImages||100);
   const id=(prefix,n)=>prefix+Array.from(crypto.getRandomValues(new Uint8Array(n))).map(v=>v.toString(16).padStart(2,'0')).join('');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  let assets=[],plan=null,jobId='',busy=false,requestInput=null,usage=null;
+  let assets=[],documents=[],plan=null,jobId='',busy=false,requestInput=null,usage=null,vehicleKm=null,vehiclePlate='';
   const dialog=document.createElement('dialog');dialog.className='wb-ai-dialog no-print';dialog.id='wbAiDialog';
   dialog.setAttribute('aria-labelledby','aiTitle');
   const checks=H.blank().checkpoints;
@@ -16,22 +16,24 @@
     <div id="aiResume" class="wb-ai-resume" hidden>Une préparation précédente est disponible.<div class="wb-ai-actions"><button class="btn" id="aiResumeBtn" type="button">Reprendre la préparation</button><button class="btn ghost" id="aiForget" type="button">Abandonner ce brouillon</button></div></div>
     <section id="aiInput">
       <div class="wb-ai-grid">
-        <div><label for="aiPlate">Immatriculation</label><input id="aiPlate" maxlength="160" autocapitalize="characters" placeholder="FL-656-AC"></div>
+        <div><label for="aiPlate">Immatriculation</label><div class="wb-ai-plate"><input id="aiPlate" maxlength="160" autocapitalize="characters" placeholder="FL-656-AC"><button class="btn ghost" type="button" id="aiVerify">Vérifier</button></div><p id="aiVehicleStatus" class="wb-ai-muted" role="status"></p></div>
         <div><label for="aiKm">Kilométrage</label><input id="aiKm" inputmode="numeric" maxlength="160" placeholder="65 000"></div>
         <div><label for="aiBrand">Marque</label><input id="aiBrand" maxlength="160" placeholder="Audi"></div>
         <div><label for="aiModel">Modèle</label><input id="aiModel" maxlength="160" placeholder="RS3"></div>
         <div><label for="aiDate">Date d’intervention</label><input id="aiDate" type="date"></div>
       </div>
       <details><summary>Motorisation et première mise en circulation</summary><div class="wb-ai-grid"><div><label for="aiEngine">Motorisation</label><input id="aiEngine" maxlength="160"></div><div><label for="aiReg">1ère mise en circulation</label><input id="aiReg" placeholder="JJ/MM/AAAA" maxlength="160"></div></div></details>
-      <p class="wb-ai-muted">Les informations inconnues restent vides. Le bouton « Vérifier » du carnet sera disponible dans l’éditeur après création ; aucune recherche par plaque n’est déclenchée ici.</p>
+      <p id="aiMileageStatus" class="wb-ai-muted">La recherche de fiche se déclenche uniquement avec « Vérifier ».</p>
       <label for="aiNotes">Travaux effectués, pièces et précisions *</label><textarea id="aiNotes" maxlength="12000" placeholder="Ex. : vidange moteur et remplacement du filtre à huile ; nettoyage du filtre à air réutilisable. Préciser les côtés ou les références si nécessaire."></textarea>
       <h3>Photos de l’intervention</h3><p class="wb-ai-muted">Jusqu’à ${LIMIT} images, en une ou plusieurs sélections. Les fichiers sont préparés un par un pour limiter la mémoire du téléphone. Factures PDF : ajout possible ensuite dans l’éditeur habituel.</p>
       <label class="filebtn btn" for="aiFiles">Ajouter des photos</label><input id="aiFiles" type="file" accept="image/*" multiple>
       <p id="aiCount" class="wb-ai-muted">Aucune photo sélectionnée.</p><div id="aiGallery" class="wb-ai-gallery"></div>
+      <h3>Factures PDF</h3><p class="wb-ai-muted">Les PDF sont analysés pour relever les références des pièces et toutes leurs pages sont ajoutées en fin de rapport, dans l’ordre de sélection. Maximum 3 PDF, 8 Mio chacun et 20 pages au total. Vérifie les références avant validation.</p>
+      <label class="filebtn btn" for="aiPdfFiles">Ajouter des factures PDF</label><input id="aiPdfFiles" type="file" accept="application/pdf,.pdf" multiple><div id="aiPdfList" class="wb-ai-muted"></div>
       <details><summary>Contrôles confirmés et recommandations (facultatif)</summary><p class="wb-ai-muted">Cocher seulement les contrôles réellement effectués. L’IA ne coche rien automatiquement.</p>
       ${checks.map((cp,i)=>`<label class="wb-ai-check"><input type="checkbox" id="aiCp${i}"><span>${esc(cp.label)}</span></label>`).join('')}
       <label for="aiClosing">Recommandations / prochaine révision</label><textarea id="aiClosing" maxlength="2000" placeholder="Reprendre uniquement les recommandations et échéances que tu confirmes."></textarea></details>
-      <label class="wb-ai-check"><input type="checkbox" id="aiConsent"><span>J’autorise l’envoi de ces photos et notes à OpenAI pour préparer ce rapport. Un appel API facturable sera effectué lorsque je cliquerai sur « Préparer le rapport ».</span></label>
+      <label class="wb-ai-check"><input type="checkbox" id="aiConsent"><span>J’autorise l’envoi de ces photos, factures PDF et notes à OpenAI pour préparer ce rapport. Un appel API facturable sera effectué lorsque je cliquerai sur « Préparer le rapport ».</span></label>
       <div class="wb-ai-actions"><button type="button" class="btn primary" id="aiGenerate">Préparer le rapport</button></div>
     </section>
     <div id="aiStatus" class="wb-ai-status" role="status" aria-live="polite"></div>
@@ -39,7 +41,7 @@
     <div class="wb-ai-actions"><button type="button" class="btn ghost" id="aiDiscard" hidden>Abandonner ce brouillon</button></div><section id="aiReview" hidden><h3>Relire le classement</h3><p class="wb-ai-muted">Corrige les titres et affectations. L’ordre numérique classe les photos au sein de chaque galerie. « Ne pas inclure » est un choix explicite, jamais automatique.</p>
       <label for="aiSummary">Résumé</label><textarea id="aiSummary" maxlength="1600"></textarea>
       <div id="aiSections"></div><label class="filebtn btn ghost" for="aiExtraFiles">Ajouter des photos manquantes (sans nouvel appel IA)</label><input id="aiExtraFiles" type="file" accept="image/*" multiple><div id="aiReviewGallery" class="wb-ai-gallery"></div>
-      <div id="aiWarnings" class="wb-ai-warnings"></div><div id="aiProblems" class="wb-ai-problems" role="status"></div><p id="aiUsage" class="wb-ai-usage"></p>
+      <div id="aiInvoiceReview" class="wb-ai-muted"></div><div id="aiWarnings" class="wb-ai-warnings"></div><div id="aiProblems" class="wb-ai-problems" role="status"></div><p id="aiUsage" class="wb-ai-usage"></p>
       <label class="wb-ai-check"><input type="checkbox" id="aiApprove"><span>J’ai relu les informations et le classement des photos. Créer le rapport sans mise à jour du carnet ni partage client.</span></label>
       <div class="wb-ai-actions"><button class="btn primary" type="button" id="aiApply" disabled>Créer le rapport dans l’éditeur</button></div>
     </section></div>`;
@@ -51,7 +53,7 @@
   function forget(){try{localStorage.removeItem(KEY);}catch(e){}$('aiResume').hidden=true;}
   function setBusy(value){
     busy=value;
-    ['aiClose','aiGenerate','aiFiles','aiRetry','aiRefresh','aiResumeBtn','aiForget','aiDiscard','aiApply'].forEach(k=>{$(k).disabled=value;});
+    ['aiClose','aiGenerate','aiFiles','aiPdfFiles','aiVerify','aiRetry','aiRefresh','aiResumeBtn','aiForget','aiDiscard','aiApply'].forEach(k=>{$(k).disabled=value;});
     $('aiInput').querySelectorAll('input,textarea').forEach(el=>el.disabled=value);
     $('aiReview').querySelectorAll('input,textarea,select').forEach(el=>el.disabled=value);
     if(!value)updateProblems();
@@ -67,6 +69,53 @@
       throw new Error(e.message||'Connexion au service IA impossible.');
     }
   }
+  function normalizePlate(v){return String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');}
+  function checkKm(){
+    const value=Number(String($('aiKm').value).replace(/[^0-9]/g,''));
+    const mismatch=vehicleKm!=null && normalizePlate($('aiPlate').value)===vehiclePlate && $('aiKm').value.trim() && value<vehicleKm;
+    $('aiMileageStatus').textContent=mismatch?`⚠ Kilométrage inférieur au dernier connu (${vehicleKm.toLocaleString('fr-FR')} km). Vérifie la saisie.`:vehicleKm!=null && normalizePlate($('aiPlate').value)===vehiclePlate?`Dernier kilométrage connu : ${vehicleKm.toLocaleString('fr-FR')} km.`:'La recherche de fiche se déclenche uniquement avec « Vérifier ».';
+    $('aiMileageStatus').classList.toggle('wb-ai-warning',Boolean(mismatch));
+  }
+  $('aiPlate').addEventListener('input',()=>{vehicleKm=null;vehiclePlate='';$('aiVehicleStatus').textContent='';checkKm();});
+  $('aiKm').addEventListener('input',checkKm);
+  $('aiVerify').onclick=async()=>{
+    const key=normalizePlate($('aiPlate').value);if(!key){$('aiVehicleStatus').textContent='Saisis une plaque.';return;}
+    const previous=Object.fromEntries(['Brand','Model','Engine','Reg'].map(k=>[k,$('ai'+k).value]));
+    $('aiVerify').disabled=true;$('aiVehicleStatus').textContent='Recherche dans le carnet Atelier…';
+    try{
+      const result=await H.lookupVehicle(key);
+      if(normalizePlate($('aiPlate').value)!==key)return;
+      if(result.matches!==1){vehicleKm=null;vehiclePlate='';$('aiVehicleStatus').textContent=result.matches?'Plusieurs fiches correspondent : aucun remplissage.':'Aucune fiche trouvée.';checkKm();return;}
+      const info=result.info;
+      const fields=[['Brand','brand'],['Model','model'],['Engine','engine'],['Reg','reg']];
+      const conflicts=fields.filter(([k,v])=>info[v] && previous[k] && previous[k]!==info[v]);
+      const replace=conflicts.length?confirm('Remplacer les champs déjà renseignés par ceux du carnet ?\n'+conflicts.map(([k,v])=>k+' : '+info[v]).join('\n')):false;
+      for(const [k,v] of fields)if(info[v] && (!previous[k]||replace) && $('ai'+k).value===previous[k])$('ai'+k).value=info[v];
+      vehicleKm=result.km?.km??null;vehiclePlate=key;checkKm();
+      $('aiVehicleStatus').textContent='Fiche trouvée. Les champs disponibles ont été complétés.'+(info.inferred?' Vérifie la marque et le modèle déduits.':'');
+    }catch(e){$('aiVehicleStatus').textContent='Recherche indisponible : '+e.message;}
+    finally{$('aiVerify').disabled=false;}
+  };
+  function renderDocuments(){
+    $('aiPdfList').innerHTML=documents.map(d=>`<div class="wb-ai-document">📄 ${esc(d.name)} — ${d.pages.length} page(s) <button type="button" class="btn ghost" data-pdf-remove="${d.id}">Retirer</button></div>`).join('');
+    $('aiPdfList').querySelectorAll('[data-pdf-remove]').forEach(b=>b.onclick=()=>{if(busy||jobId)return;documents=documents.filter(d=>d.id!==b.dataset.pdfRemove);renderDocuments();});
+  }
+  $('aiPdfFiles').addEventListener('change',async e=>{
+    const files=[...e.target.files];e.target.value='';if(busy||jobId)return;setBusy(true);const errors=[];
+    try{for(const f of files){
+      try{
+        if(documents.length>=3)throw new Error('Maximum 3 factures PDF');
+        if(f.size>8*1024*1024||f.size<8||!(/\.pdf$/i.test(f.name)))throw new Error('PDF invalide ou supérieur à 8 Mio');
+        const bytes=new Uint8Array(await f.slice(0,5).arrayBuffer());if(String.fromCharCode(...bytes)!=='%PDF-')throw new Error('En-tête PDF invalide');
+        status('Conversion locale des pages de '+f.name+'…');
+        const images=await H.pdfPages(f,1.35);
+        if(!images.length||images.length+documents.reduce((n,d)=>n+d.pages.length,0)>20)throw new Error('Maximum 20 pages de factures au total');
+        const pages=[];
+        for(const data of images){const blob=await (await fetch(data)).blob();if(blob.size>2*1024*1024)throw new Error('Page PDF trop volumineuse');pages.push({id:id('a',12),blob});}
+        documents.push({id:id('d',12),name:f.name.slice(0,160),blob:f,pages});
+      }catch(err){errors.push(f.name+' : '+err.message);}
+    }}finally{setBusy(false);renderDocuments();status(errors.length?errors.join('\n'):'Factures préparées localement. Elles seront analysées avec les photos.',errors.length?'error':'');}
+  });
   async function compress(file){
     if(file.size>45*1024*1024)throw new Error('Fichier supérieur à 45 Mio');
     let image,url;
@@ -133,6 +182,10 @@
       await ref.put(a.blob,{contentType:'image/jpeg',cacheControl:'private,max-age=3600'});
       a.url=await ref.getDownloadURL();
     }
+    for(const d of documents){
+      if(!d.uploaded){status('Envoi sécurisé de la facture '+d.name+'…');await H.storage().ref().child(`spaces/${space}/reports/${jobId}/ai-doc-${d.id}.pdf`).put(d.blob,{contentType:'application/pdf'});d.uploaded=true;}
+      for(const page of d.pages){if(page.url)continue;const ref=H.storage().ref().child(`spaces/${space}/reports/${jobId}/ai-inv-${page.id}.jpg`);await ref.put(page.blob,{contentType:'image/jpeg'});page.url=await ref.getDownloadURL();}
+    }
   }
   function entryValue(p){
     if(p.kind==='section')return 'section|'+p.sectionId+'|'+(p.side||'');
@@ -184,6 +237,7 @@
       card.querySelector('.ai-stype').onchange=e=>{s.type=e.target.value;plan.photos.filter(p=>p.sectionId===s.id).forEach(p=>{p.side='';if(s.type==='sym'){p.kind='unassigned';p.reason='Choisir le côté gauche ou droit.';}});renderReviewPhotos();resetApproval();};
     });
     renderReviewPhotos();
+    $('aiInvoiceReview').textContent=documents.length?'Factures jointes automatiquement en fin de rapport : '+documents.map(d=>d.name+' ('+d.pages.length+' pages)').join(' ; '):'';
     $('aiWarnings').textContent=plan.warnings.length?'Points à vérifier (non imprimés) :\n'+plan.warnings.join('\n'):'';
     $('aiUsage').textContent=usage?`Utilisation remontée par l’API : ${usage.inputTokens} tokens reçus, ${usage.outputTokens} générés (raisonnement inclus). Coût indicatif : ${Number(usage.estimatedUsd).toFixed(3)} $ — hors Firebase/taxes, tarifs ${usage.pricingDate}, pas une facture.`:'';
     resetApproval();
@@ -202,7 +256,9 @@
       }
       assets=manifest.map(a=>({...a,...(old.get(a.id)||{})}));
       for(const a of assets){if(!a.url)a.url=await H.storage().ref().child(`spaces/${H.space()}/reports/${jobId}/ai-${a.id}.jpg`).getDownloadURL();}
-      requestInput={jobId,assets:result.assets,notes:result.notes,meta:result.meta,consent:true};
+      documents=(result.documents||[]).map(d=>({...d,pages:d.pages.map(page=>({...page,url:page.url||''}))}));
+      for(const d of documents)for(const page of d.pages)if(!page.url)page.url=await H.storage().ref().child(`spaces/${H.space()}/reports/${jobId}/ai-inv-${page.id}.jpg`).getDownloadURL();
+      requestInput={jobId,assets:result.assets,documents:result.documents||[],notes:result.notes,meta:result.meta,consent:true};
       setMeta(result.meta||{});$('aiNotes').value=result.notes||'';
     }
     usage=result.usage||null;
@@ -233,7 +289,7 @@
       if(!retry){
         status('Vérification du service IA… Aucun appel OpenAI.');await call('capabilities');
         jobId=id('rai',16);remember();await upload();
-        requestInput={jobId,assets:assets.map(a=>({id:a.id,name:a.name})),notes:$('aiNotes').value.trim(),meta:metaFromForm(),consent:true};
+        requestInput={jobId,assets:assets.map(a=>({id:a.id,name:a.name})),documents:documents.map(d=>({id:d.id,name:d.name,pages:d.pages.map(p=>({id:p.id}))})),notes:$('aiNotes').value.trim(),meta:metaFromForm(),consent:true};
       }
       $('aiInput').hidden=true;status('Analyse et préparation du classement… L’appel API est en cours.');
       const result=await call('prepare',{...requestInput,retry});await consume(result);
@@ -268,7 +324,7 @@
     }finally{setBusy(false);}
   });
   function reset(){
-    assets.forEach(a=>{if(a.preview)URL.revokeObjectURL(a.preview);});assets=[];plan=null;jobId='';requestInput=null;usage=null;
+    assets.forEach(a=>{if(a.preview)URL.revokeObjectURL(a.preview);});assets=[];documents=[];vehicleKm=null;vehiclePlate='';renderDocuments();plan=null;jobId='';requestInput=null;usage=null;
     $('aiDiscard').hidden=true;$('aiInput').hidden=false;$('aiReview').hidden=true;$('aiRetryArea').hidden=true;setMeta({});$('aiNotes').value='';$('aiConsent').checked=false;renderInputPhotos();setBusy(false);
   }
   async function abandon(){
@@ -285,6 +341,8 @@
     try{
       const urls=Object.fromEntries(assets.map(a=>[a.id,a.url]));
       const report=C.makeReport(plan,assets,requestInput.meta,H.blank(),urls);
+      for(const d of documents)for(let i=0;i<d.pages.length;i++)report.invoices.push({id:'ai_pdf_'+d.id+'_'+i,kind:'img',src:d.pages[i].url,name:d.name+' p.'+(i+1)});
+      report.invoicesOn=report.invoices.length>0;
       await H.apply(report,jobId);
       forget();dialog.close();reset();
     }catch(e){status('Le rapport n’a pas pu être ouvert : '+e.message+'. Le brouillon est conservé.','error');}
