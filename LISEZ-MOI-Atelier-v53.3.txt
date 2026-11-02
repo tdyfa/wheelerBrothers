@@ -1,0 +1,71 @@
+﻿WHEELERBROTHERS ATELIER — MISE À JOUR 53.3
+
+BASE
+Archive complète wheelerBrothers-main.zip fournie, dont les fichiers du correctif
+Atelier v53.2 correspondent au ZIP WheelerBrothers_Atelier_v53.2_modifies.zip.
+Ce ZIP est une mise à jour différentielle, pas une installation complète.
+
+MODIFICATIONS
+- Classique et IA : chiffres seuls pour le kilométrage ; affichage 100 000.
+  Valeur enregistrée/transmise : chaîne "100000", convertible avec Number().
+  Ce type texte conserve le contrat du serveur IA v53.2 et du carnet existant.
+- Plaques SIV françaises : majuscules et tirets AA-123-BB.
+- « Autre format » décochée pour une nouvelle saisie ; saisie libre si cochée.
+  Les anciennes plaques non SIV sont conservées et rouvertes en mode libre.
+- Recherche uniquement au clic Vérifier ; clés sans casse, espaces ni tirets.
+- Motorisation et première mise en circulation toujours présentes dans l’IA.
+- Kilométrage formaté sur les pages PDF ; références actives/cache en 53.3.
+
+DÉPLOIEMENT
+1. Sauvegarder les fichiers actuellement déployés.
+2. Extraire ce ZIP. Copier tous les fichiers applicatifs listés ci-dessous à la
+   racine du site Atelier existant, au même niveau que index.html, en remplaçant
+   les fichiers homonymes. Ajouter impérativement vehicle-input.js.
+   Les deux fichiers LISEZ-MOI et VERIFICATION peuvent rester hors du site.
+3. Ne pas supprimer les autres fichiers de l’installation existante.
+4. Publier avec la procédure habituelle de votre hébergeur. Si un CDN est utilisé,
+   invalider son cache pour les fichiers remplacés. Mettre tous les fichiers
+   en ligne ensemble (ou sw.js en dernier si le transfert est séquentiel).
+5. Recharger le site connecté à Internet, puis fermer et rouvrir les onglets/PWA
+   si nécessaire. Vérifier « Version 53.3 », y compris l’écran de connexion.
+6. Contrôler dans les deux formulaires : aa123bb -> AA-123-BB ; 100000 -> 100 000 ;
+   Autre format -> saisie libre ; Vérifier -> fiche et alerte km si nécessaire.
+   Créer un rapport de contrôle et vérifier le PDF avant utilisation courante.
+
+FIREBASE / SERVEUR IA
+Aucune règle, collection, clé, configuration Firebase ni fonction serveur modifiée.
+Dans firebase-config.js, seul le libellé « Version 53.2 » devient « Version 53.3 ».
+Conserver le serveur IA v53.2 déjà déployé ; aucun npm install ni déploiement
+Functions nécessaire pour cette mise à jour de l’interface.
+
+VALIDATION
+Tests locaux automatisés avec carnet simulé et navigateur Edge, en 1440 et 390 px.
+Aucun accès au carnet de production et aucun appel OpenAI facturable.
+Les écritures Firebase réelles, l’analyse IA distante et le déploiement en
+production n’ont pas été exécutés lors de ces tests.
+
+Contrôles réussis :
+- Tous les fichiers du cache existent ; configuration Firebase inchangée hors numéro affiché.
+- Classique : formatage, valeur brute, aucune lecture à la saisie, Vérifier retrouve une ancienne plaque sans tirets et compare le kilométrage.
+- Fiches existantes : ancienne plaque conservée en mode libre, kilométrage historique nettoyé, nouveau rapport en mode français.
+- Rendu PDF : pages générées et kilométrage affiché avec espaces.
+- IA : champs persistants visibles, formatage, saisie libre, recherche au clic et avertissement kilométrique.
+- Saisie au milieu du kilométrage : curseur conservé ; formulaire contrôlé en 1440 px et 390 px.
+- Tous les scripts JavaScript : syntaxe valide ; aucune erreur navigateur.
+
+Fichiers applicatifs ajoutés/modifiés :
+- atelier.html
+- firebase-config.js
+- index.html
+- inventaire.html
+- rapport.html
+- report-ai-core.js
+- report-ai.css
+- report-ai.js
+- report-images.js
+- sw.js
+- vehicle-input.js
+
+RETOUR ARRIÈRE
+Restaurer les fichiers sauvegardés de la v53.2, y compris sw.js, puis recharger
+le site connecté. Aucune migration de données n’a été réalisée.

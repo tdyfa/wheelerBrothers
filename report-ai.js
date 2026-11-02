@@ -1,4 +1,4 @@
-/* WheelerBrothers 53.2 — préparation volontaire, relecture obligatoire, nouveau rapport uniquement. */
+/* WheelerBrothers 53.3 — préparation volontaire, relecture obligatoire, nouveau rapport uniquement. */
 (function(){
   'use strict';
   const C=window.WBReportAICore,H=window.WBReportAIHost,CFG=window.WB_REPORT_AI_CONFIG;
@@ -16,13 +16,13 @@
     <div id="aiResume" class="wb-ai-resume" hidden>Une préparation précédente est disponible.<div class="wb-ai-actions"><button class="btn" id="aiResumeBtn" type="button">Reprendre la préparation</button><button class="btn ghost" id="aiForget" type="button">Abandonner ce brouillon</button></div></div>
     <section id="aiInput">
       <div class="wb-ai-grid">
-        <div><label for="aiPlate">Immatriculation</label><div class="wb-ai-plate"><input id="aiPlate" maxlength="160" autocapitalize="characters" placeholder="FL-656-AC"><button class="btn ghost" type="button" id="aiVerify">Vérifier</button></div><p id="aiVehicleStatus" class="wb-ai-muted" role="status"></p></div>
+        <div><label for="aiPlate">Immatriculation</label><div class="wb-ai-plate"><input id="aiPlate" maxlength="160" autocapitalize="characters" placeholder="FL-656-AC"><button class="btn ghost" type="button" id="aiVerify">Vérifier</button></div><label class="wb-ai-check wb-ai-other"><input type="checkbox" id="aiPlateOther"><span>Autre format</span></label><p id="aiVehicleStatus" class="wb-ai-muted" role="status"></p></div>
         <div><label for="aiKm">Kilométrage</label><input id="aiKm" inputmode="numeric" maxlength="160" placeholder="65 000"></div>
         <div><label for="aiBrand">Marque</label><input id="aiBrand" maxlength="160" placeholder="Audi"></div>
         <div><label for="aiModel">Modèle</label><input id="aiModel" maxlength="160" placeholder="RS3"></div>
         <div><label for="aiDate">Date d’intervention</label><input id="aiDate" type="date"></div>
       </div>
-      <details><summary>Motorisation et première mise en circulation</summary><div class="wb-ai-grid"><div><label for="aiEngine">Motorisation</label><input id="aiEngine" maxlength="160"></div><div><label for="aiReg">1ère mise en circulation</label><input id="aiReg" placeholder="JJ/MM/AAAA" maxlength="160"></div></div></details>
+      <div class="wb-ai-grid"><div><label for="aiEngine">Motorisation</label><input id="aiEngine" maxlength="160"></div><div><label for="aiReg">1ère mise en circulation</label><input id="aiReg" placeholder="JJ/MM/AAAA" maxlength="160"></div></div>
       <p id="aiMileageStatus" class="wb-ai-muted">La recherche de fiche se déclenche uniquement avec « Vérifier ».</p>
       <label for="aiNotes">Travaux effectués, pièces et précisions *</label><textarea id="aiNotes" maxlength="12000" placeholder="Ex. : vidange moteur et remplacement du filtre à huile ; nettoyage du filtre à air réutilisable. Préciser les côtés ou les références si nécessaire."></textarea>
       <h3>Photos de l’intervention</h3><p class="wb-ai-muted">Jusqu’à ${LIMIT} images, en une ou plusieurs sélections. Les fichiers sont préparés un par un pour limiter la mémoire du téléphone. Factures PDF : ajout possible ensuite dans l’éditeur habituel.</p>
@@ -76,8 +76,9 @@
     $('aiMileageStatus').textContent=mismatch?`⚠ Kilométrage inférieur au dernier connu (${vehicleKm.toLocaleString('fr-FR')} km). Vérifie la saisie.`:vehicleKm!=null && normalizePlate($('aiPlate').value)===vehiclePlate?`Dernier kilométrage connu : ${vehicleKm.toLocaleString('fr-FR')} km.`:'La recherche de fiche se déclenche uniquement avec « Vérifier ».';
     $('aiMileageStatus').classList.toggle('wb-ai-warning',Boolean(mismatch));
   }
-  $('aiPlate').addEventListener('input',()=>{vehicleKm=null;vehiclePlate='';$('aiVehicleStatus').textContent='';checkKm();});
-  $('aiKm').addEventListener('input',checkKm);
+  $('aiPlate').addEventListener('input',()=>{WBVehicleInput.formatPlate($('aiPlate'),$('aiPlateOther').checked);vehicleKm=null;vehiclePlate='';$('aiVehicleStatus').textContent='';checkKm();});
+  $('aiKm').addEventListener('input',()=>{WBVehicleInput.formatKm($('aiKm'));checkKm();});
+  $('aiPlateOther').addEventListener('change',()=>{$('aiPlate').dispatchEvent(new Event('input',{bubbles:true}));});
   $('aiVerify').onclick=async()=>{
     const key=normalizePlate($('aiPlate').value);if(!key){$('aiVehicleStatus').textContent='Saisis une plaque.';return;}
     const previous=Object.fromEntries(['Brand','Model','Engine','Reg'].map(k=>[k,$('ai'+k).value]));
@@ -166,10 +167,12 @@
   });
   function metaFromForm(){
     const m={};[['plate','Plate'],['km','Km'],['brand','Brand'],['model','Model'],['date','Date'],['engine','Engine'],['reg','Reg'],['closing','Closing']].forEach(([key,suffix])=>m[key]=$('ai'+suffix).value.trim());
-    m.plate=m.plate.toUpperCase();m.checkpoints=checks.map((_,i)=>$('aiCp'+i).checked);return m;
+    m.plate=WBVehicleInput.formatPlate($('aiPlate'),$('aiPlateOther').checked);m.km=WBVehicleInput.digits(m.km);m.checkpoints=checks.map((_,i)=>$('aiCp'+i).checked);return m;
   }
   function setMeta(m){
     [['plate','Plate'],['km','Km'],['brand','Brand'],['model','Model'],['date','Date'],['engine','Engine'],['reg','Reg'],['closing','Closing']].forEach(([key,suffix])=>$('ai'+suffix).value=m[key]||'');
+    WBVehicleInput.loadPlate($('aiPlate'),$('aiPlateOther'),m.plate);
+    $('aiKm').value=WBVehicleInput.mileage(m.km);
     checks.forEach((_,i)=>$('aiCp'+i).checked=m.checkpoints?.[i]===true);
   }
   async function upload(){
@@ -279,6 +282,7 @@
   }
   async function generate(retry=false){
     if(busy)return;
+    if(!retry && !$('aiPlate').reportValidity())return;
     if(!retry && (jobId||remembered()?.jobId)){status('Une préparation est déjà ouverte. Reprends-la ou abandonne-la avant un nouvel envoi.','error');return;}
     if(!retry && (!assets.length || $('aiNotes').value.trim().length<10 || !$('aiConsent').checked)){
       status('Ajoute au moins une photo, décris les travaux et confirme l’envoi à OpenAI.','error');return;
@@ -341,6 +345,8 @@
     try{
       const urls=Object.fromEntries(assets.map(a=>[a.id,a.url]));
       const report=C.makeReport(plan,assets,requestInput.meta,H.blank(),urls);
+      report.km=WBVehicleInput.digits(report.km);
+      if(WBVehicleInput.isFrench(report.plate))report.plate=WBVehicleInput.plate(report.plate);
       for(const d of documents)for(let i=0;i<d.pages.length;i++)report.invoices.push({id:'ai_pdf_'+d.id+'_'+i,kind:'img',src:d.pages[i].url,name:d.name+' p.'+(i+1)});
       report.invoicesOn=report.invoices.length>0;
       await H.apply(report,jobId);

@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=53.2">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=53.2">
+<link rel="manifest" href="manifest.json?v=53.3">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=53.3">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -16,13 +16,14 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
-<script src="firebase-config.js?v=53.2"></script>
-<script src="html2pdf.bundle.min.js?v=53.2"></script>
-<script src="report-images.js?v=53.2"></script>
-<script src="vehicle-info.js?v=53.2"></script>
-<link rel="stylesheet" href="report-ai.css?v=53.2">
-<script src="report-ai-config.js?v=53.2"></script>
-<script src="report-ai-core.js?v=53.2"></script>
+<script src="firebase-config.js?v=53.3"></script>
+<script src="html2pdf.bundle.min.js?v=53.3"></script>
+<script src="report-images.js?v=53.3"></script>
+<script src="vehicle-info.js?v=53.3"></script>
+<script src="vehicle-input.js?v=53.3"></script>
+<link rel="stylesheet" href="report-ai.css?v=53.3">
+<script src="report-ai-config.js?v=53.3"></script>
+<script src="report-ai-core.js?v=53.3"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -139,6 +140,8 @@
   #btnLookupVehicle:hover{background:#e9eef5;border-color:#9aa3b2}
   #btnLookupVehicle:focus-visible{outline:2px solid #475569;outline-offset:2px}
   #btnLookupVehicle:disabled{opacity:.6;cursor:wait}
+  .plate-other-format{display:flex;align-items:center;gap:5px;font-size:11px;margin-top:5px;font-weight:400}
+  .plate-other-format input{width:auto;margin:0}
   .plate-lookup-status{line-height:1.45;overflow-wrap:anywhere}
   .plate-lookup-status[data-kind="success"]{color:#19713d}
   .plate-lookup-status[data-kind="warning"]{color:#875612}
@@ -528,12 +531,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=53.2" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=53.3" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 53.2</span>
+          <span class="sub">Version 53.3</span>
           <label class="app-bar-sync">
             <input type="checkbox" id="syncAtelierOnSave" checked> MàJ Carnet
           </label>
@@ -618,6 +621,7 @@
               <input type="text" id="f_plate" placeholder="GC-705-LH" autocapitalize="characters" spellcheck="false" aria-describedby="plateLookupStatus">
               <button class="btn ghost" type="button" id="btnLookupVehicle" title="Rechercher cette plaque dans le carnet d’atelier">Vérifier</button>
             </div>
+            <label class="plate-other-format" for="f_plate_other"><input type="checkbox" id="f_plate_other"> Autre format</label>
             <div class="hint plate-lookup-status" id="plateLookupStatus" role="status" aria-live="polite">Clique sur « Vérifier » pour rechercher la fiche et compléter les champs.</div>
           </div>
           <div class="field"><label>Marque</label><input type="text" id="f_brand" placeholder="Porsche"></div>
@@ -627,7 +631,7 @@
         </div>
         <div class="field">
           <label for="f_km">Kilométrage</label>
-          <input type="text" id="f_km" placeholder="145 000 km" inputmode="numeric" aria-describedby="mileageStatus">
+          <input type="text" id="f_km" placeholder="145 000" inputmode="numeric" aria-describedby="mileageStatus">
           <div class="hint mileage-status" id="mileageStatus" role="status" aria-live="polite">Clique sur « Vérifier » pour comparer avec le dernier kilométrage du carnet.</div>
         </div>
         <div class="field"><label>Résumé <span aria-hidden="true" style="color:#b3261e">*</span></label>
@@ -1461,7 +1465,10 @@ async function migrateLegacySingleReport(){
 function bind(id, key){
   const el = document.getElementById(id);
   el.value = state[key] || '';
-  el.addEventListener('input', ()=>{ state[key]=el.value; renderReport(); save(); });
+  el.addEventListener('input', ()=>{
+    state[key]=key==='km'?WBVehicleInput.formatKm(el):key==='plate'?WBVehicleInput.formatPlate(el,document.getElementById('f_plate_other').checked):el.value;
+    renderReport(); save();
+  });
 }
 
 /* ---------- normalise une section (compat anciens fichiers) ---------- */
@@ -1729,7 +1736,7 @@ function renderReport(){
       ${infoRow("Motorisation", s.engine)}
       ${infoRow("Mise en circulation", s.reg)}
       ${infoRow("Immatriculation", s.plate)}
-      ${infoRow("Kilométrage", s.km)}
+      ${infoRow("Kilométrage", WBVehicleInput.mileage(s.km))}
     </table>
     ${s.overview?`<div class="cover-photo"><img src="${s.overview}"><div class="cap">Vue d'ensemble du véhicule</div></div>`:'<div style="margin-top:auto"></div>'}
     <div class="cover-foot">Rapport généré le ${esc((s.genDate&&s.genDate.trim())?s.genDate.trim():new Date().toLocaleDateString('fr-FR'))}</div>
@@ -2552,7 +2559,7 @@ async function renderReportPdfPages(options={}){
     ctx.textAlign='left';
     const rows=[
       ["DATE D'INTERVENTION",reportDateFr(s.date)],['MARQUE',s.brand],['MODÈLE',s.model],
-      ['MOTORISATION',s.engine],['MISE EN CIRCULATION',s.reg],['IMMATRICULATION',s.plate],['KILOMÉTRAGE',s.km]
+      ['MOTORISATION',s.engine],['MISE EN CIRCULATION',s.reg],['IMMATRICULATION',s.plate],['KILOMÉTRAGE',WBVehicleInput.mileage(s.km)]
     ].filter(row=>String(row[1]||'').trim());
     const tableX=180,tableW=880,labelW=330,rowH=58;
     rows.forEach(([label,value],index)=>{
@@ -2837,16 +2844,24 @@ document.getElementById('btnReset').addEventListener('click', ()=>{
 
 /* ---------- init ---------- */
 function initFields(){
+  state.km=WBVehicleInput.digits(state.km);
+  if(WBVehicleInput.isFrench(state.plate))state.plate=WBVehicleInput.plate(state.plate);
   resetVehicleLookup();
   [['f_title','title'],['f_date','date'],['f_plate','plate'],['f_brand','brand'],
    ['f_model','model'],['f_engine','engine'],['f_reg','reg'],['f_km','km'],
    ['f_summary','summary'],['f_closing','closing'],['f_gendate','genDate'],
    ['f_baieTitle','baieTitle']].forEach(([id,key])=>{
      const el=document.getElementById(id);
-     if(el && document.activeElement !== el) el.value=state[key]||'';
+     if(el && document.activeElement !== el){
+       if(key==='plate')WBVehicleInput.loadPlate(el,document.getElementById('f_plate_other'),state[key]);
+       else el.value=key==='km'?WBVehicleInput.mileage(state[key]):state[key]||'';
+     }
    });
 }
 function bindAll(){
+  document.getElementById('f_plate_other').addEventListener('change',()=>{
+    const el=document.getElementById('f_plate');el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
   bind('f_title','title'); bind('f_date','date'); bind('f_plate','plate');
   bind('f_brand','brand'); bind('f_model','model'); bind('f_engine','engine');
   bind('f_reg','reg'); bind('f_km','km'); bind('f_summary','summary'); bind('f_closing','closing');
@@ -3035,10 +3050,10 @@ window.WBReportAIHost = {
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=53.2&build=1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=53.3&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
-<script src="report-ai.js?v=53.2"></script>
+<script src="report-ai.js?v=53.3"></script>
 </body>
 </html>

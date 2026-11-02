@@ -1,4 +1,4 @@
-/* WheelerBrothers 53.2 — assistant photo, indépendant du rendu PDF. */
+/* WheelerBrothers 53.3 — assistant photo, indépendant du rendu PDF. */
 .wb-ai-dialog{border:0;border-radius:16px;padding:0;width:min(920px,calc(100% - 24px));max-height:92dvh;color:#18202c;background:#fff;box-shadow:0 20px 80px #0005}
 .wb-ai-dialog::backdrop{background:#152233aa}
 .wb-ai-dialog[open]{display:flex;flex-direction:column}
@@ -37,7 +37,7 @@
 .wb-ai-dialog .btn:focus-visible,.wb-ai-dialog select:focus-visible{outline:3px solid #6f9bd3;outline-offset:2px}
 .wb-ai-head button{padding:8px;font-size:18px}
 
-/* v53.2 — iOS PWA / Safari : garder l'en-tête sous la Dynamic Island. */
+/* v53.3 — iOS PWA / Safari : garder l'en-tête sous la Dynamic Island. */
 @media(max-width:600px){
  .wb-ai-dialog{position:fixed;inset:0!important;margin:0!important;width:100%;max-width:none;max-height:none;height:100dvh;border-radius:0;overflow:hidden;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
  .wb-ai-head{position:relative;z-index:2;flex-shrink:0;background:#fff}
@@ -47,3 +47,8 @@
 .wb-ai-warning{color:#a85a00!important;font-weight:600}
 .wb-ai-document{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #dce2e8;padding:8px;margin:8px 0;border-radius:8px;overflow-wrap:anywhere}
 .wb-ai-document button{flex:none}
+
+.wb-ai-other{font-size:11px;gap:5px;margin:5px 0}.wb-ai-other input{width:auto}
+
+.wb-ai-body .wb-ai-other{font-size:11px;margin:5px 0}.wb-ai-other input{width:13px;height:13px}
+@media(max-width:600px){.wb-ai-grid{grid-template-columns:1fr}}

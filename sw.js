@@ -1,25 +1,26 @@
-const CACHE_NAME = 'outils-atelier-v53.2-r1';
+const CACHE_NAME = 'outils-atelier-v53.3-r1';
 const ASSETS = [
   './',
   './index.html',
-  './atelier.html?v=53.2',
-  './rapport.html?v=53.2',
-  './inventaire.html?v=53.2',
-  './manifest.json?v=53.2',
-  './firebase-config.js?v=53.2',
-  './apple-touch-icon.png?v=53.2',
+  './atelier.html?v=53.3',
+  './rapport.html?v=53.3',
+  './inventaire.html?v=53.3',
+  './manifest.json?v=53.3',
+  './firebase-config.js?v=53.3',
+  './apple-touch-icon.png?v=53.3',
   './icon-192.png',
   './icon-512.png',
   './report-cover-logo.png',
-  './report-ai.css?v=53.2',
-  './report-ai-config.js?v=53.2',
-  './report-ai-core.js?v=53.2',
-  './report-ai.js?v=53.2',
-  './report-images.js?v=53.2',
-  './vehicle-info.js?v=53.2',
-  './html2pdf.bundle.min.js?v=53.2',
-  './wb-carnet-pro.css?v=53.2',
-  './wb-carnet-pro.js?v=53.2'
+  './report-ai.css?v=53.3',
+  './report-ai-config.js?v=53.3',
+  './report-ai-core.js?v=53.3',
+  './report-ai.js?v=53.3',
+  './report-images.js?v=53.3',
+  './vehicle-info.js?v=53.3',
+  './vehicle-input.js?v=53.3',
+  './html2pdf.bundle.min.js?v=53.3',
+  './wb-carnet-pro.css?v=53.3',
+  './wb-carnet-pro.js?v=53.3'
 ];
 
 self.addEventListener('install', (event) => {

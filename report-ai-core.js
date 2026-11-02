@@ -1,4 +1,4 @@
-/* WheelerBrothers 53.2 — contrat IA partagé navigateur/serveur. Aucune clé. */
+/* WheelerBrothers 53.3 — contrat IA partagé navigateur/serveur. Aucune clé. */
 (function(root, factory){
   const api = factory();
   if(typeof module === 'object' && module.exports) module.exports = api;
