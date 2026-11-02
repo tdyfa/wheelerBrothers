@@ -1,0 +1,13 @@
+﻿CORRECTIF 53.3 — BUILD 2
+
+Le format français est désormais verrouillé dans les deux formulaires :
+2 lettres, puis 3 chiffres, puis 2 lettres ; tirets automatiques.
+Les caractères incompatibles et ceux au-delà de la longueur autorisée sont rejetés,
+y compris lors d’un collage. Exemple : AB-123-CDEFGH devient AB-123-CD.
+La case Autre format permet toujours une saisie libre.
+
+Déployer TOUS les fichiers applicatifs du ZIP sur l’installation existante.
+Ce ZIP remplace le précédent ZIP v53.3 et inclut la mise à jour depuis v53.2.
+Le cache passe en outils-atelier-v53.3-r2 et les URL du correctif en build=2.
+Recharger en ligne puis fermer et rouvrir l’application si nécessaire.
+Aucun changement serveur IA/Firebase.

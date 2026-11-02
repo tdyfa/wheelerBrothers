@@ -1,4 +1,4 @@
-const CACHE_NAME = 'outils-atelier-v53.3-r1';
+const CACHE_NAME = 'outils-atelier-v53.3-r2';
 const ASSETS = [
   './',
   './index.html',
@@ -17,7 +17,7 @@ const ASSETS = [
   './report-ai.js?v=53.3',
   './report-images.js?v=53.3',
   './vehicle-info.js?v=53.3',
-  './vehicle-input.js?v=53.3',
+  './vehicle-input.js?v=53.3&build=2',
   './html2pdf.bundle.min.js?v=53.3',
   './wb-carnet-pro.css?v=53.3',
   './wb-carnet-pro.js?v=53.3'

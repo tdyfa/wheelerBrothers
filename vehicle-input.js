@@ -6,9 +6,14 @@
   const key=v=>String(v??'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   const isFrench=v=>/^[A-Z]{2}\d{3}[A-Z]{2}$/.test(key(v));
   function plate(v){
-    const s=key(v);
-    // Les plaques existantes non SIV sont conservées lors de leur chargement.
-    if(!/^[A-Z]{0,2}\d{0,3}[A-Z]{0,2}$/.test(s))return String(v??'').toUpperCase();
+    let s='';
+    // Rejeter immédiatement les caractères incompatibles avec la position.
+    // Deux lettres, trois chiffres, deux lettres : sept caractères utiles maximum.
+    for(const c of key(v)){
+      if(s.length===7)break;
+      const expected=s.length<2 || s.length>=5 ? /[A-Z]/ : /[0-9]/;
+      if(expected.test(c))s+=c;
+    }
     return s.slice(0,2)+(s.length>2?'-'+s.slice(2,5):'')+(s.length>5?'-'+s.slice(5,7):'');
   }
   function edit(el,format,meaningful){

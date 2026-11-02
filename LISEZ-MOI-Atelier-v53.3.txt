@@ -49,6 +49,7 @@ Contrôles réussis :
 - Classique : formatage, valeur brute, aucune lecture à la saisie, Vérifier retrouve une ancienne plaque sans tirets et compare le kilométrage.
 - Fiches existantes : ancienne plaque conservée en mode libre, kilométrage historique nettoyé, nouveau rapport en mode français.
 - Rendu PDF : pages générées et kilométrage affiché avec espaces.
+- Plaques verrouillées dans les deux formulaires : lettres/chiffres à leur position, sept caractères utiles maximum, frappe et collage filtrés.
 - IA : champs persistants visibles, formatage, saisie libre, recherche au clic et avertissement kilométrique.
 - Saisie au milieu du kilométrage : curseur conservé ; formulaire contrôlé en 1440 px et 390 px.
 - Tous les scripts JavaScript : syntaxe valide ; aucune erreur navigateur.
