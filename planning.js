@@ -1,4 +1,4 @@
-/* WheelerBrothers Planning v54.4 — journées entières, synchronisation Firestore */
+/* WheelerBrothers Planning v54.5 — journées entières, synchronisation Firestore */
 (()=>{'use strict';
 const $=id=>document.getElementById(id), MS=86400000;
 const today=()=>{const d=new Date();return localISO(d)};
@@ -67,8 +67,81 @@ async function lookupVehicle(){const plate=normalizePlate($('plate').value);cons
 function isLate(x){return x.status!=='done'&&x.dates.length>0&&x.dates[x.dates.length-1]<today()}
 function card(x){const e=document.createElement('div');e.className='item';const info=document.createElement('div');const title=document.createElement('strong');title.textContent=vehicleName(x);info.append(title);const meta=document.createElement('div');meta.className='vehicle-meta';meta.textContent=vehicleMeta(x);info.append(meta);const p=document.createElement('p');p.textContent=x.job;info.append(p);if(x.notes){const n=document.createElement('p');n.className='muted';n.textContent=x.notes;info.append(n)}const sub=document.createElement('span');sub.className=isLate(x)?'late':'muted';sub.textContent=(x.dates.length?`${x.dates.length} jour(s) : ${labelDate(x.dates[0])}${x.dates.length>1?' → '+labelDate(x.dates[x.dates.length-1]):''}`:'Sans date')+(isLate(x)?' · En retard':'');info.append(sub);const b=document.createElement('button');b.textContent='Modifier';b.onclick=()=>openEditor(x);e.append(info,b);return e}
 function renderLists(){const todo=items.filter(x=>x.status==='todo'&&!x.dates.length),late=items.filter(isLate),done=items.filter(x=>x.status==='done');for(const [id,data,empty] of [['todoList',todo,'Aucune intervention sans date.'],['lateList',late,'Aucune intervention en retard.'],['doneList',done,'Aucune intervention terminée.']]){const node=$(id);node.replaceChildren();if(!data.length){const p=document.createElement('p');p.className='muted';p.textContent=empty;node.append(p)}else data.forEach(x=>node.append(card(x)))}$('counts').textContent=`${todo.length} à prévoir · ${late.length} en retard`}
-function cellDate(s,other=false){const d=document.createElement('div');d.className='day'+(other?' other':'')+(s===today()?' today':'');const num=document.createElement('span');num.className='num';num.textContent=parse(s).getDate();d.append(num);d.addEventListener('click',()=>openEditor(null,[s]));const relevant=items.filter(x=>x.dates.includes(s)&&($('showDone').checked||x.status!=='done'));relevant.sort((a,b)=>a.job.localeCompare(b.job,'fr'));relevant.forEach(x=>{const b=document.createElement('button');b.type='button';b.className='chip'+(x.status==='done'?' done':isLate(x)?' late':'');const car=document.createElement('span');car.className='chip-car';car.textContent=vehicleName(x);const meta=document.createElement('span');meta.className='chip-meta';meta.textContent=vehicleMeta(x);const job=document.createElement('span');job.className='chip-job';job.textContent=x.job;b.append(car,meta,job);b.title=[vehicleName(x),vehicleMeta(x),x.job].filter(Boolean).join(' — ');b.onclick=ev=>{ev.stopPropagation();openEditor(x)};d.append(b)});return d}
-function renderCalendar(){const c=$('calendar');c.replaceChildren();c.classList.toggle('week',calMode==='week');['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].forEach(t=>{const e=document.createElement('div');e.className='dayname';e.textContent=t;c.append(e)});let dates=[];if(calMode==='month'){const first=weekStart(calendarMonth);const last=monthShift(calendarMonth,1);const end=shift(weekStart(last),6);for(let d=first;d<=end;d=shift(d,1))dates.push(d);$('period').textContent=parse(calendarMonth).toLocaleDateString('fr-FR',{month:'long',year:'numeric'})}else{for(let i=0;i<7;i++)dates.push(shift(calendarWeek,i));$('period').textContent=`${labelDate(dates[0])} – ${labelDate(dates[6])}`}dates.forEach(s=>c.append(cellDate(s,calMode==='month'&&s.slice(0,7)!==calendarMonth.slice(0,7))))}
+let selectedCalendarDate=today();
+function visibleOnDate(x,s){return x.dates.includes(s)&&($('showDone').checked||x.status!=='done')}
+function sortedOnDate(s){return items.filter(x=>visibleOnDate(x,s)).sort((a,b)=>vehicleName(a).localeCompare(vehicleName(b),'fr'))}
+function calendarEntry(x,compact=false){
+ const b=document.createElement('button');b.type='button';b.className=compact?'agenda-entry':'chip';
+ if(x.status==='done')b.classList.add('done');else if(isLate(x))b.classList.add('late');
+ const title=document.createElement('strong');title.textContent=vehicleName(x);
+ const meta=document.createElement('span');meta.textContent=vehicleMeta(x);meta.className='chip-meta';
+ const job=document.createElement('span');job.textContent=x.job;job.className='chip-job';
+ b.append(title,meta,job);
+ if(compact&&x.dates.length>1){const period=document.createElement('small');period.className='muted';period.textContent=`Prévue sur ${x.dates.length} journées (${labelDate(x.dates[0])} – ${labelDate(x.dates.at(-1))})`;b.append(period)}
+ b.onclick=e=>{e.stopPropagation();openEditor(x)};
+ return b;
+}
+function cellDate(s,other=false){
+ const d=document.createElement('div');d.className='day'+(other?' other':'')+(s===today()?' today':'')+(s===selectedCalendarDate?' selected':'');
+ const num=document.createElement('span');num.className='num';num.textContent=parse(s).getDate();d.append(num);
+ const relevant=sortedOnDate(s);
+ if(calMode==='month'){
+  const markers=document.createElement('span');markers.className='month-markers';
+  if(relevant.length){const dot=document.createElement('i');dot.className='month-dot';if(relevant.some(isLate))dot.classList.add('late-dot');markers.append(dot);if(relevant.length>1){const count=document.createElement('small');count.textContent=relevant.length;markers.append(count)}}
+  d.append(markers);
+  d.addEventListener('click',()=>{selectedCalendarDate=s;renderCalendar()});
+  d.setAttribute('role','button');d.tabIndex=0;d.setAttribute('aria-label',`${labelDate(s)}, ${relevant.length} intervention(s)`);
+  d.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectedCalendarDate=s;renderCalendar()}});
+ }else{
+  d.addEventListener('click',()=>openEditor(null,[s]));
+  relevant.forEach(x=>d.append(calendarEntry(x)));
+ }
+ return d;
+}
+function renderMonthDetail(){
+ const detail=$('calendarDetail');detail.replaceChildren();
+ if(calMode!=='month'){detail.classList.add('hidden');return}
+ detail.classList.remove('hidden');
+ const head=document.createElement('div');head.className='detail-heading';
+ const title=document.createElement('strong');title.textContent=parse(selectedCalendarDate).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+ const add=document.createElement('button');add.type='button';add.textContent='+ Intervention';add.onclick=()=>openEditor(null,[selectedCalendarDate]);
+ head.append(title,add);detail.append(head);
+ const entries=sortedOnDate(selectedCalendarDate);
+ if(!entries.length){const p=document.createElement('p');p.className='muted';p.textContent='Aucune intervention pour cette journée.';detail.append(p)}
+ else entries.forEach(x=>detail.append(calendarEntry(x,true)));
+}
+function renderMobileWeek(dates){
+ const root=$('weekAgenda');root.replaceChildren();
+ if(calMode!=='week'){root.classList.add('hidden');return}
+ root.classList.remove('hidden');
+ const seen=new Set();
+ dates.forEach(s=>{
+  const relevant=sortedOnDate(s).filter(x=>!seen.has(x.id));
+  if(!relevant.length)return;
+  const group=document.createElement('div');group.className='agenda-day';
+  const date=document.createElement('div');date.className='agenda-date';date.textContent=parse(s).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+  const content=document.createElement('div');content.className='agenda-content';
+  relevant.forEach(x=>{content.append(calendarEntry(x,true));seen.add(x.id)});
+  group.append(date,content);root.append(group);
+ });
+ if(!root.children.length){const p=document.createElement('p');p.className='muted';p.textContent='Aucune intervention cette semaine.';root.append(p)}
+}
+function renderCalendar(){
+ const c=$('calendar');c.replaceChildren();c.classList.toggle('week',calMode==='week');
+ ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].forEach(t=>{const e=document.createElement('div');e.className='dayname';e.textContent=t;c.append(e)});
+ let dates=[];
+ if(calMode==='month'){
+  const first=weekStart(calendarMonth),last=monthShift(calendarMonth,1),end=shift(weekStart(last),6);
+  for(let d=first;d<=end;d=shift(d,1))dates.push(d);
+  $('period').textContent=parse(calendarMonth).toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  if(selectedCalendarDate.slice(0,7)!==calendarMonth.slice(0,7))selectedCalendarDate=calendarMonth;
+ }else{
+  for(let i=0;i<7;i++)dates.push(shift(calendarWeek,i));
+  $('period').textContent=`${labelDate(dates[0])} – ${labelDate(dates[6])}`;
+ }
+ dates.forEach(s=>c.append(cellDate(s,calMode==='month'&&s.slice(0,7)!==calendarMonth.slice(0,7))));
+ renderMonthDetail();renderMobileWeek(dates);
+}
 function render(){renderLists();renderCalendar()}
 function setTab(v){tab=v;$('todoView').classList.toggle('hidden',v!=='todo');$('calView').classList.toggle('hidden',v!=='cal');$('tabTodo').classList.toggle('active',v==='todo');$('tabCal').classList.toggle('active',v==='cal');if(v==='cal')renderCalendar()}
 function renderPicker(){const grid=$('pickCalendar');grid.replaceChildren();$('pickPeriod').textContent=parse(pickMonth).toLocaleDateString('fr-FR',{month:'long',year:'numeric'});$('pickMode').textContent=pickRange?'Période':'Jours individuels';$('pickMode').classList.toggle('active',pickRange);['L','M','M','J','V','S','D'].forEach(t=>{const n=document.createElement('div');n.className='dayname';n.textContent=t;grid.append(n)});const start=weekStart(pickMonth),end=monthShift(pickMonth,1);for(let s=start;s<end;s=shift(s,1)){const b=document.createElement('button');b.type='button';b.textContent=parse(s).getDate();b.dataset.date=s;b.classList.toggle('sel',selected.includes(s));b.classList.toggle('today',s===today());if(s.slice(0,7)!==pickMonth.slice(0,7))b.style.opacity='.35';grid.append(b)}$('pickedText').textContent=selected.length?`${selected.length} journée(s) : ${selected.map(labelDate).join(', ')}`:'Aucune date sélectionnée'}
