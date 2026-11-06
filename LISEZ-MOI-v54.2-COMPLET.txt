@@ -1,0 +1,13 @@
+WheelerBrothers Atelier v54.2 — ARCHIVE COMPLÈTE
+
+Cette archive contient l’ensemble des fichiers du site Atelier, assemblés à partir de :
+- dépôt wheelerBrothers-main fourni (v53.3) ;
+- correctif v54 ;
+- correctif v54.1 ;
+- correctif v54.2 corrigé (affichage iPhone, accueil et cache).
+
+Installation : remplacer les fichiers correspondants à la racine du dépôt GitHub.
+Ne pas supprimer les autres fichiers propres à votre dépôt qui ne figurent pas dans cette archive.
+Aucune modification des fonctions Firebase IA n’est requise.
+
+Le code n’a pas été testé sur un iPhone réel ni sur votre instance Firebase.
