@@ -1,0 +1,35 @@
+WHEELERBROTHERS ATELIER — VERSION 54 — PLANNING
+
+BASE : archive complète wheelerBrothers-main.zip fournie par l'utilisateur, v53.3 validée.
+
+INSTALLATION
+Copier uniquement les fichiers de ce ZIP à la racine du site Atelier en conservant les noms. Ne pas effacer les autres fichiers du dépôt. Publier sur GitHub Pages, recharger le site en ligne puis rouvrir la PWA si besoin.
+Aucun redéploiement de la fonction IA n'est nécessaire.
+
+NOUVEAU MODULE
+- Bouton Planning sur l'accueil.
+- À prévoir : interventions sans date ; En retard : opérations dont la dernière date est passée ; terminées consultables.
+- Calendrier mois/semaine, plusieurs interventions par jour, toutes en journées entières.
+- Sélection de jours non consécutifs ou période consécutive par toucher/glissement.
+- Création, édition, suppression ; statuts À prévoir / Planifié / Terminé.
+- Firestore temps réel : spaces/{spaceId}/planningItems/{itemId}.
+- Données de planning indépendantes des rapports et du carnet.
+
+ATTENTION AUX REGLES FIRESTORE
+Le nouveau module utilise une collection Firestore planningItems dans l'espace Atelier.
+Vérifier que vos règles Firestore existantes autorisent les opérations read/create/update/delete sur /spaces/{spaceId}/planningItems/{itemId} POUR LE COMPTE ATELIER UNIQUEMENT.
+Si la règle actuelle couvre déjà les sous-collections de l'espace, aucun changement nécessaire.
+Si la règle refuse cette collection, il faudra adapter les règles AVANT de pouvoir enregistrer. Ne pas ouvrir l'accès public.
+Le code atelier ne donne pas automatiquement un accès Firebase à plusieurs comptes ; les sessions doivent disposer des droits prévus par les règles.
+
+VERIFICATIONS RECOMMANDEES
+1. Ouvrir Planning depuis l'accueil, vérifier « Planning synchronisé avec Firebase ».
+2. Créer une intervention sans date et vérifier son apparition dans « À prévoir ».
+3. Ajouter des dates non consécutives et une période ; vérifier calendrier mois et semaine.
+4. Vérifier plusieurs interventions sur une date ; marquer terminé ; reporter ; supprimer.
+5. Tester depuis les deux appareils connectés et vérifier la synchronisation.
+6. Vérifier le comportement tactile sur iPhone réel (non testé ici).
+
+VERIFICATIONS LOCALES
+Syntaxe JavaScript vérifiée avec node --check ; archives vérifiées avec zipfile.testzip().
+Pas de test navigateur iOS ou Firebase en production réalisé.

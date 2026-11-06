@@ -1,4 +1,4 @@
-/* WheelerBrothers 53.3 — préparation volontaire, relecture obligatoire, nouveau rapport uniquement. */
+/* WheelerBrothers 54 — préparation volontaire, relecture obligatoire, nouveau rapport uniquement. */
 (function(){
   'use strict';
   const C=window.WBReportAICore,H=window.WBReportAIHost,CFG=window.WB_REPORT_AI_CONFIG;
