@@ -1,0 +1,11 @@
+WheelerBrothers Atelier v54.1 — Correctif de v54
+
+Copier les quatre fichiers HTML/JS à la racine du dépôt Atelier.
+- Planning : bandeau supérieur harmonisé avec Inventaire.
+- Formulaire : immatriculation et bouton Vérifier, marque, modèle, propriétaire modifiables.
+- Recherche explicite dans spaces/{spaceId}/tools/atelier, document payload JSON, correspondance normalisée de la plaque.
+- Affichage : marque modèle / plaque - propriétaire / travaux, dans la liste et le calendrier.
+- Anciennes interventions conservées (champ vehicle historique en repli).
+- Cache SW actualisé ; aucune modification du serveur IA ni des règles Firebase attendue.
+
+Tester sur Firebase réel : une fiche existante, une plaque inconnue, une intervention ancienne, iPhone.
