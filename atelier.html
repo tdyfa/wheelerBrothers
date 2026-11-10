@@ -67,6 +67,9 @@
   #opNotes{min-height:92px; resize:vertical; line-height:1.45}
   .field{margin-bottom:12px}
   .field:last-child{margin-bottom:0}
+  .plate-format-option{display:flex;align-items:center;gap:7px;width:max-content;max-width:100%;
+    margin:7px 0 0;font-size:12.5px;font-weight:500;cursor:pointer;min-height:25px}
+  .plate-format-option input{width:16px;height:16px;flex:none;margin:0;accent-color:var(--ink)}
 
   #search{margin-bottom:2px}
 
@@ -354,12 +357,12 @@
 
 <div class="app-bar">
   <div class="app-bar-inner">
-    <a class="app-back" href="index.html?v=54" aria-label="Accueil">‹</a>
+    <a class="app-back" href="index.html?v=55.1" aria-label="Accueil">‹</a>
     <div class="app-bar-title">
       <h1>Carnet d'atelier</h1>
       <div class="app-version-line">
         <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-        <span class="sub">Version 55</span>
+        <span class="sub">Version 55.1</span>
         <span id="syncWarn" style="display:none;"></span>
       </div>
     </div>
@@ -404,6 +407,7 @@
 
 <script src="firebase-config.js?v=54"></script>
 <script src="vehicle-info.js?v=54"></script>
+<script src="vehicle-input.js?v=55.1&build=2"></script>
 <script>
 const STORE_KEY = 'carnet_atelier_vehicules';
 let DATA = { vehicles: [] };
@@ -415,13 +419,13 @@ let editingOpId = null;
 function uid(){ return 'v' + Date.now() + Math.random().toString(16).slice(2,8); }
 
 function captureFormState(){
-  const ids = ['opDate','opKm','opTemps','opOperation','opRemu','opNotes','editMarque','editModele','editMoto','editPlate','editOwner','editPhone','editReg'];
+  const ids = ['opDate','opKm','opTemps','opOperation','opRemu','opNotes','editMarque','editModele','editMoto','editPlate','editOtherPlateFormat','editOwner','editPhone','editReg'];
   const captured = {};
   let anyFocused = false;
   ids.forEach(id=>{
     const el = document.getElementById(id);
     if(el){
-      captured[id] = el.value;
+      captured[id] = el.type === 'checkbox' ? el.checked : el.value;
       if(document.activeElement === el) anyFocused = true;
     }
   });
@@ -434,7 +438,10 @@ function restoreFormState(captured){
   Object.keys(captured).forEach(id=>{
     if(id === '_hadFocus') return;
     const el = document.getElementById(id);
-    if(el) el.value = captured[id];
+    if(el){
+      if(el.type === 'checkbox') el.checked = Boolean(captured[id]);
+      else el.value = captured[id];
+    }
   });
 }
 
@@ -1031,6 +1038,45 @@ function renderAnnualStatistics(selectedYear){
   document.getElementById('statisticsYear').addEventListener('change', event=>renderAnnualStatistics(event.target.value));
 }
 
+// Même normalisation SIV que le générateur de rapport : AA-123-BB.
+// Les anciennes plaques restent inchangées jusqu'à un enregistrement volontaire.
+function initVehiclePlateField(prefix, originalValue=''){
+  const input = document.getElementById(`${prefix}Plate`);
+  const other = document.getElementById(`${prefix}OtherPlateFormat`);
+  if(!input || !other) return;
+  WBVehicleInput.loadPlate(input, other, originalValue);
+  function update(){
+    const freeFormat = other.checked;
+    input.maxLength = freeFormat ? 40 : 9;
+    input.placeholder = freeFormat ? 'Immatriculation libre' : 'AA-123-BB';
+    input.setAttribute('autocapitalize', freeFormat ? 'off' : 'characters');
+    WBVehicleInput.formatPlate(input, freeFormat);
+  }
+  input.addEventListener('input', update);
+  other.addEventListener('change', update);
+  update();
+}
+
+function validatedVehiclePlate(prefix){
+  const input = document.getElementById(`${prefix}Plate`);
+  const freeFormat = document.getElementById(`${prefix}OtherPlateFormat`).checked;
+  WBVehicleInput.formatPlate(input, freeFormat);
+  if(!input.checkValidity()){
+    input.reportValidity();
+    input.focus();
+    return null;
+  }
+  return input.value.trim();
+}
+
+function findVehiclePlateDuplicate(plate, excludeId=null){
+  const key = WBVehicleInput.key(plate);
+  if(!key) return null; // L'immatriculation reste facultative.
+  return DATA.vehicles.find(v =>
+    v.id !== excludeId && WBVehicleInput.key(v.plate) === key
+  ) || null;
+}
+
 function renderMain(){
   const main = document.getElementById('main');
   const v = DATA.vehicles.find(x=>x.id === currentVehicleId);
@@ -1090,7 +1136,10 @@ function renderMain(){
               <div class="field"><label for="editMarque">Marque</label><input type="text" id="editMarque" placeholder="ex. Peugeot" value="${escapeHtml(vehicleInfo.brand)}"></div>
               <div class="field"><label for="editModele">Modèle</label><input type="text" id="editModele" placeholder="ex. 3008 II" value="${escapeHtml(vehicleInfo.model)}"></div>
               <div class="field"><label for="editMoto">Motorisation</label><input type="text" id="editMoto" value="${escapeHtml(v.motorisation)}"></div>
-              <div class="field"><label for="editPlate">Immatriculation</label><input type="text" id="editPlate" placeholder="ex. GC-705-LH" value="${escapeHtml(v.plate||'')}"></div>
+              <div class="field"><label for="editPlate">Immatriculation</label>
+                <input type="text" id="editPlate" placeholder="AA-123-BB" autocomplete="off" spellcheck="false" value="${escapeHtml(v.plate||'')}">
+                <label class="plate-format-option" for="editOtherPlateFormat"><input type="checkbox" id="editOtherPlateFormat"> Autre format</label>
+              </div>
               <div class="field"><label for="editOwner">Propriétaire</label><input type="text" id="editOwner" placeholder="ex. Jean Dupont" value="${escapeHtml(v.owner||'')}"></div><div class="field"><label for="editPhone">Téléphone du propriétaire</label><input type="tel" id="editPhone" placeholder="06 12 34 56 78" value="${escapeHtml(v.phone||'')}"></div>
               <div class="field"><label for="editReg">1ère mise en circulation</label><input type="date" id="editReg" value="${escapeHtml(vehicleInfo.isoReg)}"></div>
             </div>
@@ -1168,6 +1217,7 @@ function renderMain(){
   document.getElementById('btnAddOp').addEventListener('click', onAddOp);
   document.getElementById('btnDeleteVehicle').addEventListener('click', onDeleteVehicle);
   if(editingVehicleMode){
+    initVehiclePlateField('edit', v.plate||'');
     document.getElementById('btnSaveVehicleEdit').addEventListener('click', onSaveVehicleEdit);
     document.getElementById('btnCancelVehicleEdit').addEventListener('click', ()=>{ editingVehicleMode = false; renderMain(); });
   } else {
@@ -1193,10 +1243,16 @@ async function onSaveVehicleEdit(){
   const modele = document.getElementById('editModele').value.trim();
   const reg = document.getElementById('editReg').value;
   const motorisation = document.getElementById('editMoto').value.trim();
-  const plate = document.getElementById('editPlate').value.trim().toUpperCase();
+  const plate = validatedVehiclePlate('edit');
+  if(plate === null) return;
   const owner = document.getElementById('editOwner').value.trim(); const phone = document.getElementById('editPhone').value.trim();
   if(!modele || !motorisation){
     alert('Renseigne le modèle et la motorisation.');
+    return;
+  }
+  const duplicate = findVehiclePlateDuplicate(plate, v.id);
+  if(duplicate){
+    alert(`Cette immatriculation existe déjà dans le Carnet d’atelier : ${duplicate.modele||'véhicule'} (${duplicate.plate}).`);
     return;
   }
   Object.assign(v, WBVehicleInfo.fields(marque, modele, reg));
@@ -1305,7 +1361,8 @@ function renderNewVehicleForm(){
           </div>
           <div class="field">
             <label for="newPlate">Immatriculation</label>
-            <input type="text" id="newPlate" placeholder="ex. GC-705-LH">
+            <input type="text" id="newPlate" placeholder="AA-123-BB" autocomplete="off" spellcheck="false">
+            <label class="plate-format-option" for="newOtherPlateFormat"><input type="checkbox" id="newOtherPlateFormat"> Autre format</label>
           </div>
           <div class="field">
             <label for="newOwner">Propriétaire</label>
@@ -1324,6 +1381,7 @@ function renderNewVehicleForm(){
       </div>
     </div>
   `;
+  initVehiclePlateField('new');
   document.getElementById('btnCreateVehicle').addEventListener('click', onCreateVehicle);
   document.getElementById('btnCancelNew').addEventListener('click', renderMain);
 }
@@ -1333,12 +1391,19 @@ async function onCreateVehicle(){
   const modele = document.getElementById('newModele').value.trim();
   const reg = document.getElementById('newReg').value;
   const motorisation = document.getElementById('newMoto').value.trim();
-  const plate = document.getElementById('newPlate').value.trim().toUpperCase();
+  const plate = validatedVehiclePlate('new');
+  if(plate === null) return;
   const owner = document.getElementById('newOwner').value.trim(); const phone = document.getElementById('newPhone').value.trim();
   const statusEl = document.getElementById('newStatus');
   if(!modele || !motorisation){
     statusEl.className='status-msg status-err';
     statusEl.textContent = 'Renseigne le modèle et la motorisation.';
+    return;
+  }
+  const duplicate = findVehiclePlateDuplicate(plate);
+  if(duplicate){
+    statusEl.className='status-msg status-err';
+    statusEl.textContent = `Cette immatriculation existe déjà dans le Carnet d’atelier : ${duplicate.modele||'véhicule'} (${duplicate.plate}).`;
     return;
   }
   const v = { id: uid(), ...WBVehicleInfo.fields(marque, modele, reg), motorisation, plate, owner, phone, ops: [], updatedAt: Date.now() };
@@ -1400,7 +1465,7 @@ window.atelierReady
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=54&build=2',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=55.1&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
