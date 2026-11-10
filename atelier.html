@@ -59,7 +59,7 @@
   .card .body{padding:16px}
 
   label{display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin:0 0 5px}
-  input[type=text], input[type=date], input[type=number], textarea, select{
+  input[type=text], input[type=tel], input[type=date], input[type=number], textarea, select{
     width:100%; border:1px solid var(--line); background:var(--field);
     border-radius:9px; padding:9px 11px; font-size:14px; color:var(--ink); font-family:inherit;
   }
@@ -357,12 +357,12 @@
 
 <div class="app-bar">
   <div class="app-bar-inner">
-    <a class="app-back" href="index.html?v=55.1" aria-label="Accueil">‹</a>
+    <a class="app-back" href="index.html?v=55.2" aria-label="Accueil">‹</a>
     <div class="app-bar-title">
       <h1>Carnet d'atelier</h1>
       <div class="app-version-line">
         <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-        <span class="sub">Version 55.1</span>
+        <span class="sub">Version 55.2</span>
         <span id="syncWarn" style="display:none;"></span>
       </div>
     </div>
@@ -407,7 +407,7 @@
 
 <script src="firebase-config.js?v=54"></script>
 <script src="vehicle-info.js?v=54"></script>
-<script src="vehicle-input.js?v=55.1&build=2"></script>
+<script src="vehicle-input.js?v=55.2&build=2"></script>
 <script>
 const STORE_KEY = 'carnet_atelier_vehicules';
 let DATA = { vehicles: [] };
@@ -1140,7 +1140,7 @@ function renderMain(){
                 <input type="text" id="editPlate" placeholder="AA-123-BB" autocomplete="off" spellcheck="false" value="${escapeHtml(v.plate||'')}">
                 <label class="plate-format-option" for="editOtherPlateFormat"><input type="checkbox" id="editOtherPlateFormat"> Autre format</label>
               </div>
-              <div class="field"><label for="editOwner">Propriétaire</label><input type="text" id="editOwner" placeholder="ex. Jean Dupont" value="${escapeHtml(v.owner||'')}"></div><div class="field"><label for="editPhone">Téléphone du propriétaire</label><input type="tel" id="editPhone" placeholder="06 12 34 56 78" value="${escapeHtml(v.phone||'')}"></div>
+              <div class="field"><label for="editOwner">Propriétaire</label><input type="text" id="editOwner" placeholder="ex. Jean Dupont" value="${escapeHtml(v.owner||'')}"></div><div class="field"><label for="editPhone">Téléphone</label><input type="tel" id="editPhone" placeholder="06 12 34 56 78" value="${escapeHtml(v.phone||'')}"></div>
               <div class="field"><label for="editReg">1ère mise en circulation</label><input type="date" id="editReg" value="${escapeHtml(vehicleInfo.isoReg)}"></div>
             </div>
             ${vehicleInfo.inferred ? '<p class="hint">Ancienne fiche : marque et modèle séparés à partir du libellé. Vérifie-les avant d’enregistrer.</p>' : ''}
@@ -1366,7 +1366,11 @@ function renderNewVehicleForm(){
           </div>
           <div class="field">
             <label for="newOwner">Propriétaire</label>
-            <input type="text" id="newOwner" placeholder="ex. Jean Dupont"><label for="newPhone">Téléphone du propriétaire</label><input type="tel" id="newPhone" placeholder="06 12 34 56 78">
+            <input type="text" id="newOwner" placeholder="ex. Jean Dupont">
+          </div>
+          <div class="field">
+            <label for="newPhone">Téléphone</label>
+            <input type="tel" id="newPhone" placeholder="06 12 34 56 78">
           </div>
           <div class="field">
             <label for="newReg">1ère mise en circulation</label>
@@ -1465,7 +1469,7 @@ window.atelierReady
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=55.1&build=1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=55.2&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
