@@ -1,4 +1,4 @@
-/* WheelerBrothers Planning v55.4 — journées entières, synchronisation Firestore */
+/* WheelerBrothers Planning v55.5 — journées entières, synchronisation Firestore */
 (()=>{'use strict';
 const $=id=>document.getElementById(id), MS=86400000;
 const today=()=>{const d=new Date();return localISO(d)};
@@ -182,7 +182,7 @@ function chooseDate(s,drag=false){inspectedPickerDate=s;if(pickRange){if(!pickAn
 function updateSmsWarning(){
  const checked=$('sendSms').checked;
  const number=$('phone').value.trim();
- $('smsWarning').textContent=number?'Numéro invalide : vérifie le téléphone avant d’ouvrir Messages.':'Numéro du propriétaire manquant : complète-le pour ouvrir Messages.';
+ $('smsWarning').textContent=number?'Numéro invalide : vérifie le téléphone avant d’ouvrir Messages.':'Numéro de téléphone manquant : complète-le pour ouvrir Messages.';
  $('smsWarning').classList.toggle('hidden',!checked||WBPhone.isValid(number));
  $('smsHint').textContent=selected.length?'Notifications push automatiques lors de la planification ou d’un changement de dates.':'Sans date : aucune notification push.';
 }
@@ -199,18 +199,88 @@ function confirmationSmsText(x){
 function smsText(){
  return confirmationSmsText({brand:$('brand').value,model:$('model').value,plate:$('plate').value,dates:selected});
 }
-function showSmsAction(phone,text){
+// Le numéro saisi dans la fenêtre SMS est répercuté sur l'intervention
+// et sur la fiche correspondante du Carnet (si elle est identifiable).
+let smsContext=null,smsBusy=false;
+function smsStatus(text='',error=false){
+ const el=$('smsSaveStatus');el.textContent=text;
+ el.className=error?'error':'muted';
+}
+function showSmsAction(phone,text,context){
+ smsContext={
+  itemId:context?.itemId||null,
+  plate:String(context?.plate||'').trim(),
+  savedPhone:WBPhone.format(context?.savedPhone||''),
+  confirmedPhone:null,
+  lastResult:null
+ };
  $('smsNumber').value=WBPhone.format(phone||'');$('smsBody').value=text;
- $('smsMissing').textContent=phone?'Numéro invalide : vérifie le téléphone du propriétaire.':'Numéro manquant : renseigne-le avant d’ouvrir Messages.';
+ $('smsMissing').textContent=phone?'Numéro invalide : vérifie le numéro de téléphone.':'Numéro manquant : renseigne-le avant d’ouvrir Messages.';
  $('smsMissing').classList.toggle('hidden',WBPhone.isValid(phone));
+ smsStatus();
  $('smsDialog').showModal();
 }
-function openSmsApp(){
- const phone=$('smsNumber').value.trim();if(!WBPhone.isValid(phone)){$('smsMissing').textContent=phone?'Numéro invalide : vérifie le téléphone du propriétaire.':'Numéro manquant : renseigne-le avant d’ouvrir Messages.';$('smsMissing').classList.remove('hidden');$('smsNumber').focus();return} $('smsMissing').classList.add('hidden');
- // iOS support for prefilled body depends on browser; copy remains available.
- const separator=/iPad|iPhone|iPod/.test(navigator.userAgent)?'&':'?';
- window.location.href='sms:'+WBPhone.dial(phone)+separator+'body='+encodeURIComponent($('smsBody').value);
+function smsInputPhone(requireNumber){
+ const phone=$('smsNumber').value.trim();
+ if(!phone&&!requireNumber)return '';
+ if(!WBPhone.isValid(phone)){
+  $('smsMissing').textContent=phone?'Numéro de téléphone invalide : vérifie la saisie.':'Numéro de téléphone manquant : renseigne-le avant d’ouvrir Messages.';
+  $('smsMissing').classList.remove('hidden');$('smsNumber').focus();return null;
+ }
+ $('smsMissing').classList.add('hidden');
+ return WBPhone.format(phone);
 }
+async function persistSmsPhone(phone){
+ if(!phone)return {result:'skipped'};
+ if(!smsContext?.itemId||!collection)throw new Error('Intervention introuvable : impossible d’enregistrer le numéro.');
+ if(smsContext.confirmedPhone&&WBPhone.same(smsContext.confirmedPhone,phone))return {result:smsContext.lastResult||'unchanged'};
+ const id=smsContext.itemId;
+ if(!WBPhone.same(smsContext.savedPhone,phone)){
+  await collection.doc(id).update({phone,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+  smsContext.savedPhone=phone;
+ }
+ // La mise à jour de la fiche véhicule réutilise la transaction sécurisée
+ // créée en v55.3 (doublons, conflit de numéros, modification concurrente).
+ const result=await syncPhoneToCarnet(smsContext.plate,phone);
+ smsContext.confirmedPhone=phone;
+ smsContext.lastResult=result;
+ // Le formulaire « Modifier l'intervention » peut rester ouvert derrière
+ // cette fenêtre. Sans cette mise à jour, il pourrait écraser le numéro sauvé.
+ if(editing===id&&$('editor').open){$('phone').value=phone;updateSmsWarning()}
+ return {result};
+}
+function smsSavedNote(result){
+ if(result==='kept')return 'Numéro enregistré dans l’intervention ; le numéro existant du Carnet a été conservé.';
+ if(result==='ambiguous')return 'Numéro enregistré dans l’intervention, mais plusieurs fiches correspondent à la plaque. Le Carnet n’a pas été modifié.';
+ if(result==='no-match'||result==='skipped')return 'Numéro enregistré dans l’intervention. Aucune fiche véhicule correspondante n’a été mise à jour.';
+ return 'Numéro de téléphone enregistré dans l’intervention et le Carnet d’atelier.';
+}
+async function completeSmsAction(openMessages){
+ if(smsBusy)return;
+ const phone=smsInputPhone(openMessages);
+ if(phone===null)return;
+ smsBusy=true;$('smsClose').disabled=true;$('smsOpen').disabled=true;
+ smsStatus(phone?'Enregistrement du numéro de téléphone…':'');
+ try{
+  // Les fonctions d'enregistrement sont attendues AVANT l'ouverture de
+  // Messages, pour éviter que le navigateur suspendu interrompe Firestore.
+  let result='skipped';
+  if(phone){({result}=await persistSmsPhone(phone));smsStatus(smsSavedNote(result))}
+  if(!openMessages){
+   if(phone)message(smsSavedNote(result),['ambiguous','no-match'].includes(result));
+   $('smsDialog').close();smsContext=null;return
+  }
+  // Sur iOS, une ouverture d'application après un appel réseau asynchrone
+  // peut être bloquée : un deuxième tap reste possible, sans nouvelle écriture.
+  smsStatus('Numéro enregistré. Si Messages ne s’ouvre pas, touche à nouveau « Ouvrir Messages ».');
+  const separator=/iPad|iPhone|iPod/.test(navigator.userAgent)?'&':'?';
+  window.location.href='sms:'+WBPhone.dial(phone)+separator+'body='+encodeURIComponent($('smsBody').value);
+ }catch(err){
+  smsStatus('Numéro non synchronisé : '+err.message+'. Réessaie avant de fermer ou d’ouvrir Messages.',true);
+ }finally{smsBusy=false;$('smsClose').disabled=false;$('smsOpen').disabled=false}
+}
+function closeSmsDialog(){return completeSmsAction(false)}
+function openSmsApp(){return completeSmsAction(true)}
 
 // v55.3 — synchronise le téléphone avec la fiche du Carnet d’atelier, sans
 // modifier les autres champs ni les opérations du véhicule.
@@ -276,14 +346,15 @@ async function loadPhoneFromCarnet(plate){
 async function sendConfirmationFromCalendar(){
  const x=items.find(v=>v.id===editing);if(!x||!x.dates.length)return;
  let phone=x.phone||await loadPhoneFromCarnet(x.plate);
- showSmsAction(phone,confirmationSmsText(x));
+ showSmsAction(phone,confirmationSmsText(x),{itemId:x.id,plate:x.plate,savedPhone:x.phone});
 }
 
 function openEditor(x,dates){editing=x?.id||null;selected=unique(dates||x?.dates||[]);pickAnchor=null;pickRange=false;pickMonth=firstMonth(selected[0]||today());inspectedPickerDate=selected[0]||today();$('editorTitle').textContent=x?'Modifier l’intervention':'Nouvelle intervention';$('otherPlateFormat').checked=isOtherPlateFormat(x?.plate);$('plate').value=x?.plate||'';updatePlateDisplay();$('brand').value=x?.brand||'';$('model').value=x?.model||(!x?.brand?x?.vehicle||'':'');$('owner').value=x?.owner||'';$('phone').value=WBPhone.format(x?.phone||'');$('sendSms').checked=false;updateSmsWarning();lookupRevision++;lookupMessage('');$('job').value=x?.job||'';$('notes').value=x?.notes||'';$('finish').classList.toggle('hidden',!x||x.status==='done');$('reopen').classList.toggle('hidden',!x||x.status!=='done');$('delete').classList.toggle('hidden',!x);$('calendarSms').classList.toggle('hidden',!x||!x.dates.length);$('formError').textContent='';updateSmsWarning();renderPicker();$('editor').showModal();loadKnownVehicles()}
 function closeEditor(){$('editor').close()}
 async function save(ev){ev.preventDefault();if(!collection)return;$('formError').textContent='';if(!WBPhone.validOrReport($('phone'))){$('formError').textContent='Vérifie le numéro de téléphone.';return}const job=$('job').value.trim();if(!job){$('formError').textContent='Renseigne les travaux prévus.';return}const previous=items.find(x=>x.id===editing);const status=previous?.status==='done'?'done':selected.length?'planned':'todo';const payload={vehicle:[$('brand').value.trim(),$('model').value.trim()].filter(Boolean).join(' '),plate:($('otherPlateFormat').checked?$('plate').value.trim():formatFrenchPlate($('plate').value)),brand:$('brand').value.trim(),model:$('model').value.trim(),owner:$('owner').value.trim(),phone:WBPhone.format($('phone').value),job,notes:$('notes').value.trim(),status,dates:unique(selected),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};$('save').disabled=true;try{
+ let savedItemId=editing;
  if(editing)await collection.doc(editing).update(payload);
- else await collection.add({...payload,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+ else {const ref=await collection.add({...payload,createdAt:firebase.firestore.FieldValue.serverTimestamp()});savedItemId=ref.id}
  // L'intervention est sauvée séparément. Un problème de synchronisation du
  // téléphone ne doit jamais annuler les dates ou les travaux enregistrés.
  let carnetResult='skipped',carnetError=null;
@@ -294,7 +365,7 @@ async function save(ev){ev.preventDefault();if(!collection)return;$('formError')
  const wantsSms=$('sendSms').checked&&payload.dates.length;
  const phone=payload.phone,text=wantsSms?smsText():'';
  closeEditor();
- if(wantsSms)showSmsAction(phone,text);
+ if(wantsSms)showSmsAction(phone,text,{itemId:savedItemId,plate:payload.plate,savedPhone:phone});
  if(carnetError){alert('Intervention enregistrée, mais impossible de mettre à jour le téléphone dans le Carnet d’atelier : '+carnetError.message)}
  else if(carnetResult==='ambiguous'){alert('Intervention enregistrée, mais plusieurs fiches du Carnet correspondent à cette plaque. Le téléphone du Carnet n’a pas été modifié.')}
  else if(carnetResult==='kept'){message('Intervention enregistrée. Numéro existant conservé dans le Carnet d’atelier.')}
@@ -310,7 +381,7 @@ async function setCompletion(done){
  finally{btn.disabled=false}
 }
 async function remove(){if(!editing||!collection||!confirm('Supprimer définitivement cette intervention ?'))return;try{await collection.doc(editing).delete();closeEditor()}catch(err){$('formError').textContent=err.message}}
-$('vehicleSearch').addEventListener('input',renderVehicleOptions);$('vehicleSelect').addEventListener('change',selectKnownVehicle);$('lookupVehicle').onclick=lookupVehicle;$('plate').addEventListener('input',()=>{updatePlateDisplay();lookupRevision++;lookupMessage('')});$('otherPlateFormat').addEventListener('change',()=>{updatePlateDisplay();lookupRevision++;lookupMessage('')});$('add').onclick=()=>openEditor(null);$('close').onclick=closeEditor;$('cancel').onclick=closeEditor;$('form').onsubmit=save;$('delete').onclick=remove;$('calendarSms').onclick=sendConfirmationFromCalendar;$('sendSms').onchange=updateSmsWarning;WBPhone.bind($('phone'));$('phone').addEventListener('input',updateSmsWarning);WBPhone.bind($('smsNumber'));$('smsOpen').onclick=openSmsApp;$('smsClose').onclick=()=>$('smsDialog').close();$('smsCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('smsBody').value)}catch{alert('Sélectionne le texte pour le copier.')}};$('finish').onclick=()=>setCompletion(true);$('reopen').onclick=()=>setCompletion(false);$('tabTodo').onclick=()=>setTab('todo');$('tabCal').onclick=()=>setTab('cal');$('month').onclick=()=>{calMode='month';$('month').classList.add('active');$('week').classList.remove('active');renderCalendar()};$('week').onclick=()=>{calMode='week';$('week').classList.add('active');$('month').classList.remove('active');renderCalendar()};$('prev').onclick=()=>{if(calMode==='month')calendarMonth=monthShift(calendarMonth,-1);else calendarWeek=shift(calendarWeek,-7);renderCalendar()};$('next').onclick=()=>{if(calMode==='month')calendarMonth=monthShift(calendarMonth,1);else calendarWeek=shift(calendarWeek,7);renderCalendar()};$('today').onclick=()=>{calendarMonth=firstMonth(today());calendarWeek=weekStart(today());renderCalendar()};$('showDone').onchange=renderCalendar;$('pickPrev').onclick=()=>{pickMonth=monthShift(pickMonth,-1);renderPicker()};$('pickNext').onclick=()=>{pickMonth=monthShift(pickMonth,1);renderPicker()};$('pickMode').onclick=()=>{pickRange=!pickRange;pickAnchor=null;renderPicker()};$('clearDates').onclick=()=>{selected=[];pickAnchor=null;renderPicker()};
+$('vehicleSearch').addEventListener('input',renderVehicleOptions);$('vehicleSelect').addEventListener('change',selectKnownVehicle);$('lookupVehicle').onclick=lookupVehicle;$('plate').addEventListener('input',()=>{updatePlateDisplay();lookupRevision++;lookupMessage('')});$('otherPlateFormat').addEventListener('change',()=>{updatePlateDisplay();lookupRevision++;lookupMessage('')});$('add').onclick=()=>openEditor(null);$('close').onclick=closeEditor;$('cancel').onclick=closeEditor;$('form').onsubmit=save;$('delete').onclick=remove;$('calendarSms').onclick=sendConfirmationFromCalendar;$('sendSms').onchange=updateSmsWarning;WBPhone.bind($('phone'));$('phone').addEventListener('input',updateSmsWarning);WBPhone.bind($('smsNumber'));$('smsOpen').onclick=openSmsApp;$('smsClose').onclick=closeSmsDialog;$('smsDialog').addEventListener('cancel',e=>{e.preventDefault();closeSmsDialog()});$('smsNumber').addEventListener('input',()=>{smsStatus();if(smsContext)smsContext.confirmedPhone=null});$('smsCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('smsBody').value)}catch{alert('Sélectionne le texte pour le copier.')}};$('finish').onclick=()=>setCompletion(true);$('reopen').onclick=()=>setCompletion(false);$('tabTodo').onclick=()=>setTab('todo');$('tabCal').onclick=()=>setTab('cal');$('month').onclick=()=>{calMode='month';$('month').classList.add('active');$('week').classList.remove('active');renderCalendar()};$('week').onclick=()=>{calMode='week';$('week').classList.add('active');$('month').classList.remove('active');renderCalendar()};$('prev').onclick=()=>{if(calMode==='month')calendarMonth=monthShift(calendarMonth,-1);else calendarWeek=shift(calendarWeek,-7);renderCalendar()};$('next').onclick=()=>{if(calMode==='month')calendarMonth=monthShift(calendarMonth,1);else calendarWeek=shift(calendarWeek,7);renderCalendar()};$('today').onclick=()=>{calendarMonth=firstMonth(today());calendarWeek=weekStart(today());renderCalendar()};$('showDone').onchange=renderCalendar;$('pickPrev').onclick=()=>{pickMonth=monthShift(pickMonth,-1);renderPicker()};$('pickNext').onclick=()=>{pickMonth=monthShift(pickMonth,1);renderPicker()};$('pickMode').onclick=()=>{pickRange=!pickRange;pickAnchor=null;renderPicker()};$('clearDates').onclick=()=>{selected=[];pickAnchor=null;renderPicker()};
 // Pointer events support finger drag for contiguous ranges; individual tapping for noncontiguous days.
 const picker=$('pickCalendar');let dragged=false;
 picker.addEventListener('pointerdown',e=>{const b=e.target.closest('button[data-date]');if(!b||!pickRange)return;pointerDown=true;dragStart=b.dataset.date;dragged=false});
@@ -328,7 +399,7 @@ async function activatePush(){
  try{
   const permission=await Notification.requestPermission();
   if(permission!=='granted'){label.textContent='Notifications non autorisées.';return}
-  const registration=await navigator.serviceWorker.register('sw.js?v=55',{updateViaCache:'none'});
+  const registration=await navigator.serviceWorker.register('sw.js?v=55.5',{updateViaCache:'none'});
   messaging=firebase.messaging();
   const token=await messaging.getToken({vapidKey:vapid,serviceWorkerRegistration:registration});
   if(!token)throw Error('Aucun jeton de notification obtenu');
