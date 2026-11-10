@@ -357,12 +357,12 @@
 
 <div class="app-bar">
   <div class="app-bar-inner">
-    <a class="app-back" href="index.html?v=55.2" aria-label="Accueil">‹</a>
+    <a class="app-back" href="index.html?v=55.3" aria-label="Accueil">‹</a>
     <div class="app-bar-title">
       <h1>Carnet d'atelier</h1>
       <div class="app-version-line">
         <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-        <span class="sub">Version 55.2</span>
+        <span class="sub">Version 55.3</span>
         <span id="syncWarn" style="display:none;"></span>
       </div>
     </div>
@@ -407,7 +407,7 @@
 
 <script src="firebase-config.js?v=54"></script>
 <script src="vehicle-info.js?v=54"></script>
-<script src="vehicle-input.js?v=55.2&build=2"></script>
+<script src="vehicle-input.js?v=55.3&build=2"></script>
 <script>
 const STORE_KEY = 'carnet_atelier_vehicules';
 let DATA = { vehicles: [] };
@@ -1469,7 +1469,7 @@ window.atelierReady
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=55.2&build=1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=55.3&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>

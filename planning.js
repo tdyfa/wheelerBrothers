@@ -1,4 +1,4 @@
-/* WheelerBrothers Planning v55 — journées entières, synchronisation Firestore */
+/* WheelerBrothers Planning v55.3 — journées entières, synchronisation Firestore */
 (()=>{'use strict';
 const $=id=>document.getElementById(id), MS=86400000;
 const today=()=>{const d=new Date();return localISO(d)};
@@ -208,6 +208,60 @@ function openSmsApp(){
  const separator=/iPad|iPhone|iPod/.test(navigator.userAgent)?'&':'?';
  window.location.href='sms:'+encodeURIComponent(phone)+separator+'body='+encodeURIComponent($('smsBody').value);
 }
+
+// v55.3 — synchronise le téléphone avec la fiche du Carnet d’atelier, sans
+// modifier les autres champs ni les opérations du véhicule.
+function carnetDataFromSnapshot(snap){
+ const data=JSON.parse(snap.data().payload||'{"vehicles":[]}');
+ if(!data||!Array.isArray(data.vehicles))throw new Error('Format du Carnet d’atelier invalide.');
+ return data;
+}
+function matchingCarnetVehicles(data,plateKey){
+ return data.vehicles.filter(v=>v&&typeof v==='object'&&normalizePlate(v.plate)===plateKey);
+}
+function phoneKey(value){return String(value||'').replace(/[\s().-]/g,'')}
+function samePhone(a,b){return phoneKey(a)===phoneKey(b)}
+async function syncPhoneToCarnet(plate,phone){
+ const key=normalizePlate(plate),number=String(phone||'').trim();
+ // Ne jamais effacer le numéro d'une fiche lors d'une saisie vide dans le Planning.
+ if(!key||!number||!activeSpaceId)return 'skipped';
+ const docRef=db.collection('spaces').doc(activeSpaceId).collection('tools').doc('atelier');
+ const snapshot=await docRef.get({source:'server'});
+ if(!snapshot.exists)return 'no-match';
+ const initial=carnetDataFromSnapshot(snapshot);
+ const matches=matchingCarnetVehicles(initial,key);
+ if(!matches.length)return 'no-match';
+ if(matches.length!==1)return 'ambiguous';
+ const original=matches[0];
+ const current=String(original.phone||original.telephone||'').trim();
+ if(samePhone(current,number))return 'unchanged';
+ // L'utilisateur garde la possibilité de conserver le numéro du Carnet,
+ // tout en utilisant un numéro différent pour cette intervention.
+ if(current&&!confirm(`Le Carnet d’atelier contient déjà le numéro ${current} pour ${original.plate||plate}.\n\nLe remplacer par ${number} ?`))return 'kept';
+ const vehicleId=original.id;
+ let updated=false;
+ await db.runTransaction(async tx=>{
+  updated=false; // La transaction peut être rejouée en cas d'écriture concurrente.
+  const latest=await tx.get(docRef);
+  if(!latest.exists)throw new Error('La fiche du Carnet d’atelier n’existe plus.');
+  const data=carnetDataFromSnapshot(latest);
+  const found=matchingCarnetVehicles(data,key);
+  if(found.length!==1||(vehicleId&&found[0].id!==vehicleId)){
+   throw new Error('La fiche véhicule a changé pendant l’enregistrement. Vérifie le Carnet d’atelier.');
+  }
+  const v=found[0];
+  const latestPhone=String(v.phone||v.telephone||'').trim();
+  if(samePhone(latestPhone,number))return;
+  if(!samePhone(latestPhone,current)){
+   throw new Error('Le téléphone a été modifié sur un autre appareil. Vérifie la fiche avant de recommencer.');
+  }
+  v.phone=number;
+  v.updatedAt=Date.now();
+  tx.update(docRef,{payload:JSON.stringify(data),updatedAt:Date.now()});
+  updated=true;
+ });
+ return updated?'updated':'unchanged';
+}
 async function loadPhoneFromCarnet(plate){
  if(!plate||!activeSpaceId)return '';
  try{
@@ -225,7 +279,25 @@ async function sendConfirmationFromCalendar(){
 
 function openEditor(x,dates){editing=x?.id||null;selected=unique(dates||x?.dates||[]);pickAnchor=null;pickRange=false;pickMonth=firstMonth(selected[0]||today());inspectedPickerDate=selected[0]||today();$('editorTitle').textContent=x?'Modifier l’intervention':'Nouvelle intervention';$('otherPlateFormat').checked=isOtherPlateFormat(x?.plate);$('plate').value=x?.plate||'';updatePlateDisplay();$('brand').value=x?.brand||'';$('model').value=x?.model||(!x?.brand?x?.vehicle||'':'');$('owner').value=x?.owner||'';$('phone').value=x?.phone||'';$('sendSms').checked=false;updateSmsWarning();lookupRevision++;lookupMessage('');$('job').value=x?.job||'';$('notes').value=x?.notes||'';$('finish').classList.toggle('hidden',!x||x.status==='done');$('reopen').classList.toggle('hidden',!x||x.status!=='done');$('delete').classList.toggle('hidden',!x);$('calendarSms').classList.toggle('hidden',!x||!x.dates.length);$('formError').textContent='';updateSmsWarning();renderPicker();$('editor').showModal();loadKnownVehicles()}
 function closeEditor(){$('editor').close()}
-async function save(ev){ev.preventDefault();if(!collection)return;$('formError').textContent='';const job=$('job').value.trim();if(!job){$('formError').textContent='Renseigne les travaux prévus.';return}const previous=items.find(x=>x.id===editing);const status=previous?.status==='done'?'done':selected.length?'planned':'todo';const payload={vehicle:[$('brand').value.trim(),$('model').value.trim()].filter(Boolean).join(' '),plate:($('otherPlateFormat').checked?$('plate').value.trim():formatFrenchPlate($('plate').value)),brand:$('brand').value.trim(),model:$('model').value.trim(),owner:$('owner').value.trim(),phone:$('phone').value.trim(),job,notes:$('notes').value.trim(),status,dates:unique(selected),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};$('save').disabled=true;try{if(editing)await collection.doc(editing).update(payload);else await collection.add({...payload,createdAt:firebase.firestore.FieldValue.serverTimestamp()});const wantsSms=$('sendSms').checked&&payload.dates.length;const phone=payload.phone;const text=wantsSms?smsText():'';closeEditor();if(wantsSms)showSmsAction(phone,text)}catch(err){$('formError').textContent='Enregistrement impossible : '+err.message}finally{$('save').disabled=false}}
+async function save(ev){ev.preventDefault();if(!collection)return;$('formError').textContent='';const job=$('job').value.trim();if(!job){$('formError').textContent='Renseigne les travaux prévus.';return}const previous=items.find(x=>x.id===editing);const status=previous?.status==='done'?'done':selected.length?'planned':'todo';const payload={vehicle:[$('brand').value.trim(),$('model').value.trim()].filter(Boolean).join(' '),plate:($('otherPlateFormat').checked?$('plate').value.trim():formatFrenchPlate($('plate').value)),brand:$('brand').value.trim(),model:$('model').value.trim(),owner:$('owner').value.trim(),phone:$('phone').value.trim(),job,notes:$('notes').value.trim(),status,dates:unique(selected),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};$('save').disabled=true;try{
+ if(editing)await collection.doc(editing).update(payload);
+ else await collection.add({...payload,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+ // L'intervention est sauvée séparément. Un problème de synchronisation du
+ // téléphone ne doit jamais annuler les dates ou les travaux enregistrés.
+ let carnetResult='skipped',carnetError=null;
+ if(payload.phone&&normalizePlate(payload.plate)){
+  try{carnetResult=await syncPhoneToCarnet(payload.plate,payload.phone)}
+  catch(err){carnetError=err}
+ }
+ const wantsSms=$('sendSms').checked&&payload.dates.length;
+ const phone=payload.phone,text=wantsSms?smsText():'';
+ closeEditor();
+ if(wantsSms)showSmsAction(phone,text);
+ if(carnetError){alert('Intervention enregistrée, mais impossible de mettre à jour le téléphone dans le Carnet d’atelier : '+carnetError.message)}
+ else if(carnetResult==='ambiguous'){alert('Intervention enregistrée, mais plusieurs fiches du Carnet correspondent à cette plaque. Le téléphone du Carnet n’a pas été modifié.')}
+ else if(carnetResult==='kept'){message('Intervention enregistrée. Numéro existant conservé dans le Carnet d’atelier.')}
+}catch(err){$('formError').textContent='Enregistrement impossible : '+err.message}
+finally{$('save').disabled=false}}
 async function setCompletion(done){
  if(!editing||!collection)return;
  const btn=done?$('finish'):$('reopen');btn.disabled=true;
