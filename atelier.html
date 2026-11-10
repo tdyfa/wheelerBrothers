@@ -359,7 +359,7 @@
       <h1>Carnet d'atelier</h1>
       <div class="app-version-line">
         <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-        <span class="sub">Version 54</span>
+        <span class="sub">Version 55</span>
         <span id="syncWarn" style="display:none;"></span>
       </div>
     </div>
@@ -415,7 +415,7 @@ let editingOpId = null;
 function uid(){ return 'v' + Date.now() + Math.random().toString(16).slice(2,8); }
 
 function captureFormState(){
-  const ids = ['opDate','opKm','opTemps','opOperation','opRemu','opNotes','editMarque','editModele','editMoto','editPlate','editOwner','editReg'];
+  const ids = ['opDate','opKm','opTemps','opOperation','opRemu','opNotes','editMarque','editModele','editMoto','editPlate','editOwner','editPhone','editReg'];
   const captured = {};
   let anyFocused = false;
   ids.forEach(id=>{
@@ -1091,7 +1091,7 @@ function renderMain(){
               <div class="field"><label for="editModele">Modèle</label><input type="text" id="editModele" placeholder="ex. 3008 II" value="${escapeHtml(vehicleInfo.model)}"></div>
               <div class="field"><label for="editMoto">Motorisation</label><input type="text" id="editMoto" value="${escapeHtml(v.motorisation)}"></div>
               <div class="field"><label for="editPlate">Immatriculation</label><input type="text" id="editPlate" placeholder="ex. GC-705-LH" value="${escapeHtml(v.plate||'')}"></div>
-              <div class="field"><label for="editOwner">Propriétaire</label><input type="text" id="editOwner" placeholder="ex. Jean Dupont" value="${escapeHtml(v.owner||'')}"></div>
+              <div class="field"><label for="editOwner">Propriétaire</label><input type="text" id="editOwner" placeholder="ex. Jean Dupont" value="${escapeHtml(v.owner||'')}"></div><div class="field"><label for="editPhone">Téléphone du propriétaire</label><input type="tel" id="editPhone" placeholder="06 12 34 56 78" value="${escapeHtml(v.phone||'')}"></div>
               <div class="field"><label for="editReg">1ère mise en circulation</label><input type="date" id="editReg" value="${escapeHtml(vehicleInfo.isoReg)}"></div>
             </div>
             ${vehicleInfo.inferred ? '<p class="hint">Ancienne fiche : marque et modèle séparés à partir du libellé. Vérifie-les avant d’enregistrer.</p>' : ''}
@@ -1194,7 +1194,7 @@ async function onSaveVehicleEdit(){
   const reg = document.getElementById('editReg').value;
   const motorisation = document.getElementById('editMoto').value.trim();
   const plate = document.getElementById('editPlate').value.trim().toUpperCase();
-  const owner = document.getElementById('editOwner').value.trim();
+  const owner = document.getElementById('editOwner').value.trim(); const phone = document.getElementById('editPhone').value.trim();
   if(!modele || !motorisation){
     alert('Renseigne le modèle et la motorisation.');
     return;
@@ -1203,6 +1203,7 @@ async function onSaveVehicleEdit(){
   v.motorisation = motorisation;
   v.plate = plate;
   v.owner = owner;
+  v.phone = phone;
   v.updatedAt = Date.now();
   editingVehicleMode = false;
   const ok = await saveData();
@@ -1308,7 +1309,7 @@ function renderNewVehicleForm(){
           </div>
           <div class="field">
             <label for="newOwner">Propriétaire</label>
-            <input type="text" id="newOwner" placeholder="ex. Jean Dupont">
+            <input type="text" id="newOwner" placeholder="ex. Jean Dupont"><label for="newPhone">Téléphone du propriétaire</label><input type="tel" id="newPhone" placeholder="06 12 34 56 78">
           </div>
           <div class="field">
             <label for="newReg">1ère mise en circulation</label>
@@ -1333,14 +1334,14 @@ async function onCreateVehicle(){
   const reg = document.getElementById('newReg').value;
   const motorisation = document.getElementById('newMoto').value.trim();
   const plate = document.getElementById('newPlate').value.trim().toUpperCase();
-  const owner = document.getElementById('newOwner').value.trim();
+  const owner = document.getElementById('newOwner').value.trim(); const phone = document.getElementById('newPhone').value.trim();
   const statusEl = document.getElementById('newStatus');
   if(!modele || !motorisation){
     statusEl.className='status-msg status-err';
     statusEl.textContent = 'Renseigne le modèle et la motorisation.';
     return;
   }
-  const v = { id: uid(), ...WBVehicleInfo.fields(marque, modele, reg), motorisation, plate, owner, ops: [], updatedAt: Date.now() };
+  const v = { id: uid(), ...WBVehicleInfo.fields(marque, modele, reg), motorisation, plate, owner, phone, ops: [], updatedAt: Date.now() };
   DATA.vehicles.push(v);
   statusEl.textContent = 'Enregistrement…';
   const ok = await saveData();

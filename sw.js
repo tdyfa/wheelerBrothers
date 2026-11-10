@@ -1,12 +1,12 @@
-const CACHE_NAME = 'outils-atelier-v54.6-r1';
+const CACHE_NAME = 'outils-atelier-v55-r1';
 const ASSETS = [
   './',
   './index.html',
-  './atelier.html?v=54',
+  './atelier.html?v=55',
   './rapport.html?v=54',
   './inventaire.html?v=54',
-  './planning.html?v=54.6',
-  './planning.js?v=54.6',
+  './planning.html?v=55',
+  './planning.js?v=55',
   './manifest.json?v=54',
   './firebase-config.js?v=54',
   './apple-touch-icon.png?v=54',
@@ -65,3 +65,13 @@ self.addEventListener('fetch', (event) => {
     }
   })());
 });
+
+// Notifications push Planning (Firebase Cloud Messaging)
+self.addEventListener('push', event => {
+ let payload={};try{payload=event.data?.json()||{}}catch{}
+ // FCM notifications are handled by the Firebase messaging service worker integration below.
+ if(payload.notification)return;
+ const data=payload.data||{};
+ event.waitUntil(self.registration.showNotification(data.title||'WheelerBrothers Planning',{body:data.body||'Intervention mise à jour',icon:'./icon-192.png',data:{url:'./planning.html?v=55'}}));
+});
+self.addEventListener('notificationclick',event=>{event.notification.close();event.waitUntil(self.clients.openWindow('./planning.html?v=55'))});

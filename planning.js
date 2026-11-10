@@ -1,4 +1,4 @@
-/* WheelerBrothers Planning v54.5 — journées entières, synchronisation Firestore */
+/* WheelerBrothers Planning v55 — journées entières, synchronisation Firestore */
 (()=>{'use strict';
 const $=id=>document.getElementById(id), MS=86400000;
 const today=()=>{const d=new Date();return localISO(d)};
@@ -23,7 +23,7 @@ function isOtherPlateFormat(v){const s=String(v||'').trim();return !!s&&!/^[A-Z]
 let knownVehicles=[],vehicleLoadToken=0;
 function vehicleInfo(v){
  const info=window.WBVehicleInfo?.fromVehicle?.(v);
- return {plate:String(v.plate||'').trim(),brand:String(info?.brand||v.marque||'').trim(),model:String(info?.model||v.modeleDetail||v.modele||'').trim(),owner:String(v.owner||'').trim()};
+ return {plate:String(v.plate||'').trim(),brand:String(info?.brand||v.marque||'').trim(),model:String(info?.model||v.modeleDetail||v.modele||'').trim(),owner:String(v.owner||'').trim(),phone:String(v.phone||v.telephone||'').trim()};
 }
 const vehicleSort=new Intl.Collator('fr',{sensitivity:'base',numeric:true});
 function renderVehicleOptions(){
@@ -56,14 +56,14 @@ async function loadKnownVehicles(){
 function selectKnownVehicle(){
  const i=$('vehicleSelect').value;if(i==='')return;
  const v=knownVehicles[Number(i)];if(!v)return;
- const fields=[['plate',v.plate],['brand',v.brand],['model',v.model],['owner',v.owner]];
+ const fields=[['plate',v.plate],['brand',v.brand],['model',v.model],['owner',v.owner],['phone',v.phone]];
  if(fields.some(([id,value])=>value&&$(id).value.trim()&&$(id).value.trim()!==value)&&!confirm('Remplacer les informations déjà saisies par celles du carnet ?')){$('vehicleSelect').value='';return}
  $('otherPlateFormat').checked=isOtherPlateFormat(v.plate);
  fields.forEach(([id,value])=>{$(id).value=value});updatePlateDisplay();lookupRevision++;lookupMessage('Véhicule sélectionné dans le carnet.');
 }
 let lookupRevision=0;
 function lookupMessage(text,error=false){$('lookupStatus').textContent=text;$('lookupStatus').className=(error?'error':'muted')+' lookup-status'}
-async function lookupVehicle(){const plate=normalizePlate($('plate').value);const revision=++lookupRevision;if(!plate){lookupMessage('Saisis une plaque avant de vérifier.');return}const button=$('lookupVehicle');button.disabled=true;lookupMessage('Recherche dans le carnet d’atelier…');try{const snap=await db.collection('spaces').doc(activeSpaceId).collection('tools').doc('atelier').get({source:'server'});if(revision!==lookupRevision)return;const data=snap.exists?JSON.parse(snap.data().payload||'{"vehicles":[]}'):{vehicles:[]};if(!Array.isArray(data.vehicles))throw new Error('Format de carnet invalide');const matches=data.vehicles.filter(v=>v&&normalizePlate(v.plate)===plate);if(matches.length!==1){lookupMessage(matches.length?'Plusieurs fiches correspondent à cette plaque : remplissage automatique désactivé.':'Aucune fiche trouvée. Tu peux renseigner les informations manuellement.',matches.length>1);return}const v=matches[0];const info=window.WBVehicleInfo?.fromVehicle?.(v);const brand=info?.brand||String(v.marque||'').trim();const model=info?.model||String(v.modeleDetail||v.modele||'').trim();const owner=String(v.owner||'').trim();const fields=[['brand',brand],['model',model],['owner',owner]];const conflicts=fields.filter(([id,value])=>value&&$(id).value.trim()&&$(id).value.trim()!==value);if(conflicts.length&&!confirm('Remplacer les informations déjà saisies par celles du carnet ?')){fields.forEach(([id,value])=>{if(!$(id).value.trim())$(id).value=value})}else fields.forEach(([id,value])=>{if(value)$(id).value=value});lookupMessage('Fiche trouvée : informations récupérées.')}catch(err){if(revision===lookupRevision)lookupMessage('Recherche impossible : '+err.message,true)}finally{if(revision===lookupRevision)button.disabled=false}}
+async function lookupVehicle(){const plate=normalizePlate($('plate').value);const revision=++lookupRevision;if(!plate){lookupMessage('Saisis une plaque avant de vérifier.');return}const button=$('lookupVehicle');button.disabled=true;lookupMessage('Recherche dans le carnet d’atelier…');try{const snap=await db.collection('spaces').doc(activeSpaceId).collection('tools').doc('atelier').get({source:'server'});if(revision!==lookupRevision)return;const data=snap.exists?JSON.parse(snap.data().payload||'{"vehicles":[]}'):{vehicles:[]};if(!Array.isArray(data.vehicles))throw new Error('Format de carnet invalide');const matches=data.vehicles.filter(v=>v&&normalizePlate(v.plate)===plate);if(matches.length!==1){lookupMessage(matches.length?'Plusieurs fiches correspondent à cette plaque : remplissage automatique désactivé.':'Aucune fiche trouvée. Tu peux renseigner les informations manuellement.',matches.length>1);return}const v=matches[0];const info=window.WBVehicleInfo?.fromVehicle?.(v);const brand=info?.brand||String(v.marque||'').trim();const model=info?.model||String(v.modeleDetail||v.modele||'').trim();const owner=String(v.owner||'').trim();const phone=String(v.phone||v.telephone||'').trim();const fields=[['brand',brand],['model',model],['owner',owner],['phone',phone]];const conflicts=fields.filter(([id,value])=>value&&$(id).value.trim()&&$(id).value.trim()!==value);if(conflicts.length&&!confirm('Remplacer les informations déjà saisies par celles du carnet ?')){fields.forEach(([id,value])=>{if(!$(id).value.trim())$(id).value=value})}else fields.forEach(([id,value])=>{if(value)$(id).value=value});lookupMessage('Fiche trouvée : informations récupérées.')}catch(err){if(revision===lookupRevision)lookupMessage('Recherche impossible : '+err.message,true)}finally{if(revision===lookupRevision)button.disabled=false}}
 function isLate(x){return x.status!=='done'&&x.dates.length>0&&x.dates[x.dates.length-1]<today()}
 function card(x){const e=document.createElement('div');e.className='item';const info=document.createElement('div');const title=document.createElement('strong');title.textContent=vehicleName(x);info.append(title);const meta=document.createElement('div');meta.className='vehicle-meta';meta.textContent=vehicleMeta(x);info.append(meta);const p=document.createElement('p');p.textContent=x.job;info.append(p);if(x.notes){const n=document.createElement('p');n.className='muted';n.textContent=x.notes;info.append(n)}const sub=document.createElement('span');sub.className=isLate(x)?'late':'muted';sub.textContent=(x.dates.length?`${x.dates.length} jour(s) : ${labelDate(x.dates[0])}${x.dates.length>1?' → '+labelDate(x.dates[x.dates.length-1]):''}`:'Sans date')+(isLate(x)?' · En retard':'');info.append(sub);const b=document.createElement('button');b.textContent='Modifier';b.onclick=()=>openEditor(x);e.append(info,b);return e}
 function renderLists(){const todo=items.filter(x=>x.status==='todo'&&!x.dates.length),late=items.filter(isLate),done=items.filter(x=>x.status==='done');for(const [id,data,empty] of [['todoList',todo,'Aucune intervention sans date.'],['lateList',late,'Aucune intervention en retard.'],['doneList',done,'Aucune intervention terminée.']]){const node=$(id);node.replaceChildren();if(!data.length){const p=document.createElement('p');p.className='muted';p.textContent=empty;node.append(p)}else data.forEach(x=>node.append(card(x)))}$('counts').textContent=`${todo.length} à prévoir · ${late.length} en retard`}
@@ -174,13 +174,54 @@ function renderPicker(){
   b.setAttribute('aria-label',`${labelDate(s)}, ${occupied.length} intervention(s)`);
   grid.append(b);
  }
- $('pickedText').textContent=selected.length?`${selected.length} journée(s) : ${selected.map(labelDate).join(', ')}`:'Aucune date sélectionnée';
+ updateSmsWarning();$('pickedText').textContent=selected.length?`${selected.length} journée(s) : ${selected.map(labelDate).join(', ')}`:'Aucune date sélectionnée';
  renderPickerDetails();
 }
 function chooseDate(s,drag=false){inspectedPickerDate=s;if(pickRange){if(!pickAnchor){pickAnchor=s;selected=[s]}else{const lo=pickAnchor<s?pickAnchor:s,hi=pickAnchor>s?pickAnchor:s;selected=[];for(let d=lo;d<=hi;d=shift(d,1))selected.push(d);if(!drag)pickAnchor=null}}else{selected=selected.includes(s)?selected.filter(x=>x!==s):unique([...selected,s])}renderPicker()}
-function openEditor(x,dates){editing=x?.id||null;selected=unique(dates||x?.dates||[]);pickAnchor=null;pickRange=false;pickMonth=firstMonth(selected[0]||today());inspectedPickerDate=selected[0]||today();$('editorTitle').textContent=x?'Modifier l’intervention':'Nouvelle intervention';$('otherPlateFormat').checked=isOtherPlateFormat(x?.plate);$('plate').value=x?.plate||'';updatePlateDisplay();$('brand').value=x?.brand||'';$('model').value=x?.model||(!x?.brand?x?.vehicle||'':'');$('owner').value=x?.owner||'';lookupRevision++;lookupMessage('');$('job').value=x?.job||'';$('notes').value=x?.notes||'';$('finish').classList.toggle('hidden',!x||x.status==='done');$('reopen').classList.toggle('hidden',!x||x.status!=='done');$('delete').classList.toggle('hidden',!x);$('formError').textContent='';renderPicker();$('editor').showModal();loadKnownVehicles()}
+
+function updateSmsWarning(){
+ const checked=$('sendSms').checked;
+ $('smsWarning').classList.toggle('hidden',!checked||!!$('phone').value.trim());
+ $('smsHint').textContent=selected.length?'Notifications push automatiques lors de la planification ou d’un changement de dates.':'Sans date : aucune notification push.';
+}
+function smsText(){
+ const name=[$('brand').value.trim(),$('model').value.trim()].filter(Boolean).join(' ')||'votre véhicule';
+ const dates=unique(selected);
+ const when=dates.length===1?`le ${labelDate(dates[0])}`:`les ${dates.map(labelDate).join(', ')}`;
+ return `Bonjour, WheelerBrothers vous confirme l'intervention sur ${name}${$('plate').value.trim()?' ('+$('plate').value.trim()+')':''}, prévue ${when}. Travaux : ${$('job').value.trim()}.`;
+}
+function showSmsAction(phone,text){
+ $('smsNumber').value=phone||'';$('smsBody').value=text;
+ $('smsMissing').classList.toggle('hidden',!!phone);
+ $('smsDialog').showModal();
+}
+function openSmsApp(){
+ const phone=$('smsNumber').value.trim();if(!phone){$('smsMissing').classList.remove('hidden');return}
+ // iOS support for prefilled body depends on browser; copy remains available.
+ const separator=/iPad|iPhone|iPod/.test(navigator.userAgent)?'&':'?';
+ window.location.href='sms:'+encodeURIComponent(phone)+separator+'body='+encodeURIComponent($('smsBody').value);
+}
+async function loadPhoneFromCarnet(plate){
+ if(!plate||!activeSpaceId)return '';
+ try{
+  const snap=await db.collection('spaces').doc(activeSpaceId).collection('tools').doc('atelier').get();
+  const data=snap.exists?JSON.parse(snap.data().payload||'{}'):{};
+  const found=(data.vehicles||[]).filter(v=>normalizePlate(v.plate)===normalizePlate(plate));
+  return found.length===1?String(found[0].phone||found[0].telephone||'').trim():'';
+ }catch{return ''}
+}
+async function sendConfirmationFromCalendar(){
+ const x=items.find(v=>v.id===editing);if(!x||!x.dates.length)return;
+ let phone=x.phone||await loadPhoneFromCarnet(x.plate);
+ const dates=unique(x.dates);
+ const name=[x.brand,x.model].filter(Boolean).join(' ')||'votre véhicule';
+ const when=dates.length===1?`le ${labelDate(dates[0])}`:`les ${dates.map(labelDate).join(', ')}`;
+ showSmsAction(phone,`Bonjour, WheelerBrothers vous confirme l'intervention sur ${name}${x.plate?' ('+x.plate+')':''}, prévue ${when}. Travaux : ${x.job}.`);
+}
+
+function openEditor(x,dates){editing=x?.id||null;selected=unique(dates||x?.dates||[]);pickAnchor=null;pickRange=false;pickMonth=firstMonth(selected[0]||today());inspectedPickerDate=selected[0]||today();$('editorTitle').textContent=x?'Modifier l’intervention':'Nouvelle intervention';$('otherPlateFormat').checked=isOtherPlateFormat(x?.plate);$('plate').value=x?.plate||'';updatePlateDisplay();$('brand').value=x?.brand||'';$('model').value=x?.model||(!x?.brand?x?.vehicle||'':'');$('owner').value=x?.owner||'';$('phone').value=x?.phone||'';$('sendSms').checked=false;updateSmsWarning();lookupRevision++;lookupMessage('');$('job').value=x?.job||'';$('notes').value=x?.notes||'';$('finish').classList.toggle('hidden',!x||x.status==='done');$('reopen').classList.toggle('hidden',!x||x.status!=='done');$('delete').classList.toggle('hidden',!x);$('calendarSms').classList.toggle('hidden',!x||!x.dates.length);$('formError').textContent='';updateSmsWarning();renderPicker();$('editor').showModal();loadKnownVehicles()}
 function closeEditor(){$('editor').close()}
-async function save(ev){ev.preventDefault();if(!collection)return;$('formError').textContent='';const job=$('job').value.trim();if(!job){$('formError').textContent='Renseigne les travaux prévus.';return}const previous=items.find(x=>x.id===editing);const status=previous?.status==='done'?'done':selected.length?'planned':'todo';const payload={vehicle:[$('brand').value.trim(),$('model').value.trim()].filter(Boolean).join(' '),plate:($('otherPlateFormat').checked?$('plate').value.trim():formatFrenchPlate($('plate').value)),brand:$('brand').value.trim(),model:$('model').value.trim(),owner:$('owner').value.trim(),job,notes:$('notes').value.trim(),status,dates:unique(selected),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};$('save').disabled=true;try{if(editing)await collection.doc(editing).update(payload);else await collection.add({...payload,createdAt:firebase.firestore.FieldValue.serverTimestamp()});closeEditor()}catch(err){$('formError').textContent='Enregistrement impossible : '+err.message}finally{$('save').disabled=false}}
+async function save(ev){ev.preventDefault();if(!collection)return;$('formError').textContent='';const job=$('job').value.trim();if(!job){$('formError').textContent='Renseigne les travaux prévus.';return}const previous=items.find(x=>x.id===editing);const status=previous?.status==='done'?'done':selected.length?'planned':'todo';const payload={vehicle:[$('brand').value.trim(),$('model').value.trim()].filter(Boolean).join(' '),plate:($('otherPlateFormat').checked?$('plate').value.trim():formatFrenchPlate($('plate').value)),brand:$('brand').value.trim(),model:$('model').value.trim(),owner:$('owner').value.trim(),phone:$('phone').value.trim(),job,notes:$('notes').value.trim(),status,dates:unique(selected),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};$('save').disabled=true;try{if(editing)await collection.doc(editing).update(payload);else await collection.add({...payload,createdAt:firebase.firestore.FieldValue.serverTimestamp()});const wantsSms=$('sendSms').checked&&payload.dates.length;const phone=payload.phone;const text=wantsSms?smsText():'';closeEditor();if(wantsSms)showSmsAction(phone,text)}catch(err){$('formError').textContent='Enregistrement impossible : '+err.message}finally{$('save').disabled=false}}
 async function setCompletion(done){
  if(!editing||!collection)return;
  const btn=done?$('finish'):$('reopen');btn.disabled=true;
@@ -191,7 +232,7 @@ async function setCompletion(done){
  finally{btn.disabled=false}
 }
 async function remove(){if(!editing||!collection||!confirm('Supprimer définitivement cette intervention ?'))return;try{await collection.doc(editing).delete();closeEditor()}catch(err){$('formError').textContent=err.message}}
-$('vehicleSearch').addEventListener('input',renderVehicleOptions);$('vehicleSelect').addEventListener('change',selectKnownVehicle);$('lookupVehicle').onclick=lookupVehicle;$('plate').addEventListener('input',()=>{updatePlateDisplay();lookupRevision++;lookupMessage('')});$('otherPlateFormat').addEventListener('change',()=>{updatePlateDisplay();lookupRevision++;lookupMessage('')});$('add').onclick=()=>openEditor(null);$('close').onclick=closeEditor;$('cancel').onclick=closeEditor;$('form').onsubmit=save;$('delete').onclick=remove;$('finish').onclick=()=>setCompletion(true);$('reopen').onclick=()=>setCompletion(false);$('tabTodo').onclick=()=>setTab('todo');$('tabCal').onclick=()=>setTab('cal');$('month').onclick=()=>{calMode='month';$('month').classList.add('active');$('week').classList.remove('active');renderCalendar()};$('week').onclick=()=>{calMode='week';$('week').classList.add('active');$('month').classList.remove('active');renderCalendar()};$('prev').onclick=()=>{if(calMode==='month')calendarMonth=monthShift(calendarMonth,-1);else calendarWeek=shift(calendarWeek,-7);renderCalendar()};$('next').onclick=()=>{if(calMode==='month')calendarMonth=monthShift(calendarMonth,1);else calendarWeek=shift(calendarWeek,7);renderCalendar()};$('today').onclick=()=>{calendarMonth=firstMonth(today());calendarWeek=weekStart(today());renderCalendar()};$('showDone').onchange=renderCalendar;$('pickPrev').onclick=()=>{pickMonth=monthShift(pickMonth,-1);renderPicker()};$('pickNext').onclick=()=>{pickMonth=monthShift(pickMonth,1);renderPicker()};$('pickMode').onclick=()=>{pickRange=!pickRange;pickAnchor=null;renderPicker()};$('clearDates').onclick=()=>{selected=[];pickAnchor=null;renderPicker()};
+$('vehicleSearch').addEventListener('input',renderVehicleOptions);$('vehicleSelect').addEventListener('change',selectKnownVehicle);$('lookupVehicle').onclick=lookupVehicle;$('plate').addEventListener('input',()=>{updatePlateDisplay();lookupRevision++;lookupMessage('')});$('otherPlateFormat').addEventListener('change',()=>{updatePlateDisplay();lookupRevision++;lookupMessage('')});$('add').onclick=()=>openEditor(null);$('close').onclick=closeEditor;$('cancel').onclick=closeEditor;$('form').onsubmit=save;$('delete').onclick=remove;$('calendarSms').onclick=sendConfirmationFromCalendar;$('sendSms').onchange=updateSmsWarning;$('phone').oninput=updateSmsWarning;$('smsOpen').onclick=openSmsApp;$('smsClose').onclick=()=>$('smsDialog').close();$('smsCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('smsBody').value)}catch{alert('Sélectionne le texte pour le copier.')}};$('finish').onclick=()=>setCompletion(true);$('reopen').onclick=()=>setCompletion(false);$('tabTodo').onclick=()=>setTab('todo');$('tabCal').onclick=()=>setTab('cal');$('month').onclick=()=>{calMode='month';$('month').classList.add('active');$('week').classList.remove('active');renderCalendar()};$('week').onclick=()=>{calMode='week';$('week').classList.add('active');$('month').classList.remove('active');renderCalendar()};$('prev').onclick=()=>{if(calMode==='month')calendarMonth=monthShift(calendarMonth,-1);else calendarWeek=shift(calendarWeek,-7);renderCalendar()};$('next').onclick=()=>{if(calMode==='month')calendarMonth=monthShift(calendarMonth,1);else calendarWeek=shift(calendarWeek,7);renderCalendar()};$('today').onclick=()=>{calendarMonth=firstMonth(today());calendarWeek=weekStart(today());renderCalendar()};$('showDone').onchange=renderCalendar;$('pickPrev').onclick=()=>{pickMonth=monthShift(pickMonth,-1);renderPicker()};$('pickNext').onclick=()=>{pickMonth=monthShift(pickMonth,1);renderPicker()};$('pickMode').onclick=()=>{pickRange=!pickRange;pickAnchor=null;renderPicker()};$('clearDates').onclick=()=>{selected=[];pickAnchor=null;renderPicker()};
 // Pointer events support finger drag for contiguous ranges; individual tapping for noncontiguous days.
 const picker=$('pickCalendar');let dragged=false;
 picker.addEventListener('pointerdown',e=>{const b=e.target.closest('button[data-date]');if(!b||!pickRange)return;pointerDown=true;dragStart=b.dataset.date;dragged=false});
@@ -199,6 +240,29 @@ picker.addEventListener('pointermove',e=>{if(!pointerDown||!pickRange||!dragStar
 window.addEventListener('pointerup',()=>{if(pointerDown){pointerDown=false;if(dragged){pickAnchor=null;setTimeout(()=>{dragged=false},0)}dragStart=null}});
 picker.addEventListener('click',e=>{const b=e.target.closest('button[data-date]');if(!b||dragged)return;chooseDate(b.dataset.date)});
 
-window.atelierReady.then(({spaceId})=>{activeSpaceId=spaceId;document.querySelectorAll('[data-firebase-status]').forEach(e=>{e.classList.add('is-connected');e.classList.remove('is-disconnected')});collection=db.collection('spaces').doc(spaceId).collection('planningItems');unsubscribe=collection.onSnapshot(snapshot=>{items=snapshot.docs.map(doc=>{const x=doc.data();return{id:doc.id,vehicle:String(x.vehicle||''),plate:String(x.plate||''),brand:String(x.brand||''),model:String(x.model||''),owner:String(x.owner||''),job:String(x.job||''),notes:String(x.notes||''),status:['todo','planned','done'].includes(x.status)?x.status:'todo',dates:unique(Array.isArray(x.dates)?x.dates:[])}});items.sort((a,b)=>a.job.localeCompare(b.job,'fr'));message('Planning synchronisé avec Firebase');render();if($('editor').open)renderPicker()},err=>message('Accès au planning refusé : '+err.message,true))}).catch(err=>message('Connexion impossible : '+err.message,true));
+
+let messaging=null;
+async function activatePush(){
+ const label=$('pushStatus');
+ if(!('serviceWorker' in navigator)||!('Notification' in window)||!firebase.messaging?.isSupported){label.textContent='Notifications non prises en charge sur cet appareil.';return}
+ const vapid=window.WB_PUSH_VAPID_KEY||'';
+ if(!vapid||vapid.startsWith('REMPLACER')){label.textContent='Configuration Firebase : clé VAPID manquante.';return}
+ try{
+  const permission=await Notification.requestPermission();
+  if(permission!=='granted'){label.textContent='Notifications non autorisées.';return}
+  const registration=await navigator.serviceWorker.register('sw.js?v=55',{updateViaCache:'none'});
+  messaging=firebase.messaging();
+  const token=await messaging.getToken({vapidKey:vapid,serviceWorkerRegistration:registration});
+  if(!token)throw Error('Aucun jeton de notification obtenu');
+  const id=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token));
+  const key=Array.from(new Uint8Array(id)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  await db.collection('spaces').doc(activeSpaceId).collection('planningPushDevices').doc(key).set({token,updatedAt:firebase.firestore.FieldValue.serverTimestamp(),userAgent:navigator.userAgent.slice(0,220)}, {merge:true});
+  label.textContent='Notifications activées sur cet appareil.';
+  messaging.onMessage(payload=>{label.textContent=payload.notification?.title||'Nouvelle notification Planning';});
+ }catch(err){label.textContent='Activation impossible : '+err.message}
+}
+$('enablePush').onclick=activatePush;
+
+window.atelierReady.then(({spaceId})=>{activeSpaceId=spaceId;document.querySelectorAll('[data-firebase-status]').forEach(e=>{e.classList.add('is-connected');e.classList.remove('is-disconnected')});collection=db.collection('spaces').doc(spaceId).collection('planningItems');unsubscribe=collection.onSnapshot(snapshot=>{items=snapshot.docs.map(doc=>{const x=doc.data();return{id:doc.id,vehicle:String(x.vehicle||''),plate:String(x.plate||''),brand:String(x.brand||''),model:String(x.model||''),owner:String(x.owner||''),phone:String(x.phone||''),job:String(x.job||''),notes:String(x.notes||''),status:['todo','planned','done'].includes(x.status)?x.status:'todo',dates:unique(Array.isArray(x.dates)?x.dates:[])}});items.sort((a,b)=>a.job.localeCompare(b.job,'fr'));message('Planning synchronisé avec Firebase');render();if($('editor').open)renderPicker()},err=>message('Accès au planning refusé : '+err.message,true))}).catch(err=>message('Connexion impossible : '+err.message,true));
 render();
 })();
