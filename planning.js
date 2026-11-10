@@ -184,11 +184,18 @@ function updateSmsWarning(){
  $('smsWarning').classList.toggle('hidden',!checked||!!$('phone').value.trim());
  $('smsHint').textContent=selected.length?'Notifications push automatiques lors de la planification ou d’un changement de dates.':'Sans date : aucune notification push.';
 }
+function confirmationSmsText(x){
+ const name=[x.brand,x.model].map(v=>String(v||'').trim()).filter(Boolean).join(' ')||'véhicule';
+ const plate=String(x.plate||'').trim();
+ const dates=unique(x.dates||[]);
+ const isConsecutive=dates.length>1&&dates.every((day,i)=>i===0||day===shift(dates[i-1],1));
+ const when=dates.length===1?`le ${labelDate(dates[0])}`
+   :isConsecutive?`du ${labelDate(dates[0])} au ${labelDate(dates[dates.length-1])}`
+   :`les ${dates.map(labelDate).join(', ')}`;
+ return `Bonjour,\n\nWheelerBrothers vous confirme l'intervention sur votre ${name}${plate?' ('+plate+')':''}, prévue ${when}.`;
+}
 function smsText(){
- const name=[$('brand').value.trim(),$('model').value.trim()].filter(Boolean).join(' ')||'votre véhicule';
- const dates=unique(selected);
- const when=dates.length===1?`le ${labelDate(dates[0])}`:`les ${dates.map(labelDate).join(', ')}`;
- return `Bonjour, WheelerBrothers vous confirme l'intervention sur ${name}${$('plate').value.trim()?' ('+$('plate').value.trim()+')':''}, prévue ${when}. Travaux : ${$('job').value.trim()}.`;
+ return confirmationSmsText({brand:$('brand').value,model:$('model').value,plate:$('plate').value,dates:selected});
 }
 function showSmsAction(phone,text){
  $('smsNumber').value=phone||'';$('smsBody').value=text;
@@ -213,10 +220,7 @@ async function loadPhoneFromCarnet(plate){
 async function sendConfirmationFromCalendar(){
  const x=items.find(v=>v.id===editing);if(!x||!x.dates.length)return;
  let phone=x.phone||await loadPhoneFromCarnet(x.plate);
- const dates=unique(x.dates);
- const name=[x.brand,x.model].filter(Boolean).join(' ')||'votre véhicule';
- const when=dates.length===1?`le ${labelDate(dates[0])}`:`les ${dates.map(labelDate).join(', ')}`;
- showSmsAction(phone,`Bonjour, WheelerBrothers vous confirme l'intervention sur ${name}${x.plate?' ('+x.plate+')':''}, prévue ${when}. Travaux : ${x.job}.`);
+ showSmsAction(phone,confirmationSmsText(x));
 }
 
 function openEditor(x,dates){editing=x?.id||null;selected=unique(dates||x?.dates||[]);pickAnchor=null;pickRange=false;pickMonth=firstMonth(selected[0]||today());inspectedPickerDate=selected[0]||today();$('editorTitle').textContent=x?'Modifier l’intervention':'Nouvelle intervention';$('otherPlateFormat').checked=isOtherPlateFormat(x?.plate);$('plate').value=x?.plate||'';updatePlateDisplay();$('brand').value=x?.brand||'';$('model').value=x?.model||(!x?.brand?x?.vehicle||'':'');$('owner').value=x?.owner||'';$('phone').value=x?.phone||'';$('sendSms').checked=false;updateSmsWarning();lookupRevision++;lookupMessage('');$('job').value=x?.job||'';$('notes').value=x?.notes||'';$('finish').classList.toggle('hidden',!x||x.status==='done');$('reopen').classList.toggle('hidden',!x||x.status!=='done');$('delete').classList.toggle('hidden',!x);$('calendarSms').classList.toggle('hidden',!x||!x.dates.length);$('formError').textContent='';updateSmsWarning();renderPicker();$('editor').showModal();loadKnownVehicles()}
