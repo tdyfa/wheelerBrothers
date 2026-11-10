@@ -1,12 +1,12 @@
-const CACHE_NAME = 'outils-atelier-v55.3-r1';
+const CACHE_NAME = 'outils-atelier-v55.4-r1';
 const ASSETS = [
   './',
   './index.html',
-  './atelier.html?v=55.3',
+  './atelier.html?v=55.4',
   './rapport.html?v=54',
   './inventaire.html?v=54',
-  './planning.html?v=55.3',
-  './planning.js?v=55.3',
+  './planning.html?v=55.4',
+  './planning.js?v=55.4',
   './manifest.json?v=54',
   './firebase-config.js?v=54',
   './apple-touch-icon.png?v=54',
@@ -20,6 +20,7 @@ const ASSETS = [
   './report-images.js?v=54',
   './vehicle-info.js?v=54',
   './vehicle-input.js?v=55.3&build=2',
+  './wb-phone.js?v=55.4',
   './html2pdf.bundle.min.js?v=54',
   './wb-carnet-pro.css?v=54',
   './wb-carnet-pro.js?v=54'
@@ -72,6 +73,6 @@ self.addEventListener('push', event => {
  // FCM notifications are handled by the Firebase messaging service worker integration below.
  if(payload.notification)return;
  const data=payload.data||{};
- event.waitUntil(self.registration.showNotification(data.title||'WheelerBrothers Planning',{body:data.body||'Intervention mise à jour',icon:'./icon-192.png',data:{url:'./planning.html?v=55.3'}}));
+ event.waitUntil(self.registration.showNotification(data.title||'WheelerBrothers Planning',{body:data.body||'Intervention mise à jour',icon:'./icon-192.png',data:{url:'./planning.html?v=55.4'}}));
 });
-self.addEventListener('notificationclick',event=>{event.notification.close();event.waitUntil(self.clients.openWindow('./planning.html?v=55.3'))});
+self.addEventListener('notificationclick',event=>{event.notification.close();event.waitUntil(self.clients.openWindow('./planning.html?v=55.4'))});

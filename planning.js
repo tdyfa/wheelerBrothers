@@ -1,4 +1,4 @@
-/* WheelerBrothers Planning v55.3 — journées entières, synchronisation Firestore */
+/* WheelerBrothers Planning v55.4 — journées entières, synchronisation Firestore */
 (()=>{'use strict';
 const $=id=>document.getElementById(id), MS=86400000;
 const today=()=>{const d=new Date();return localISO(d)};
@@ -23,7 +23,7 @@ function isOtherPlateFormat(v){const s=String(v||'').trim();return !!s&&!/^[A-Z]
 let knownVehicles=[],vehicleLoadToken=0;
 function vehicleInfo(v){
  const info=window.WBVehicleInfo?.fromVehicle?.(v);
- return {plate:String(v.plate||'').trim(),brand:String(info?.brand||v.marque||'').trim(),model:String(info?.model||v.modeleDetail||v.modele||'').trim(),owner:String(v.owner||'').trim(),phone:String(v.phone||v.telephone||'').trim()};
+ return {plate:String(v.plate||'').trim(),brand:String(info?.brand||v.marque||'').trim(),model:String(info?.model||v.modeleDetail||v.modele||'').trim(),owner:String(v.owner||'').trim(),phone:WBPhone.format(v.phone||v.telephone||'')};
 }
 const vehicleSort=new Intl.Collator('fr',{sensitivity:'base',numeric:true});
 function renderVehicleOptions(){
@@ -57,13 +57,13 @@ function selectKnownVehicle(){
  const i=$('vehicleSelect').value;if(i==='')return;
  const v=knownVehicles[Number(i)];if(!v)return;
  const fields=[['plate',v.plate],['brand',v.brand],['model',v.model],['owner',v.owner],['phone',v.phone]];
- if(fields.some(([id,value])=>value&&$(id).value.trim()&&$(id).value.trim()!==value)&&!confirm('Remplacer les informations déjà saisies par celles du carnet ?')){$('vehicleSelect').value='';return}
+ if(fields.some(([id,value])=>value&&$(id).value.trim()&&(id==='phone'?!WBPhone.same($(id).value,value):$(id).value.trim()!==value))&&!confirm('Remplacer les informations déjà saisies par celles du carnet ?')){$('vehicleSelect').value='';return}
  $('otherPlateFormat').checked=isOtherPlateFormat(v.plate);
- fields.forEach(([id,value])=>{$(id).value=value});updatePlateDisplay();lookupRevision++;lookupMessage('Véhicule sélectionné dans le carnet.');
+ fields.forEach(([id,value])=>{$(id).value=id==='phone'?WBPhone.format(value):value});updatePlateDisplay();updateSmsWarning();lookupRevision++;lookupMessage('Véhicule sélectionné dans le carnet.');
 }
 let lookupRevision=0;
 function lookupMessage(text,error=false){$('lookupStatus').textContent=text;$('lookupStatus').className=(error?'error':'muted')+' lookup-status'}
-async function lookupVehicle(){const plate=normalizePlate($('plate').value);const revision=++lookupRevision;if(!plate){lookupMessage('Saisis une plaque avant de vérifier.');return}const button=$('lookupVehicle');button.disabled=true;lookupMessage('Recherche dans le carnet d’atelier…');try{const snap=await db.collection('spaces').doc(activeSpaceId).collection('tools').doc('atelier').get({source:'server'});if(revision!==lookupRevision)return;const data=snap.exists?JSON.parse(snap.data().payload||'{"vehicles":[]}'):{vehicles:[]};if(!Array.isArray(data.vehicles))throw new Error('Format de carnet invalide');const matches=data.vehicles.filter(v=>v&&normalizePlate(v.plate)===plate);if(matches.length!==1){lookupMessage(matches.length?'Plusieurs fiches correspondent à cette plaque : remplissage automatique désactivé.':'Aucune fiche trouvée. Tu peux renseigner les informations manuellement.',matches.length>1);return}const v=matches[0];const info=window.WBVehicleInfo?.fromVehicle?.(v);const brand=info?.brand||String(v.marque||'').trim();const model=info?.model||String(v.modeleDetail||v.modele||'').trim();const owner=String(v.owner||'').trim();const phone=String(v.phone||v.telephone||'').trim();const fields=[['brand',brand],['model',model],['owner',owner],['phone',phone]];const conflicts=fields.filter(([id,value])=>value&&$(id).value.trim()&&$(id).value.trim()!==value);if(conflicts.length&&!confirm('Remplacer les informations déjà saisies par celles du carnet ?')){fields.forEach(([id,value])=>{if(!$(id).value.trim())$(id).value=value})}else fields.forEach(([id,value])=>{if(value)$(id).value=value});lookupMessage('Fiche trouvée : informations récupérées.')}catch(err){if(revision===lookupRevision)lookupMessage('Recherche impossible : '+err.message,true)}finally{if(revision===lookupRevision)button.disabled=false}}
+async function lookupVehicle(){const plate=normalizePlate($('plate').value);const revision=++lookupRevision;if(!plate){lookupMessage('Saisis une plaque avant de vérifier.');return}const button=$('lookupVehicle');button.disabled=true;lookupMessage('Recherche dans le carnet d’atelier…');try{const snap=await db.collection('spaces').doc(activeSpaceId).collection('tools').doc('atelier').get({source:'server'});if(revision!==lookupRevision)return;const data=snap.exists?JSON.parse(snap.data().payload||'{"vehicles":[]}'):{vehicles:[]};if(!Array.isArray(data.vehicles))throw new Error('Format de carnet invalide');const matches=data.vehicles.filter(v=>v&&normalizePlate(v.plate)===plate);if(matches.length!==1){lookupMessage(matches.length?'Plusieurs fiches correspondent à cette plaque : remplissage automatique désactivé.':'Aucune fiche trouvée. Tu peux renseigner les informations manuellement.',matches.length>1);return}const v=matches[0];const info=window.WBVehicleInfo?.fromVehicle?.(v);const brand=info?.brand||String(v.marque||'').trim();const model=info?.model||String(v.modeleDetail||v.modele||'').trim();const owner=String(v.owner||'').trim();const phone=String(v.phone||v.telephone||'').trim();const fields=[['brand',brand],['model',model],['owner',owner],['phone',phone]];const conflicts=fields.filter(([id,value])=>value&&$(id).value.trim()&&(id==='phone'?!WBPhone.same($(id).value,value):$(id).value.trim()!==value));if(conflicts.length&&!confirm('Remplacer les informations déjà saisies par celles du carnet ?')){fields.forEach(([id,value])=>{if(!$(id).value.trim())$(id).value=id==='phone'?WBPhone.format(value):value})}else fields.forEach(([id,value])=>{if(value)$(id).value=id==='phone'?WBPhone.format(value):value});updateSmsWarning();lookupMessage('Fiche trouvée : informations récupérées.')}catch(err){if(revision===lookupRevision)lookupMessage('Recherche impossible : '+err.message,true)}finally{if(revision===lookupRevision)button.disabled=false}}
 function isLate(x){return x.status!=='done'&&x.dates.length>0&&x.dates[x.dates.length-1]<today()}
 function card(x){const e=document.createElement('div');e.className='item';const info=document.createElement('div');const title=document.createElement('strong');title.textContent=vehicleName(x);info.append(title);const meta=document.createElement('div');meta.className='vehicle-meta';meta.textContent=vehicleMeta(x);info.append(meta);const p=document.createElement('p');p.textContent=x.job;info.append(p);if(x.notes){const n=document.createElement('p');n.className='muted';n.textContent=x.notes;info.append(n)}const sub=document.createElement('span');sub.className=isLate(x)?'late':'muted';sub.textContent=(x.dates.length?`${x.dates.length} jour(s) : ${labelDate(x.dates[0])}${x.dates.length>1?' → '+labelDate(x.dates[x.dates.length-1]):''}`:'Sans date')+(isLate(x)?' · En retard':'');info.append(sub);const b=document.createElement('button');b.textContent='Modifier';b.onclick=()=>openEditor(x);e.append(info,b);return e}
 function renderLists(){const todo=items.filter(x=>x.status==='todo'&&!x.dates.length),late=items.filter(isLate),done=items.filter(x=>x.status==='done');for(const [id,data,empty] of [['todoList',todo,'Aucune intervention sans date.'],['lateList',late,'Aucune intervention en retard.'],['doneList',done,'Aucune intervention terminée.']]){const node=$(id);node.replaceChildren();if(!data.length){const p=document.createElement('p');p.className='muted';p.textContent=empty;node.append(p)}else data.forEach(x=>node.append(card(x)))}$('counts').textContent=`${todo.length} à prévoir · ${late.length} en retard`}
@@ -181,7 +181,9 @@ function chooseDate(s,drag=false){inspectedPickerDate=s;if(pickRange){if(!pickAn
 
 function updateSmsWarning(){
  const checked=$('sendSms').checked;
- $('smsWarning').classList.toggle('hidden',!checked||!!$('phone').value.trim());
+ const number=$('phone').value.trim();
+ $('smsWarning').textContent=number?'Numéro invalide : vérifie le téléphone avant d’ouvrir Messages.':'Numéro du propriétaire manquant : complète-le pour ouvrir Messages.';
+ $('smsWarning').classList.toggle('hidden',!checked||WBPhone.isValid(number));
  $('smsHint').textContent=selected.length?'Notifications push automatiques lors de la planification ou d’un changement de dates.':'Sans date : aucune notification push.';
 }
 function confirmationSmsText(x){
@@ -198,15 +200,16 @@ function smsText(){
  return confirmationSmsText({brand:$('brand').value,model:$('model').value,plate:$('plate').value,dates:selected});
 }
 function showSmsAction(phone,text){
- $('smsNumber').value=phone||'';$('smsBody').value=text;
- $('smsMissing').classList.toggle('hidden',!!phone);
+ $('smsNumber').value=WBPhone.format(phone||'');$('smsBody').value=text;
+ $('smsMissing').textContent=phone?'Numéro invalide : vérifie le téléphone du propriétaire.':'Numéro manquant : renseigne-le avant d’ouvrir Messages.';
+ $('smsMissing').classList.toggle('hidden',WBPhone.isValid(phone));
  $('smsDialog').showModal();
 }
 function openSmsApp(){
- const phone=$('smsNumber').value.trim();if(!phone){$('smsMissing').classList.remove('hidden');return}
+ const phone=$('smsNumber').value.trim();if(!WBPhone.isValid(phone)){$('smsMissing').textContent=phone?'Numéro invalide : vérifie le téléphone du propriétaire.':'Numéro manquant : renseigne-le avant d’ouvrir Messages.';$('smsMissing').classList.remove('hidden');$('smsNumber').focus();return} $('smsMissing').classList.add('hidden');
  // iOS support for prefilled body depends on browser; copy remains available.
  const separator=/iPad|iPhone|iPod/.test(navigator.userAgent)?'&':'?';
- window.location.href='sms:'+encodeURIComponent(phone)+separator+'body='+encodeURIComponent($('smsBody').value);
+ window.location.href='sms:'+WBPhone.dial(phone)+separator+'body='+encodeURIComponent($('smsBody').value);
 }
 
 // v55.3 — synchronise le téléphone avec la fiche du Carnet d’atelier, sans
@@ -219,8 +222,7 @@ function carnetDataFromSnapshot(snap){
 function matchingCarnetVehicles(data,plateKey){
  return data.vehicles.filter(v=>v&&typeof v==='object'&&normalizePlate(v.plate)===plateKey);
 }
-function phoneKey(value){return String(value||'').replace(/[\s().-]/g,'')}
-function samePhone(a,b){return phoneKey(a)===phoneKey(b)}
+function samePhone(a,b){return WBPhone.same(a,b)}
 async function syncPhoneToCarnet(plate,phone){
  const key=normalizePlate(plate),number=String(phone||'').trim();
  // Ne jamais effacer le numéro d'une fiche lors d'une saisie vide dans le Planning.
@@ -255,7 +257,7 @@ async function syncPhoneToCarnet(plate,phone){
   if(!samePhone(latestPhone,current)){
    throw new Error('Le téléphone a été modifié sur un autre appareil. Vérifie la fiche avant de recommencer.');
   }
-  v.phone=number;
+  v.phone=WBPhone.format(number);
   v.updatedAt=Date.now();
   tx.update(docRef,{payload:JSON.stringify(data),updatedAt:Date.now()});
   updated=true;
@@ -277,9 +279,9 @@ async function sendConfirmationFromCalendar(){
  showSmsAction(phone,confirmationSmsText(x));
 }
 
-function openEditor(x,dates){editing=x?.id||null;selected=unique(dates||x?.dates||[]);pickAnchor=null;pickRange=false;pickMonth=firstMonth(selected[0]||today());inspectedPickerDate=selected[0]||today();$('editorTitle').textContent=x?'Modifier l’intervention':'Nouvelle intervention';$('otherPlateFormat').checked=isOtherPlateFormat(x?.plate);$('plate').value=x?.plate||'';updatePlateDisplay();$('brand').value=x?.brand||'';$('model').value=x?.model||(!x?.brand?x?.vehicle||'':'');$('owner').value=x?.owner||'';$('phone').value=x?.phone||'';$('sendSms').checked=false;updateSmsWarning();lookupRevision++;lookupMessage('');$('job').value=x?.job||'';$('notes').value=x?.notes||'';$('finish').classList.toggle('hidden',!x||x.status==='done');$('reopen').classList.toggle('hidden',!x||x.status!=='done');$('delete').classList.toggle('hidden',!x);$('calendarSms').classList.toggle('hidden',!x||!x.dates.length);$('formError').textContent='';updateSmsWarning();renderPicker();$('editor').showModal();loadKnownVehicles()}
+function openEditor(x,dates){editing=x?.id||null;selected=unique(dates||x?.dates||[]);pickAnchor=null;pickRange=false;pickMonth=firstMonth(selected[0]||today());inspectedPickerDate=selected[0]||today();$('editorTitle').textContent=x?'Modifier l’intervention':'Nouvelle intervention';$('otherPlateFormat').checked=isOtherPlateFormat(x?.plate);$('plate').value=x?.plate||'';updatePlateDisplay();$('brand').value=x?.brand||'';$('model').value=x?.model||(!x?.brand?x?.vehicle||'':'');$('owner').value=x?.owner||'';$('phone').value=WBPhone.format(x?.phone||'');$('sendSms').checked=false;updateSmsWarning();lookupRevision++;lookupMessage('');$('job').value=x?.job||'';$('notes').value=x?.notes||'';$('finish').classList.toggle('hidden',!x||x.status==='done');$('reopen').classList.toggle('hidden',!x||x.status!=='done');$('delete').classList.toggle('hidden',!x);$('calendarSms').classList.toggle('hidden',!x||!x.dates.length);$('formError').textContent='';updateSmsWarning();renderPicker();$('editor').showModal();loadKnownVehicles()}
 function closeEditor(){$('editor').close()}
-async function save(ev){ev.preventDefault();if(!collection)return;$('formError').textContent='';const job=$('job').value.trim();if(!job){$('formError').textContent='Renseigne les travaux prévus.';return}const previous=items.find(x=>x.id===editing);const status=previous?.status==='done'?'done':selected.length?'planned':'todo';const payload={vehicle:[$('brand').value.trim(),$('model').value.trim()].filter(Boolean).join(' '),plate:($('otherPlateFormat').checked?$('plate').value.trim():formatFrenchPlate($('plate').value)),brand:$('brand').value.trim(),model:$('model').value.trim(),owner:$('owner').value.trim(),phone:$('phone').value.trim(),job,notes:$('notes').value.trim(),status,dates:unique(selected),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};$('save').disabled=true;try{
+async function save(ev){ev.preventDefault();if(!collection)return;$('formError').textContent='';if(!WBPhone.validOrReport($('phone'))){$('formError').textContent='Vérifie le numéro de téléphone.';return}const job=$('job').value.trim();if(!job){$('formError').textContent='Renseigne les travaux prévus.';return}const previous=items.find(x=>x.id===editing);const status=previous?.status==='done'?'done':selected.length?'planned':'todo';const payload={vehicle:[$('brand').value.trim(),$('model').value.trim()].filter(Boolean).join(' '),plate:($('otherPlateFormat').checked?$('plate').value.trim():formatFrenchPlate($('plate').value)),brand:$('brand').value.trim(),model:$('model').value.trim(),owner:$('owner').value.trim(),phone:WBPhone.format($('phone').value),job,notes:$('notes').value.trim(),status,dates:unique(selected),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};$('save').disabled=true;try{
  if(editing)await collection.doc(editing).update(payload);
  else await collection.add({...payload,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
  // L'intervention est sauvée séparément. Un problème de synchronisation du
@@ -308,7 +310,7 @@ async function setCompletion(done){
  finally{btn.disabled=false}
 }
 async function remove(){if(!editing||!collection||!confirm('Supprimer définitivement cette intervention ?'))return;try{await collection.doc(editing).delete();closeEditor()}catch(err){$('formError').textContent=err.message}}
-$('vehicleSearch').addEventListener('input',renderVehicleOptions);$('vehicleSelect').addEventListener('change',selectKnownVehicle);$('lookupVehicle').onclick=lookupVehicle;$('plate').addEventListener('input',()=>{updatePlateDisplay();lookupRevision++;lookupMessage('')});$('otherPlateFormat').addEventListener('change',()=>{updatePlateDisplay();lookupRevision++;lookupMessage('')});$('add').onclick=()=>openEditor(null);$('close').onclick=closeEditor;$('cancel').onclick=closeEditor;$('form').onsubmit=save;$('delete').onclick=remove;$('calendarSms').onclick=sendConfirmationFromCalendar;$('sendSms').onchange=updateSmsWarning;$('phone').oninput=updateSmsWarning;$('smsOpen').onclick=openSmsApp;$('smsClose').onclick=()=>$('smsDialog').close();$('smsCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('smsBody').value)}catch{alert('Sélectionne le texte pour le copier.')}};$('finish').onclick=()=>setCompletion(true);$('reopen').onclick=()=>setCompletion(false);$('tabTodo').onclick=()=>setTab('todo');$('tabCal').onclick=()=>setTab('cal');$('month').onclick=()=>{calMode='month';$('month').classList.add('active');$('week').classList.remove('active');renderCalendar()};$('week').onclick=()=>{calMode='week';$('week').classList.add('active');$('month').classList.remove('active');renderCalendar()};$('prev').onclick=()=>{if(calMode==='month')calendarMonth=monthShift(calendarMonth,-1);else calendarWeek=shift(calendarWeek,-7);renderCalendar()};$('next').onclick=()=>{if(calMode==='month')calendarMonth=monthShift(calendarMonth,1);else calendarWeek=shift(calendarWeek,7);renderCalendar()};$('today').onclick=()=>{calendarMonth=firstMonth(today());calendarWeek=weekStart(today());renderCalendar()};$('showDone').onchange=renderCalendar;$('pickPrev').onclick=()=>{pickMonth=monthShift(pickMonth,-1);renderPicker()};$('pickNext').onclick=()=>{pickMonth=monthShift(pickMonth,1);renderPicker()};$('pickMode').onclick=()=>{pickRange=!pickRange;pickAnchor=null;renderPicker()};$('clearDates').onclick=()=>{selected=[];pickAnchor=null;renderPicker()};
+$('vehicleSearch').addEventListener('input',renderVehicleOptions);$('vehicleSelect').addEventListener('change',selectKnownVehicle);$('lookupVehicle').onclick=lookupVehicle;$('plate').addEventListener('input',()=>{updatePlateDisplay();lookupRevision++;lookupMessage('')});$('otherPlateFormat').addEventListener('change',()=>{updatePlateDisplay();lookupRevision++;lookupMessage('')});$('add').onclick=()=>openEditor(null);$('close').onclick=closeEditor;$('cancel').onclick=closeEditor;$('form').onsubmit=save;$('delete').onclick=remove;$('calendarSms').onclick=sendConfirmationFromCalendar;$('sendSms').onchange=updateSmsWarning;WBPhone.bind($('phone'));$('phone').addEventListener('input',updateSmsWarning);WBPhone.bind($('smsNumber'));$('smsOpen').onclick=openSmsApp;$('smsClose').onclick=()=>$('smsDialog').close();$('smsCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('smsBody').value)}catch{alert('Sélectionne le texte pour le copier.')}};$('finish').onclick=()=>setCompletion(true);$('reopen').onclick=()=>setCompletion(false);$('tabTodo').onclick=()=>setTab('todo');$('tabCal').onclick=()=>setTab('cal');$('month').onclick=()=>{calMode='month';$('month').classList.add('active');$('week').classList.remove('active');renderCalendar()};$('week').onclick=()=>{calMode='week';$('week').classList.add('active');$('month').classList.remove('active');renderCalendar()};$('prev').onclick=()=>{if(calMode==='month')calendarMonth=monthShift(calendarMonth,-1);else calendarWeek=shift(calendarWeek,-7);renderCalendar()};$('next').onclick=()=>{if(calMode==='month')calendarMonth=monthShift(calendarMonth,1);else calendarWeek=shift(calendarWeek,7);renderCalendar()};$('today').onclick=()=>{calendarMonth=firstMonth(today());calendarWeek=weekStart(today());renderCalendar()};$('showDone').onchange=renderCalendar;$('pickPrev').onclick=()=>{pickMonth=monthShift(pickMonth,-1);renderPicker()};$('pickNext').onclick=()=>{pickMonth=monthShift(pickMonth,1);renderPicker()};$('pickMode').onclick=()=>{pickRange=!pickRange;pickAnchor=null;renderPicker()};$('clearDates').onclick=()=>{selected=[];pickAnchor=null;renderPicker()};
 // Pointer events support finger drag for contiguous ranges; individual tapping for noncontiguous days.
 const picker=$('pickCalendar');let dragged=false;
 picker.addEventListener('pointerdown',e=>{const b=e.target.closest('button[data-date]');if(!b||!pickRange)return;pointerDown=true;dragStart=b.dataset.date;dragged=false});
