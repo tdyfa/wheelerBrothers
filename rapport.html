@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=54">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=54">
+<link rel="manifest" href="manifest.json?v=56">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -16,14 +16,16 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
-<script src="firebase-config.js?v=54"></script>
-<script src="html2pdf.bundle.min.js?v=54"></script>
-<script src="report-images.js?v=54"></script>
-<script src="vehicle-info.js?v=54"></script>
-<script src="vehicle-input.js?v=54&build=2"></script>
-<link rel="stylesheet" href="report-ai.css?v=54">
-<script src="report-ai-config.js?v=54"></script>
-<script src="report-ai-core.js?v=54"></script>
+<script src="firebase-config.js?v=56"></script>
+<script src="html2pdf.bundle.min.js?v=56"></script>
+<script src="report-images.js?v=56"></script>
+<script src="vehicle-info.js?v=56"></script>
+<script src="wb-workflow.js?v=56"></script>
+<link rel="stylesheet" href="wb-workflow.css?v=56">
+<script src="vehicle-input.js?v=56&build=2"></script>
+<link rel="stylesheet" href="report-ai.css?v=56">
+<script src="report-ai-config.js?v=56"></script>
+<script src="report-ai-core.js?v=56"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -500,46 +502,15 @@
 </style>
 </head>
 <body data-report-view="home">
-<div class="atelier-meta-overlay" id="atelierMetaOverlay" role="dialog" aria-modal="true" aria-labelledby="atelierMetaTitle">
-  <div class="atelier-meta-modal">
-    <h3 id="atelierMetaTitle">Informations pour le carnet atelier</h3>
-    <div class="modal-body">
-      <div class="hint" style="margin-bottom:13px;">Ces informations seront enregistrées sur la fiche du véhicule et sur l’intervention liée au rapport. Les champs peuvent être laissés vides.</div>
-      <div class="field">
-        <label for="atelierOwner">Nom du propriétaire</label>
-        <input type="text" id="atelierOwner" placeholder="ex. Jean Dupont" autocomplete="name">
-      </div>
-      <div class="grid2">
-        <div class="field">
-          <label for="atelierTime">Temps passé (h)</label>
-          <input type="number" id="atelierTime" min="0" step="0.25" placeholder="ex. 2.5" inputmode="decimal">
-        </div>
-        <div class="field">
-          <label for="atelierPay">Rémunération (€)</label>
-          <input type="number" id="atelierPay" min="0" step="1" placeholder="ex. 150" inputmode="decimal">
-        </div>
-      </div>
-      <div class="modal-error" id="atelierMetaError"></div>
-      <div class="modal-actions">
-        <button class="btn" type="button" id="atelierMetaCancel">Annuler</button>
-        <button class="btn primary" type="button" id="atelierMetaConfirm">Sauvegarder dans le carnet</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=54" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=56" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 54</span>
-          <label class="app-bar-sync">
-            <input type="checkbox" id="syncAtelierOnSave" checked> MàJ Carnet
-          </label>
+          <span class="sub">Version 56</span>
         </div>
       </div>
       <div class="app-bar-notices">
@@ -550,7 +521,7 @@
     </div>
     <div class="app-bar-actions">
       <button class="btn ghost wide" id="btnArchive">📁 Mes rapports</button>
-      <button class="btn primary" id="btnSaveNow">💾 Sauvegarder</button>
+      <button class="btn primary" id="btnSaveNow">💾 Enregistrer</button><button class="btn primary" id="btnCompleteReport" type="button" hidden>Enregistrer et marquer terminée</button>
       <button class="btn primary" id="btnPdf">📄 Générer le PDF</button>
       <button class="btn ghost" id="btnImport">📥 Importer</button>
       <button class="btn ghost" id="btnExport">📤 Exporter (.json)</button>
@@ -600,6 +571,16 @@
 <div class="wrap">
   <!-- ====================== EDITOR ====================== -->
   <div class="editor">
+    <section class="wb-flow-panel no-print" id="wbReportWorkflowPanel" aria-label="Intervention liée">
+      <h3>Intervention liée</h3><div id="wbReportLinkLabel" class="wb-flow-muted">Rapport indépendant — aucune opération du Carnet liée.</div><span id="wbReportState" class="wb-flow-state">Indépendant</span>
+      <label for="wbLinkedOperation">Rattacher à une intervention (facultatif)</label><select id="wbLinkedOperation"><option value="">Aucune intervention liée — rapport indépendant</option></select>
+      <div class="wb-flow-actions"><button type="button" id="wbRefreshLinks">Rechercher les interventions</button><button type="button" id="wbLinkOperation">Appliquer le rattachement</button></div>
+      <p class="wb-flow-muted">La liste est actualisée avec « Vérifier » ou « Rechercher les interventions ». Les opérations possédant un autre rapport sont grisées.</p>
+      <div class="wb-flow-actions"><button type="button" id="wbCreateOperation">Créer une opération terminée dans le Carnet</button><button type="button" id="wbEditClosure" hidden>Modifier la clôture</button><button type="button" id="wbReopenOperation" hidden>Réouvrir l’intervention</button></div>
+      <p id="wbReportStatus" class="wb-flow-muted" role="status"></p>
+      <div class="wb-flow-actions"><button type="button" id="wbPublishReport" hidden>Valider et partager le rapport</button><button type="button" id="wbUnpublishReport" hidden>Retirer le partage</button></div><p id="wbReportShareStatus" class="wb-flow-muted">Le rapport reste privé.</p>
+    </section>
+
 
     <div class="card">
       <h2>Informations du véhicule</h2>
@@ -878,58 +859,17 @@ async function uploadAndSwapArrayItem(item, dataUrl, pathHint){
 /* Corrige un champ image (overview, logo, baieAvant...) directement dans le
    document Firestore d'un rapport donné, sans dépendre de ce qui est affiché
    à l'écran au moment où l'upload se termine. */
-async function patchReportField(reportId, key, oldDataUrl, newUrl){
-  try{
-    const ref = reportDocRef(reportId);
-    const snap = await ref.get();
-    if(!snap.exists) return; // rien encore écrit pour ce rapport, pas de correction possible
-    const remote = snap.data();
-    if(!remote || !remote.payload) return;
-    let parsed;
-    try{ parsed = JSON.parse(remote.payload); }catch(e){ return; }
-    if(parsed[key] !== oldDataUrl) return; // déjà à jour ou changé depuis, on ne touche à rien
-    parsed[key] = newUrl;
-    await ref.set({
-      payload: JSON.stringify(parsed),
-      title: parsed.plate || parsed.model || parsed.title || 'Sans titre',
-      subtitle: [parsed.brand, parsed.model].filter(Boolean).join(' '),
-      updatedAt: Date.now(),
-      writerId: SYNC_CLIENT_ID
-    },{merge:true});
-  }catch(e){ console.warn('Correction différée du rapport impossible', e); }
+function retainReportAsset(url){
+  // Removing an image from a draft never deletes an image of its published snapshot.
+  // Whole-report deletion (only after detaching) still removes its Storage folder.
 }
-
-/* Même principe pour une photo dans un tableau (sections, factures),
-   retrouvée par son identifiant plutôt que par sa position. */
-async function patchReportArrayItem(reportId, itemId, oldDataUrl, newUrl){
-  try{
-    const ref = reportDocRef(reportId);
-    const snap = await ref.get();
-    if(!snap.exists) return;
-    const remote = snap.data();
-    if(!remote || !remote.payload) return;
-    let parsed;
-    try{ parsed = JSON.parse(remote.payload); }catch(e){ return; }
-    let touched = false;
-    const patchArr = (arr)=>{
-      if(!Array.isArray(arr)) return;
-      arr.forEach(it=>{
-        if(it && it.id === itemId && it.src === oldDataUrl){ it.src = newUrl; touched = true; }
-      });
-    };
-    patchArr(parsed.invoices);
-    (parsed.sections||[]).forEach(sec=>{
-      patchArr(sec.photos); patchArr(sec.photosL); patchArr(sec.photosR);
-    });
-    if(!touched) return;
-    await ref.set({
-      payload: JSON.stringify(parsed),
-      title: parsed.plate || parsed.model || parsed.title || 'Sans titre',
-      subtitle: [parsed.brand, parsed.model].filter(Boolean).join(' '),
-      updatedAt: Date.now(),
-      writerId: SYNC_CLIENT_ID
-    },{merge:true});
-  }catch(e){ console.warn('Correction différée du rapport impossible', e); }
+async function patchReportField(reportId,key,oldDataUrl,newUrl){
+  try{await WBWorkflow.raw('replaceReportImage',{reportId,key,oldDataUrl,newUrl,writerId:SYNC_CLIENT_ID});}
+  catch(e){console.warn('Correction différée du rapport impossible',e);}
+}
+async function patchReportArrayItem(reportId,itemId,oldDataUrl,newUrl){
+  try{await WBWorkflow.raw('replaceReportImage',{reportId,itemId,oldDataUrl,newUrl,writerId:SYNC_CLIENT_ID});}
+  catch(e){console.warn('Correction différée du rapport impossible',e);}
 }
 
 /* ---------- PDF -> images (pdf.js chargé à la demande depuis le CDN) ---------- */
@@ -1014,30 +954,30 @@ function clearSyncError(){
 
 const FIRESTORE_DOC_SAFE_LIMIT = 900000; // marge sous la limite Firestore de 1 048 576 octets
 
-function doFirestoreSave(reportId, payloadJson, meta){
-  if(payloadJson.length > FIRESTORE_DOC_SAFE_LIMIT){
-    flagSyncError("⚠️ Ce rapport est trop volumineux pour être synchronisé (photos en haute résolution probablement) → utilise « Exporter (.json) » pour ne rien perdre");
-    return;
-  }
-  try{
-    reportDocRef(reportId).set({
-      payload: payloadJson,
-      title: meta.title,
-      subtitle: meta.subtitle,
-      updatedAt: Date.now(),
-      writerId: SYNC_CLIENT_ID
-    },{merge:true}).then(()=>{forgetLocalDraft(reportId,payloadJson);clearSyncError();})
-      .catch((e)=>{ console.error('Erreur de synchronisation', e); flagSyncError(); });
-  }catch(e){ console.error('Erreur de synchronisation', e); flagSyncError(); }
+const reportWriteQueues=new Map();
+const reportRemotePayloads=new Map();
+const dirtyReportIds=new Set();
+const conflictedReportIds=new Set();
+let reportUiReady=false;
+function doFirestoreSave(reportId,payloadJson,meta){
+  if(new TextEncoder().encode(payloadJson).length>FIRESTORE_DOC_SAFE_LIMIT){flagSyncError('Rapport trop volumineux : exporte le JSON pour préserver ton travail.');return Promise.reject(new Error('Rapport trop volumineux.'));}
+  const next=(reportWriteQueues.get(reportId)||Promise.resolve()).catch(()=>{}).then(async()=>{
+    if(conflictedReportIds.has(reportId))throw new Error('Le rapport a changé sur un autre appareil. Ton brouillon est conservé localement : exporte-le avant de rouvrir la version distante.');
+    const expected=reportRemotePayloads.get(reportId);
+    await WBWorkflow.raw('draftReport',{reportId,report:JSON.parse(payloadJson),writerId:SYNC_CLIENT_ID,...(expected===undefined?{}:{expectedPayload:expected})});
+    reportRemotePayloads.set(reportId,payloadJson);
+    if(currentReportId!==reportId||JSON.stringify(state)===payloadJson)dirtyReportIds.delete(reportId);
+    forgetLocalDraft(reportId,payloadJson);clearSyncError();
+  }).catch(e=>{flagSyncError('Synchronisation impossible : '+e.message);throw e;});
+  reportWriteQueues.set(reportId,next);next.catch(()=>{});return next;
 }
-
 function flushPendingSave(){
-  if(_saveDebounceTimer){
-    clearTimeout(_saveDebounceTimer);
-    _saveDebounceTimer = null;
-    if(_pendingSave) doFirestoreSave(_pendingSave.reportId, _pendingSave.payload, _pendingSave.meta);
-    _pendingSave = null;
-  }
+  clearTimeout(_saveDebounceTimer);_saveDebounceTimer=null;
+  if(_pendingSave){const pending=_pendingSave;_pendingSave=null;return doFirestoreSave(pending.reportId,pending.payload,pending.meta);}
+  return reportWriteQueues.get(currentReportId)||Promise.resolve();
+}
+async function flushReportForWorkflow(){
+  await migrateEmbeddedImages();save();await flushPendingSave();
 }
 
 function fmtSize(bytes){
@@ -1059,6 +999,7 @@ function save(){
   updateSizeIndicator(payloadNow.length);
   cacheReportLocally(currentReportId,payloadNow);
   if(_applyingRemoteUpdate) return; // ne pas ré-émettre ce qu'on vient de recevoir
+  dirtyReportIds.add(currentReportId);
 
   // on fige la cible (rapport + contenu) tout de suite, pour ne jamais
   // écrire dans le mauvais rapport si l'utilisateur change de rapport
@@ -1076,43 +1017,8 @@ function save(){
 }
 
 async function saveNow(){
-  if(!currentReportId || document.body.dataset.reportView!=='editor') return;
-  if(!requireReportSummary()) return;
-  const btn = document.getElementById('btnSaveNow');
-  const original = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = '⏳ Préparation…';
-
-  const checkbox = document.getElementById('syncAtelierOnSave');
-  let metadata = null;
-  if(!checkbox || checkbox.checked){
-    metadata = await askAtelierMetadata();
-    if(!metadata){
-      btn.textContent = original;
-      btn.disabled = false;
-      return;
-    }
-  }
-
-  btn.textContent = '⏳ Enregistrement…';
-  try{
-    save();             // recalcule et fige le contenu à jour
-    flushPendingSave(); // écrit tout de suite, sans attendre les 600 ms
-    await new Promise(r=>setTimeout(r, 400));
-
-    if(metadata){
-      const result = await syncReportToAtelier(metadata);
-      if(result && result.message && result.status !== 'skipped') alert(result.message);
-    }
-
-    btn.textContent = '✓ Enregistré';
-  }catch(e){
-    console.error('Sauvegarde ou synchronisation du carnet impossible', e);
-    btn.textContent = '⚠️ Carnet non mis à jour';
-    alert("Le rapport a été sauvegardé, mais le carnet atelier n'a pas pu être mis à jour."+(e?.message?'\n\n'+e.message:''));
-  }finally{
-    setTimeout(()=>{ btn.textContent = original; btn.disabled = false; }, 1400);
-  }
+  if(window.WBReportFlow)return window.WBReportFlow.save();
+  alert('Initialisation du générateur en cours.');
 }
 
 /* Copies locales non confirmées par Firebase : ne pas perdre un brouillon
@@ -1296,6 +1202,14 @@ function subscribeToReport(id, {isNew=false, localDraft=null}={}){
       return;
     }
     const remote=snap.data();
+    window.WBReportFlow?.opened(id,remote);
+    if(!isInitialSnapshot && remote.writerId!==SYNC_CLIENT_ID && dirtyReportIds.has(id)
+       && reportRemotePayloads.get(id)!==remote.payload && remote.payload!==JSON.stringify(state)){
+      conflictedReportIds.add(id);cacheReportLocally(id,JSON.stringify(state));
+      flagSyncError('Conflit : une autre session a modifié ce rapport. Ton brouillon est conservé localement ; exporte-le avant de rouvrir le rapport.');
+      return;
+    }
+    reportRemotePayloads.set(id,remote.payload);
     let parsed;
     try{
       parsed=JSON.parse(remote?.payload||'');
@@ -1333,23 +1247,28 @@ function subscribeToReport(id, {isNew=false, localDraft=null}={}){
   });
 }
 
-function startNewReport(){
+async function startNewReport(){
   if(currentReportId && !confirm('Créer un nouveau rapport ? Le rapport actuel reste enregistré dans « Mes rapports ».'))return;
-  subscribeToReport(newReportId(),{isNew:true});
-  closeArchive();
+  const id=newReportId();
+  try{await WBWorkflow.call('draftReport',{reportId:id,report:blankState(),writerId:SYNC_CLIENT_ID});subscribeToReport(id);closeArchive();}
+  catch(e){alert('Création impossible : '+e.message)}
 }
 
-function openReport(id){
-  subscribeToReport(id);
-  closeArchive();
+async function openReport(id){
+  try{
+    if(conflictedReportIds.has(id)&&!confirm('Rouvrir la version distante ? Exporte d’abord ton brouillon local si tu souhaites le conserver.'))return;
+    await WBWorkflow.call('reportInfo',{reportId:id});
+    if(conflictedReportIds.has(id)){clearTimeout(_saveDebounceTimer);if(_pendingSave?.reportId===id)_pendingSave=null;await (reportWriteQueues.get(id)||Promise.resolve()).catch(()=>{});conflictedReportIds.delete(id);dirtyReportIds.delete(id);}
+    subscribeToReport(id);closeArchive();}
+  catch(e){alert('Ouverture impossible : '+e.message)}
 }
 
 async function deleteReport(id,evt){
   evt.stopPropagation();
   if(!confirm('Supprimer définitivement ce rapport (et ses photos) ?'))return;
   try{
-    if(id===currentReportId)flushPendingSave();
-    await reportDocRef(id).delete();
+    if(id===currentReportId)await flushPendingSave();
+    await WBWorkflow.call('deleteReport',{reportId:id});
     forgetLocalDraft(id);
     try{
       if(localStorage.getItem('current_report_id')===id){
@@ -1358,7 +1277,7 @@ async function deleteReport(id,evt){
     }catch(e){}
     deleteStorageFolder(`reports/${id}`);
     if(id===currentReportId)showReportHome('Rapport supprimé. Sélectionne un rapport ou crée-en un nouveau.');
-  }catch(e){alert('Échec de la suppression, réessaie.');}
+  }catch(e){alert('Suppression impossible : '+e.message);}
 }
 
 function fmtArchiveDate(ts){
@@ -1679,7 +1598,7 @@ function renderThumbs(tw, sec, arr){
     cap.addEventListener('input', ()=>{ p.cap=cap.value; renderReport(); save(); });
     th.querySelector('.pup').addEventListener('click', ()=>movePhotoArr(arr,pi,-1));
     th.querySelector('.pdown').addEventListener('click', ()=>movePhotoArr(arr,pi,1));
-    th.querySelector('.pdel').addEventListener('click', ()=>{ deleteStorageFileByUrl(arr[pi].src); arr.splice(pi,1); buildSections(); renderReport(); save(); });
+    th.querySelector('.pdel').addEventListener('click', ()=>{ retainReportAsset(arr[pi].src); arr.splice(pi,1); buildSections(); renderReport(); save(); });
     tw.appendChild(th);
   });
 }
@@ -1856,7 +1775,7 @@ document.getElementById('f_overview').addEventListener('change', async (e)=>{
   renderReport(); save(); e.target.value='';
   uploadAndSwapField('overview', dataUrl);
 });
-document.getElementById('clearOverview').addEventListener('click',(e)=>{e.preventDefault(); deleteStorageFileByUrl(state.overview); state.overview=null; renderReport(); save();});
+document.getElementById('clearOverview').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.overview); state.overview=null; renderReport(); save();});
 document.getElementById('f_products').addEventListener('change', async (e)=>{
   if(!e.target.files[0]) return;
   const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
@@ -1864,7 +1783,7 @@ document.getElementById('f_products').addEventListener('change', async (e)=>{
   renderReport(); save(); e.target.value='';
   uploadAndSwapField('products', dataUrl);
 });
-document.getElementById('clearProducts').addEventListener('click',(e)=>{e.preventDefault(); deleteStorageFileByUrl(state.products); state.products=null; renderReport(); save();});
+document.getElementById('clearProducts').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.products); state.products=null; renderReport(); save();});
 document.getElementById('f_logo').addEventListener('change', async (e)=>{
   if(!e.target.files[0]) return;
   const dataUrl = await processImage(e.target.files[0], 700, 0.92);
@@ -1872,7 +1791,7 @@ document.getElementById('f_logo').addEventListener('change', async (e)=>{
   renderReport(); save(); e.target.value='';
   uploadAndSwapField('logo', dataUrl);
 });
-document.getElementById('resetLogo').addEventListener('click',(e)=>{e.preventDefault(); deleteStorageFileByUrl(state.logo); state.logo=DEFAULT_LOGO; renderReport(); save();});
+document.getElementById('resetLogo').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.logo); state.logo=DEFAULT_LOGO; renderReport(); save();});
 
 /* ---------- baie moteur ---------- */
 function buildBaie(){
@@ -1906,7 +1825,7 @@ document.getElementById('f_baieAvant').addEventListener('change', async (e)=>{
   renderReport(); save(); e.target.value='';
   uploadAndSwapField('baieAvant', dataUrl);
 });
-document.getElementById('clearBaieAvant').addEventListener('click',(e)=>{e.preventDefault(); deleteStorageFileByUrl(state.baieAvant); state.baieAvant=null; renderReport(); save();});
+document.getElementById('clearBaieAvant').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.baieAvant); state.baieAvant=null; renderReport(); save();});
 document.getElementById('f_baieApres').addEventListener('change', async (e)=>{
   if(!e.target.files[0]) return;
   const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
@@ -1915,7 +1834,7 @@ document.getElementById('f_baieApres').addEventListener('change', async (e)=>{
   renderReport(); save(); e.target.value='';
   uploadAndSwapField('baieApres', dataUrl);
 });
-document.getElementById('clearBaieApres').addEventListener('click',(e)=>{e.preventDefault(); deleteStorageFileByUrl(state.baieApres); state.baieApres=null; renderReport(); save();});
+document.getElementById('clearBaieApres').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.baieApres); state.baieApres=null; renderReport(); save();});
 
 /* ---------- étiquette ---------- */
 document.getElementById('f_labelR').addEventListener('change', async (e)=>{
@@ -1925,7 +1844,7 @@ document.getElementById('f_labelR').addEventListener('change', async (e)=>{
   renderReport(); save(); e.target.value='';
   uploadAndSwapField('labelR', dataUrl);
 });
-document.getElementById('clearLabelR').addEventListener('click',(e)=>{e.preventDefault(); deleteStorageFileByUrl(state.labelR); state.labelR=null; renderReport(); save();});
+document.getElementById('clearLabelR').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.labelR); state.labelR=null; renderReport(); save();});
 document.getElementById('f_labelV').addEventListener('change', async (e)=>{
   if(!e.target.files[0]) return;
   const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
@@ -1933,7 +1852,7 @@ document.getElementById('f_labelV').addEventListener('change', async (e)=>{
   renderReport(); save(); e.target.value='';
   uploadAndSwapField('labelV', dataUrl);
 });
-document.getElementById('clearLabelV').addEventListener('click',(e)=>{e.preventDefault(); deleteStorageFileByUrl(state.labelV); state.labelV=null; renderReport(); save();});
+document.getElementById('clearLabelV').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.labelV); state.labelV=null; renderReport(); save();});
 
 /* ---------- invoices ---------- */
 function buildInvoices(){
@@ -1953,7 +1872,7 @@ function buildInvoices(){
     th.innerHTML=`<div class="tbar"><button class="pup">‹</button><button class="pdown">›</button><button class="pdel">✕</button></div>${preview}<div style="font-size:11px;text-align:center;padding:5px;border-top:1px solid var(--line);font-weight:600">Facture ${i+1}${isPdf?' (PDF)':''}</div>`;
     th.querySelector('.pup').addEventListener('click',()=>{ if(i>0){[state.invoices[i-1],state.invoices[i]]=[state.invoices[i],state.invoices[i-1]];buildInvoices();renderReport();save();}});
     th.querySelector('.pdown').addEventListener('click',()=>{ if(i<state.invoices.length-1){[state.invoices[i+1],state.invoices[i]]=[state.invoices[i],state.invoices[i+1]];buildInvoices();renderReport();save();}});
-    th.querySelector('.pdel').addEventListener('click',()=>{ deleteStorageFileByUrl(state.invoices[i].src); state.invoices.splice(i,1); buildInvoices(); renderReport(); save();});
+    th.querySelector('.pdel').addEventListener('click',()=>{ retainReportAsset(state.invoices[i].src); state.invoices.splice(i,1); buildInvoices(); renderReport(); save();});
     tw.appendChild(th);
   });
 }
@@ -2038,7 +1957,7 @@ function latestAtelierMileage(vehicle){
   // Même règle que la fiche Atelier : dernière opération DATÉE avec un km,
   // et non le maximum de l'historique (utile après un remplacement de compteur).
   const latest=(Array.isArray(vehicle.ops)?vehicle.ops:[])
-    .filter(op=>op && op.km!=='' && op.km!=null)
+    .filter(op=>op && WBWorkflow.done(op) && op.km!=='' && op.km!=null)
     .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))[0];
   if(!latest)return null;
   const km=Number(latest.km);
@@ -2126,6 +2045,7 @@ async function lookupAtelierVehicle(){
     if(info.inferred)messages.push('Ancienne fiche : marque/modèle extraits du libellé, à vérifier.');
     setVehicleLookupStatus(messages.join(' '),preserved.length||missing.length||info.inferred?'warning':'success');
     if(filled.length){renderReport();save();}
+    window.WBReportFlow?.refresh(true);
   }catch(error){
     if(!isCurrent())return;
     vehicleMileageReference=null;
@@ -2201,188 +2121,6 @@ function requireReportSummary(){
   }
   alert('Le résumé est obligatoire. Il sera utilisé comme intitulé de l’opération dans le Carnet d’atelier.');
   return false;
-}
-
-async function getAtelierMetadataDefaults(){
-  const defaults={owner:'',temps:'',remuneration:''};
-  const plateKey=normalizePlate(state.plate);
-  if(!plateKey) return defaults;
-  try{
-    const snap=await sharedDocRef('atelier').get();
-    if(!snap.exists) return defaults;
-    const data=JSON.parse(snap.data().payload||'{"vehicles":[]}');
-    const matches=(data.vehicles||[]).filter(v=>normalizePlate(v.plate)===plateKey);
-    if(matches.length!==1) return defaults;
-    const vehicle=matches[0];
-    defaults.owner=String(vehicle.owner||'');
-    const existing=(vehicle.ops||[]).find(o=>o && o.source==='rapport' && o.reportId===currentReportId);
-    if(existing){
-      defaults.temps=existing.temps ?? '';
-      defaults.remuneration=existing.remuneration ?? '';
-    }
-  }catch(e){ console.warn('Préremplissage carnet indisponible',e); }
-  return defaults;
-}
-
-async function askAtelierMetadata(){
-  const overlay=document.getElementById('atelierMetaOverlay');
-  const owner=document.getElementById('atelierOwner');
-  const time=document.getElementById('atelierTime');
-  const pay=document.getElementById('atelierPay');
-  const error=document.getElementById('atelierMetaError');
-  const defaults=await getAtelierMetadataDefaults();
-  owner.value=defaults.owner;
-  time.value=defaults.temps;
-  pay.value=defaults.remuneration;
-  error.textContent='';
-  overlay.style.display='flex';
-  setTimeout(()=>owner.focus(),0);
-  return new Promise(resolve=>{
-    const confirmBtn=document.getElementById('atelierMetaConfirm');
-    const cancelBtn=document.getElementById('atelierMetaCancel');
-    const finish=value=>{
-      overlay.style.display='none';
-      confirmBtn.onclick=null; cancelBtn.onclick=null; overlay.onclick=null;
-      resolve(value);
-    };
-    confirmBtn.onclick=()=>{
-      const ownerValue=owner.value.trim();
-      const timeRaw=String(time.value||'').trim().replace(',','.');
-      const payRaw=String(pay.value||'').trim().replace(',','.');
-      const temps=timeRaw==='' ? 0 : Number(timeRaw);
-      const remuneration=payRaw==='' ? 0 : Number(payRaw);
-      if(!Number.isFinite(temps) || temps<0){ error.textContent='Renseigne un temps passé valide ou laisse le champ vide.'; time.focus(); return; }
-      if(!Number.isFinite(remuneration) || remuneration<0){ error.textContent='Renseigne une rémunération valide ou laisse le champ vide.'; pay.focus(); return; }
-      finish({owner:ownerValue,temps,remuneration});
-    };
-    cancelBtn.onclick=()=>finish(null);
-    overlay.onclick=e=>{ if(e.target===overlay) finish(null); };
-  });
-}
-
-
-function wbCarnetSafeOperationId(id){
-  const raw=String(id || '').replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,120);
-  return `atelier_${raw || ('r'+Date.now().toString(36))}`;
-}
-
-async function syncLinkedReportToWBCarnet(vehicle,operation){
-  const vehicleId=vehicle?.wbCarnet?.vehicleId;
-  if(!vehicleId || !operation?.reportId || !auth.currentUser) return;
-  const reportId=String(operation.reportId);
-  const target=db.collection('wbCarnetVehicles').doc(vehicleId);
-  const operationId=wbCarnetSafeOperationId(operation.id);
-  const batch=db.batch();
-  batch.set(target,{
-    model:vehicle.modele || 'Véhicule',
-    engine:vehicle.motorisation || '',
-    plate:vehicle.plate || '',
-    plateKey:normalizePlate(vehicle.plate),
-    ownerName:vehicle.owner || '',
-    sourceVehicleId:vehicle.id,
-    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-  },{merge:true});
-  batch.set(target.collection('operations').doc(operationId),{
-    source:'atelier',
-    sourceType:'rapport',
-    sourceVehicleId:vehicle.id,
-    sourceOperationId:String(operation.id || ''),
-    date:operation.date || '',
-    mileage:Number(operation.km) || null,
-    title:operation.operation || 'Intervention',
-    details:operation.notes || '',
-    performedBy:'WheelerBrothers',
-    createdBy:auth.currentUser.uid,
-    reportId,
-    reportSpaceId:ensureSharedCode(),
-    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-  },{merge:true});
-  batch.set(reportDocRef(reportId),{
-    sharedReport:true,
-    sharedVehicleId:vehicleId,
-    sourceVehicleId:vehicle.id,
-    sharedUpdatedAt:firebase.firestore.FieldValue.serverTimestamp()
-  },{merge:true});
-  await batch.commit();
-}
-
-async function syncReportToAtelier(metadata){
-  const plateKey = normalizePlate(state.plate);
-  if(!plateKey) return {status:'skipped', message:"Aucune immatriculation : le carnet n'a pas été modifié."};
-  if(!currentReportId) return {status:'skipped', message:"Rapport non identifié : le carnet n'a pas été modifié."};
-
-  const atelierRef = sharedDocRef('atelier');
-  let outcome = null;
-  let linkedVehicle = null;
-  let linkedOperation = null;
-  await db.runTransaction(async tx=>{
-    const snap = await tx.get(atelierRef);
-    let data = {vehicles:[]};
-    if(snap.exists){
-      try{ data = JSON.parse(snap.data().payload||'{"vehicles":[]}'); }catch(e){ data={vehicles:[]}; }
-    }
-    if(!Array.isArray(data.vehicles)) data.vehicles=[];
-
-    const matches = data.vehicles.filter(v=>normalizePlate(v.plate)===plateKey);
-    if(matches.length>1)throw new Error('Plusieurs fiches portent cette plaque : corrige les doublons dans le carnet avant sa mise à jour.');
-    let vehicle = matches[0];
-    if(!vehicle){
-      const label = [state.brand, state.model].filter(Boolean).join(' ').trim() || state.plate;
-      const create = confirm(`Aucune fiche trouvée pour ${state.plate}.
-
-Créer automatiquement la fiche « ${label} » dans le carnet atelier ?`);
-      if(!create){ outcome={status:'skipped',message:'Rapport sauvegardé sans modification du carnet.'}; return; }
-      vehicle = {
-        id:'v'+Date.now()+Math.random().toString(16).slice(2,8),
-        ...WBVehicleInfo.fields(state.brand,state.model,state.reg),
-        modele:label,
-        motorisation:String(state.engine||'Non renseignée').trim(),
-        plate:String(state.plate||'').trim().toUpperCase(),
-        owner:String(metadata.owner||'').trim(),
-        ops:[],
-        updatedAt:Date.now()
-      };
-      data.vehicles.push(vehicle);
-    }
-    WBVehicleInfo.enrichFromReport(vehicle,state);
-    if(!Array.isArray(vehicle.ops)) vehicle.ops=[];
-    vehicle.plate = String(state.plate||vehicle.plate||'').trim().toUpperCase();
-    const ownerValue=String(metadata.owner||'').trim();
-    if(ownerValue) vehicle.owner=ownerValue;
-    else if(typeof vehicle.owner!=='string') vehicle.owner='';
-
-    const opData = {
-      date:state.date || new Date().toISOString().slice(0,10),
-      operation:reportOperationTitle(),
-      km:cleanKm(state.km),
-      temps:Number(metadata.temps)||0,
-      remuneration:Number(metadata.remuneration)||0,
-      notes:reportOperationNotes(),
-      source:'rapport',
-      reportId:currentReportId
-    };
-    const existing = vehicle.ops.find(o=>o && o.source==='rapport' && o.reportId===currentReportId);
-    if(existing){
-      Object.assign(existing, opData);
-      linkedOperation=existing;
-      outcome={status:'updated',message:`Opération mise à jour dans la fiche ${vehicle.plate || vehicle.modele}.`};
-    }else{
-      const created={id:'v'+Date.now()+Math.random().toString(16).slice(2,8), ...opData};
-      vehicle.ops.push(created);
-      linkedOperation=created;
-      outcome={status:'created',message:`Opération ajoutée à la fiche ${vehicle.plate || vehicle.modele}.`};
-    }
-    linkedVehicle=JSON.parse(JSON.stringify(vehicle));
-    vehicle.updatedAt=Date.now();
-    tx.set(atelierRef,{payload:JSON.stringify(data),updatedAt:Date.now()});
-  });
-  if(linkedVehicle?.wbCarnet?.vehicleId && linkedOperation){
-    await syncLinkedReportToWBCarnet(linkedVehicle,linkedOperation);
-  }
-  if(outcome && outcome.status!=='skipped' && String(state.reg||'').trim() && !WBVehicleInfo.isoDate(state.reg)){
-    outcome.message += ' La 1ère mise en circulation n’a pas été enregistrée dans la fiche : indique une date complète au format JJ/MM/AAAA.';
-  }
-  return outcome || {status:'skipped',message:'Rapport sauvegardé sans modification du carnet.'};
 }
 
 function isFirebaseStorageDownloadUrl(value){
@@ -2835,7 +2573,7 @@ document.getElementById('importFile').addEventListener('change',(e)=>{
 });
 document.getElementById('btnReset').addEventListener('click', ()=>{
   if(!confirm('Tout effacer et repartir de zéro ?')) return;
-  deleteStorageFolder(`reports/${currentReportId}`); // best-effort
+  // v56: keep uploaded files; a validated snapshot may still reference them.
   Object.assign(state,{title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,checkpoints:makeDefaultCheckpoints(),invoicesOn:false,invoices:[],closing:"",sections:[]});
   try{ localStorage.removeItem('rapport_state'); }catch(e){}
   initFields(); buildSections(); buildBaie(); buildChecklist(); buildInvoices(); renderReport();
@@ -3011,6 +2749,7 @@ setMobileView('editor');
   document.getElementById('btnSaveNow').addEventListener('click',saveNow);
   document.getElementById('btnHomeSelect').disabled=false;
   document.getElementById('btnHomeCreate').disabled=false;
+  reportUiReady=true;window.dispatchEvent(new Event('wb-report-ready'));
 })();
 /* ---------- passerelle du nouvel assistant IA : nouveau rapport exclusivement ---------- */
 window.WBReportAIHost = {
@@ -3025,9 +2764,9 @@ window.WBReportAIHost = {
     const data=snap.exists?JSON.parse(snap.data().payload||'{"vehicles":[]}'):{vehicles:[]};
     if(!Array.isArray(data.vehicles))throw new Error('Données carnet invalides');
     const found=data.vehicles.filter(v=>v && normalizePlate(v.plate)===key);
-    return {matches:found.length,info:found.length===1?WBVehicleInfo.fromVehicle(found[0]):null,km:found.length===1?latestAtelierMileage(found[0]):null};
+    return {matches:found.length,info:found.length===1?WBVehicleInfo.fromVehicle(found[0]):null,km:found.length===1?latestAtelierMileage(found[0]):null,vehicleId:found.length===1?found[0].id:null,operations:found.length===1?(found[0].ops||[]).filter(o=>!['merged','deleted'].includes(o.status)):[]};
   },
-  async apply(report, id){
+  async apply(report, id, workflowRef){
     await window.atelierReady;
     if(!/^rai[a-f0-9]{32}$/.test(id)) throw new Error('Identifiant de brouillon IA invalide');
     const payload=JSON.stringify(report);
@@ -3038,11 +2777,23 @@ window.WBReportAIHost = {
     // Écriture atomique côté serveur avec le statut du brouillon. Si déjà créé,
     // ouvrir la version existante sans écraser les corrections faites ensuite.
     await apply({action:'apply',jobId:id,report,writerId:SYNC_CLIENT_ID});
-    const sync=document.getElementById('syncAtelierOnSave');
-    if(sync)sync.checked=false;
+    // A competing association can fail without losing the report or triggering a new AI call.
+    if(workflowRef){
+      try{await WBWorkflow.call('linkReport',{...workflowRef,reportId:id});}
+      catch(e){alert('Le rapport est créé et conservé, mais son rattachement n’a pas été effectué : '+e.message+' Tu peux le rattacher depuis le générateur.');}
+    }
+    await WBWorkflow.call('reportInfo',{reportId:id});
     subscribeToReport(id);
     closeArchive();
   }
+};
+
+window.WBReportWorkflowHost={
+ ready:window.atelierReady,booted:()=>reportUiReady,id:()=>currentReportId,
+ state:()=>JSON.parse(JSON.stringify(state)),blank:blankState,writer:SYNC_CLIENT_ID,
+ open:openReport,flush:flushReportForWorkflow,requireSummary:requireReportSummary,
+ expected:()=>reportRemotePayloads.get(currentReportId),
+  setDate:value=>{state.date=value;document.getElementById('f_date').value=value;renderReport();save();}
 };
 
 </script>
@@ -3050,10 +2801,11 @@ window.WBReportAIHost = {
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=54&build=2',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=56&build=2',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
-<script src="report-ai.js?v=54"></script>
+<script src="report-workflow.js?v=56"></script>
+<script src="report-ai.js?v=56"></script>
 </body>
 </html>

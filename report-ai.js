@@ -7,12 +7,12 @@
   const LIMIT=Math.min(C.MAX_IMAGES,CFG.maxImages||100);
   const id=(prefix,n)=>prefix+Array.from(crypto.getRandomValues(new Uint8Array(n))).map(v=>v.toString(16).padStart(2,'0')).join('');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  let assets=[],documents=[],plan=null,jobId='',busy=false,requestInput=null,usage=null,vehicleKm=null,vehiclePlate='';
+  let assets=[],documents=[],plan=null,jobId='',busy=false,requestInput=null,usage=null,vehicleKm=null,vehiclePlate='',workflowRef=null,workflowOptions=[];
   const dialog=document.createElement('dialog');dialog.className='wb-ai-dialog no-print';dialog.id='wbAiDialog';
   dialog.setAttribute('aria-labelledby','aiTitle');
   const checks=H.blank().checkpoints;
   dialog.innerHTML=`<header class="wb-ai-head"><h2 id="aiTitle">Créer un rapport avec l’IA</h2><button type="button" class="btn ghost" id="aiClose" aria-label="Fermer">✕</button></header>
-    <div class="wb-ai-body"><p class="wb-ai-notice">Ajoute tes photos et décris les travaux. L’IA propose un classement ; tu le relis avant de créer un <strong>nouveau</strong> rapport. Aucun ancien rapport ni carnet client n’est modifié.</p>
+    <div class="wb-ai-body"><p class="wb-ai-notice">Ajoute tes photos et décris les travaux. L’IA propose un classement ; tu le relis avant de créer un <strong>nouveau</strong> rapport. Aucun ancien rapport n’est remplacé. Le rattachement reste facultatif ; la création ne termine pas l’intervention et ne partage pas le rapport.</p>
     <div id="aiResume" class="wb-ai-resume" hidden>Une préparation précédente est disponible.<div class="wb-ai-actions"><button class="btn" id="aiResumeBtn" type="button">Reprendre la préparation</button><button class="btn ghost" id="aiForget" type="button">Abandonner ce brouillon</button></div></div>
     <section id="aiInput">
       <div class="wb-ai-grid">
@@ -24,7 +24,7 @@
       </div>
       <div class="wb-ai-grid"><div><label for="aiEngine">Motorisation</label><input id="aiEngine" maxlength="160"></div><div><label for="aiReg">1ère mise en circulation</label><input id="aiReg" placeholder="JJ/MM/AAAA" maxlength="160"></div></div>
       <p id="aiMileageStatus" class="wb-ai-muted">La recherche de fiche se déclenche uniquement avec « Vérifier ».</p>
-      <label for="aiNotes">Travaux effectués, pièces et précisions *</label><textarea id="aiNotes" maxlength="12000" placeholder="Ex. : vidange moteur et remplacement du filtre à huile ; nettoyage du filtre à air réutilisable. Préciser les côtés ou les références si nécessaire."></textarea>
+      <div class="wb-flow-panel"><label for="aiLinkedOperation">Intervention liée (facultatif)</label><select id="aiLinkedOperation"><option value="">Aucune — rapport indépendant</option></select><p id="aiWorkflowHint" class="wb-flow-muted">Clique sur « Vérifier » pour afficher les interventions du véhicule. Les opérations possédant déjà un rapport sont grisées.</p></div><label for="aiNotes">Travaux effectués, pièces et précisions *</label><textarea id="aiNotes" maxlength="12000" placeholder="Ex. : vidange moteur et remplacement du filtre à huile ; nettoyage du filtre à air réutilisable. Préciser les côtés ou les références si nécessaire."></textarea>
       <h3>Photos de l’intervention</h3><p class="wb-ai-muted">Jusqu’à ${LIMIT} images, en une ou plusieurs sélections. Les fichiers sont préparés un par un pour limiter la mémoire du téléphone. Factures PDF : ajout possible ensuite dans l’éditeur habituel.</p>
       <label class="filebtn btn" for="aiFiles">Ajouter des photos</label><input id="aiFiles" type="file" accept="image/*" multiple>
       <p id="aiCount" class="wb-ai-muted">Aucune photo sélectionnée.</p><div id="aiGallery" class="wb-ai-gallery"></div>
@@ -42,13 +42,13 @@
       <label for="aiSummary">Résumé</label><textarea id="aiSummary" maxlength="1600"></textarea>
       <div id="aiSections"></div><label class="filebtn btn ghost" for="aiExtraFiles">Ajouter des photos manquantes (sans nouvel appel IA)</label><input id="aiExtraFiles" type="file" accept="image/*" multiple><div id="aiReviewGallery" class="wb-ai-gallery"></div>
       <div id="aiInvoiceReview" class="wb-ai-muted"></div><div id="aiWarnings" class="wb-ai-warnings"></div><div id="aiProblems" class="wb-ai-problems" role="status"></div><p id="aiUsage" class="wb-ai-usage"></p>
-      <label class="wb-ai-check"><input type="checkbox" id="aiApprove"><span>J’ai relu les informations et le classement des photos. Créer le rapport sans mise à jour du carnet ni partage client.</span></label>
+      <label class="wb-ai-check"><input type="checkbox" id="aiApprove"><span>J’ai relu les informations et le classement des photos. Créer le rapport ; si une intervention est sélectionnée, y rattacher le document sans la terminer ni le partager.</span></label>
       <div class="wb-ai-actions"><button class="btn primary" type="button" id="aiApply" disabled>Créer le rapport dans l’éditeur</button></div>
     </section></div>`;
   document.body.appendChild(dialog);
   const $=name=>dialog.querySelector('#'+name);
   function status(message,kind=''){ $('aiStatus').textContent=message;$('aiStatus').dataset.kind=kind; }
-  function remember(){$('aiDiscard').hidden=!jobId;try{localStorage.setItem(KEY,JSON.stringify({jobId}));}catch(e){/* reprise non disponible si stockage local interdit */}}
+  function remember(){$('aiDiscard').hidden=!jobId;try{localStorage.setItem(KEY,JSON.stringify({jobId,workflowRef}));}catch(e){/* reprise non disponible si stockage local interdit */}}
   function remembered(){try{return JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){return null;}}
   function forget(){try{localStorage.removeItem(KEY);}catch(e){}$('aiResume').hidden=true;}
   function setBusy(value){
@@ -76,7 +76,7 @@
     $('aiMileageStatus').textContent=mismatch?`⚠ Kilométrage inférieur au dernier connu (${vehicleKm.toLocaleString('fr-FR')} km). Vérifie la saisie.`:vehicleKm!=null && normalizePlate($('aiPlate').value)===vehiclePlate?`Dernier kilométrage connu : ${vehicleKm.toLocaleString('fr-FR')} km.`:'La recherche de fiche se déclenche uniquement avec « Vérifier ».';
     $('aiMileageStatus').classList.toggle('wb-ai-warning',Boolean(mismatch));
   }
-  $('aiPlate').addEventListener('input',()=>{WBVehicleInput.formatPlate($('aiPlate'),$('aiPlateOther').checked);vehicleKm=null;vehiclePlate='';$('aiVehicleStatus').textContent='';checkKm();});
+  $('aiPlate').addEventListener('input',()=>{workflowRef=null;workflowOptions=[];renderWorkflowOptions();WBVehicleInput.formatPlate($('aiPlate'),$('aiPlateOther').checked);vehicleKm=null;vehiclePlate='';$('aiVehicleStatus').textContent='';checkKm();});
   $('aiKm').addEventListener('input',()=>{WBVehicleInput.formatKm($('aiKm'));checkKm();});
   $('aiPlateOther').addEventListener('change',()=>{$('aiPlate').dispatchEvent(new Event('input',{bubbles:true}));});
   $('aiVerify').onclick=async()=>{
@@ -92,7 +92,7 @@
       const conflicts=fields.filter(([k,v])=>info[v] && previous[k] && previous[k]!==info[v]);
       const replace=conflicts.length?confirm('Remplacer les champs déjà renseignés par ceux du carnet ?\n'+conflicts.map(([k,v])=>k+' : '+info[v]).join('\n')):false;
       for(const [k,v] of fields)if(info[v] && (!previous[k]||replace) && $('ai'+k).value===previous[k])$('ai'+k).value=info[v];
-      vehicleKm=result.km?.km??null;vehiclePlate=key;checkKm();
+      vehicleKm=result.km?.km??null;vehiclePlate=key;checkKm();const choices=await WBWorkflow.call('list');workflowOptions=choices.vehicles.filter(v=>v.id===result.vehicleId).flatMap(v=>v.operations.map(o=>({...o,vehicleId:v.id})));workflowOptions.push(...(choices.pendingPlanning||[]).filter(x=>String(x.vehicle.plate||'').toUpperCase().replace(/[^A-Z0-9]/g,'')===key).map(x=>({...x.operation,vehicleId:x.vehicle.id})));renderWorkflowOptions();
       $('aiVehicleStatus').textContent='Fiche trouvée. Les champs disponibles ont été complétés.'+(info.inferred?' Vérifie la marque et le modèle déduits.':'');
     }catch(e){$('aiVehicleStatus').textContent='Recherche indisponible : '+e.message;}
     finally{$('aiVerify').disabled=false;}
@@ -206,7 +206,7 @@
   }
   function persistReview(){
     if(!plan || !jobId)return;
-    try{localStorage.setItem(KEY,JSON.stringify({jobId,review:{plan,assets:assets.map(a=>({id:a.id,name:a.name})),usage}}));}catch(e){status('Le classement reste ouvert, mais les corrections ne peuvent pas être conservées localement.','error');}
+    try{localStorage.setItem(KEY,JSON.stringify({jobId,workflowRef,review:{plan,assets:assets.map(a=>({id:a.id,name:a.name})),usage}}));}catch(e){status('Le classement reste ouvert, mais les corrections ne peuvent pas être conservées localement.','error');}
   }
   function resetApproval(){$('aiApprove').checked=false;updateProblems();persistReview();}
   function updateProblems(){
@@ -328,7 +328,7 @@
     }finally{setBusy(false);}
   });
   function reset(){
-    assets.forEach(a=>{if(a.preview)URL.revokeObjectURL(a.preview);});assets=[];documents=[];vehicleKm=null;vehiclePlate='';renderDocuments();plan=null;jobId='';requestInput=null;usage=null;
+    assets.forEach(a=>{if(a.preview)URL.revokeObjectURL(a.preview);});assets=[];documents=[];vehicleKm=null;vehiclePlate='';renderDocuments();plan=null;jobId='';requestInput=null;usage=null;workflowRef=null;workflowOptions=[];renderWorkflowOptions();
     $('aiDiscard').hidden=true;$('aiInput').hidden=false;$('aiReview').hidden=true;$('aiRetryArea').hidden=true;setMeta({});$('aiNotes').value='';$('aiConsent').checked=false;renderInputPhotos();setBusy(false);
   }
   async function abandon(){
@@ -349,16 +349,31 @@
       if(WBVehicleInput.isFrench(report.plate))report.plate=WBVehicleInput.plate(report.plate);
       for(const d of documents)for(let i=0;i<d.pages.length;i++)report.invoices.push({id:'ai_pdf_'+d.id+'_'+i,kind:'img',src:d.pages[i].url,name:d.name+' p.'+(i+1)});
       report.invoicesOn=report.invoices.length>0;
-      await H.apply(report,jobId);
+      await H.apply(report,jobId,workflowRef);
       forget();dialog.close();reset();
     }catch(e){status('Le rapport n’a pas pu être ouvert : '+e.message+'. Le brouillon est conservé.','error');}
     finally{setBusy(false);}
   }
-  async function open(){
+  function renderWorkflowOptions(){
+    const sel=$('aiLinkedOperation');sel.replaceChildren();const empty=document.createElement('option');empty.value='';empty.textContent='Aucune — rapport indépendant';sel.append(empty);
+    workflowOptions.forEach(o=>{const opt=document.createElement('option');opt.value=o._planningOnly?'planning::'+o.planningId:o.vehicleId+'::'+o.id;opt.textContent=[o.plannedDates?.join(', ')||o.date||'Sans date',o.operation||'Intervention',(o.status||'done')==='done'?'Terminée':'Planifiée',o.reportId?'Rapport déjà associé':''].filter(Boolean).join(' — ');opt.disabled=!!o.reportId;sel.append(opt);});
+    sel.value=workflowRef?(workflowRef.vehicleId?workflowRef.vehicleId+'::'+workflowRef.operationId:'planning::'+workflowRef.planningId):'';
+    $('aiWorkflowHint').textContent=workflowRef?'Ce rapport sera rattaché à l’intervention choisie. Décris uniquement les travaux réellement effectués, pas les travaux restant à faire.':'Rapport indépendant. Clique sur « Vérifier » pour afficher les interventions du véhicule.';
+  }
+  $('aiLinkedOperation').onchange=()=>{const value=$('aiLinkedOperation').value;workflowRef=value?(value.startsWith('planning::')?{planningId:value.split('::')[1]}:{vehicleId:value.split('::')[0],operationId:value.split('::')[1]}):null;if(jobId)remember();renderWorkflowOptions();};
+  async function open(context){
     await H.ready;
-    if(!plan && !jobId){const previous=remembered();$('aiResume').hidden=!previous?.jobId;$('aiGenerate').disabled=Boolean(previous?.jobId);}
+    if(context){
+      if(jobId||assets.length||remembered()?.jobId){alert('Une préparation IA est déjà en cours. Reprends-la ou abandonne-la avant de commencer un autre rapport lié.');return;}
+      const v=context.vehicle,op=context.operation,meta=window.WBVehicleInfo.fromVehicle(v);
+      setMeta({plate:v.plate||'',brand:meta.brand,model:meta.model,engine:meta.engine,reg:meta.reg,km:op.km||'',date:(op.status||'done')==='done'?op.date||'':''});
+      workflowRef=context.ref;workflowOptions=[{...op,vehicleId:v.id}];renderWorkflowOptions();
+      $('aiWorkflowHint').textContent+=' Travaux initialement prévus : '+(op.operation||'');
+    }
+    if(!plan && !jobId){const previous=remembered();if(previous?.workflowRef){workflowRef=previous.workflowRef;const info=await WBWorkflow.call('operationInfo',workflowRef);workflowOptions=[{...info.operation,vehicleId:info.vehicle.id}];renderWorkflowOptions();}$('aiResume').hidden=!previous?.jobId;$('aiGenerate').disabled=Boolean(previous?.jobId);}
     dialog.showModal();
   }
+  window.WBReportAI={open};window.dispatchEvent(new Event('wb-ai-ready'));
   $('aiGenerate').onclick=()=>generate(false);$('aiRetry').onclick=()=>generate(true);$('aiRefresh').onclick=resume;
   $('aiResumeBtn').onclick=resume;$('aiForget').onclick=abandon;$('aiDiscard').onclick=abandon;
   $('aiClose').onclick=()=>{if(!busy)dialog.close();};dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault();});

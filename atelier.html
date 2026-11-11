@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Carnet d'atelier</title>
-<link rel="manifest" href="manifest.json?v=54">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=54">
+<link rel="manifest" href="manifest.json?v=56">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Carnet d'atelier">
@@ -316,7 +316,7 @@
 }
 
 </style>
-<link rel="stylesheet" href="wb-carnet-pro.css?v=54">
+<link rel="stylesheet" href="wb-carnet-pro.css?v=56">
 
 <style id="header-harmonisation-v50-1">
   .app-bar{
@@ -357,12 +357,12 @@
 
 <div class="app-bar">
   <div class="app-bar-inner">
-    <a class="app-back" href="index.html?v=55.4" aria-label="Accueil">‹</a>
+    <a class="app-back" href="index.html?v=56" aria-label="Accueil">‹</a>
     <div class="app-bar-title">
       <h1>Carnet d'atelier</h1>
       <div class="app-version-line">
         <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-        <span class="sub">Version 55.4</span>
+        <span class="sub">Version 56</span>
         <span id="syncWarn" style="display:none;"></span>
       </div>
     </div>
@@ -405,17 +405,22 @@
 
 <div id="historyPrint" aria-hidden="true"></div>
 
-<script src="firebase-config.js?v=54"></script>
-<script src="vehicle-info.js?v=54"></script>
-<script src="vehicle-input.js?v=55.3&build=2"></script>
-<script src="wb-phone.js?v=55.4"></script>
+<script src="firebase-config.js?v=56"></script>
+<script src="vehicle-info.js?v=56"></script>
+<script src="vehicle-input.js?v=56&build=2"></script>
+<script src="wb-phone.js?v=56"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
+<script src="wb-workflow.js?v=56"></script>
+<link rel="stylesheet" href="wb-workflow.css?v=56">
 <script>
 const STORE_KEY = 'carnet_atelier_vehicules';
 let DATA = { vehicles: [] };
+let lastRemoteAtelierPayload = null;
 let currentVehicleId = null;
 let searchTerm = '';
 let editingVehicleMode = false;
 let editingOpId = null;
+let manualOperationKey = uid();
 
 function uid(){ return 'v' + Date.now() + Math.random().toString(16).slice(2,8); }
 
@@ -470,11 +475,13 @@ async function loadData(){
     clearSyncError();
     if(snap.exists){
       const remote = snap.data();
+      lastRemoteAtelierPayload=remote.payload||null;
       try{
         DATA = remote.payload ? JSON.parse(remote.payload) : { vehicles: [] };
       }catch(e){ DATA = { vehicles: [] }; }
       if(!DATA.vehicles) DATA.vehicles = [];
     } else {
+      lastRemoteAtelierPayload=null;
       DATA = { vehicles: [] };
     }
     const loadingMsg = document.getElementById('loadingMsg');
@@ -492,7 +499,18 @@ async function loadData(){
 async function saveData(){
   try{
     const docRef = sharedDocRef('atelier');
-    await docRef.set({ payload: JSON.stringify(DATA), updatedAt: Date.now() });
+    const expected=lastRemoteAtelierPayload,payload=JSON.stringify(DATA);
+    await db.runTransaction(async tx=>{
+      const snapshot=await tx.get(docRef),remote=snapshot.exists?snapshot.data():{};
+      if((remote.payload||null)!==expected)throw new Error('Le Carnet a changé sur un autre appareil. Recharge la fiche avant de réessayer.');
+      const previous=remote.payload?JSON.parse(remote.payload):{vehicles:[]};
+      for(const vehicle of previous.vehicles||[])for(const operation of vehicle.ops||[]){
+        if(!operation.planningId&&!operation.reportId)continue;
+        const next=DATA.vehicles.find(v=>v.id===vehicle.id)?.ops?.find(o=>o.id===operation.id);
+        if(!next||next.planningId!==operation.planningId||next.reportId!==operation.reportId||next.status!==operation.status)throw new Error('Import ou suppression refusé : les liens d’une intervention existante doivent être conservés.');
+      }
+      tx.set(docRef,{...remote,payload,updatedAt:Date.now()});
+    });
     clearSyncError();
     return true;
   }catch(e){
@@ -552,24 +570,24 @@ function fmtH(n){ return n.toLocaleString('fr-FR',{minimumFractionDigits:0, maxi
 
 function vehicleStats(v){
   // Les totaux affichés conservent toutes les opérations.
-  const totalTemps = v.ops.reduce((s,o)=>s+Number(o.temps||0),0);
-  const totalRemu = v.ops.reduce((s,o)=>s+Number(o.remuneration||0),0);
+  const totalTemps = v.ops.filter(WBWorkflow.done).reduce((s,o)=>s+Number(o.temps||0),0);
+  const totalRemu = v.ops.filter(WBWorkflow.done).reduce((s,o)=>s+Number(o.remuneration||0),0);
 
   // Le taux horaire moyen ne tient compte que des opérations ayant
   // à la fois un temps strictement positif et une rémunération strictement positive.
-  const operationsForRate = v.ops.filter(o=>
+  const operationsForRate = v.ops.filter(WBWorkflow.done).filter(o=>
     Number(o.temps||0) > 0 && Number(o.remuneration||0) > 0
   );
   const rateTemps = operationsForRate.reduce((s,o)=>s+Number(o.temps||0),0);
   const rateRemu = operationsForRate.reduce((s,o)=>s+Number(o.remuneration||0),0);
   const taux = rateTemps > 0 ? rateRemu/rateTemps : null;
 
-  return { totalTemps, totalRemu, taux, count: v.ops.length };
+  return { totalTemps, totalRemu, taux, count: v.ops.filter(WBWorkflow.done).length };
 }
 
 function globalAvgRate(){
   let t=0, r=0;
-  DATA.vehicles.forEach(v=>v.ops.forEach(o=>{
+  DATA.vehicles.forEach(v=>v.ops.filter(WBWorkflow.done).forEach(o=>{
     const temps = Number(o.temps||0);
     const remuneration = Number(o.remuneration||0);
     if(temps > 0 && remuneration > 0){
@@ -598,7 +616,7 @@ function operationDateValue(operation){
 }
 
 function latestVehicleOperationDate(v){
-  return (v.ops || []).reduce((latest, operation)=>{
+  return (v.ops || []).filter(WBWorkflow.done).reduce((latest, operation)=>{
     return Math.max(latest, operationDateValue(operation));
   }, 0);
 }
@@ -759,7 +777,7 @@ function buildImagePdf(jpegPages, pageWidthPt=595.28, pageHeightPt=841.89){
 async function exportVehicleHistory(){
   const v = DATA.vehicles.find(x=>x.id === currentVehicleId);
   if(!v) return;
-  const ops = [...(v.ops||[])].sort((a,b)=>{
+  const ops = [...(v.ops||[])].filter(WBWorkflow.done).map(o=>({...o,notes:[o.notes,o.reportNotes].filter(Boolean).join('\n\n')})).sort((a,b)=>{
     const dateCmp = String(a.date||'').localeCompare(String(b.date||''));
     return dateCmp || String(a.id||'').localeCompare(String(b.id||''));
   });
@@ -946,7 +964,7 @@ function operationYear(operation){
 function qualifyingAnnualOperations(year){
   const operations = [];
   DATA.vehicles.forEach(vehicle=>{
-    (vehicle.ops || []).forEach(operation=>{
+    (vehicle.ops || []).filter(WBWorkflow.done).forEach(operation=>{
       const temps = Number(operation.temps || 0);
       const remuneration = Number(operation.remuneration || 0);
       if(operationYear(operation) === Number(year) && temps > 0 && remuneration > 0){
@@ -960,7 +978,7 @@ function qualifyingAnnualOperations(year){
 function availableStatisticsYears(){
   const years = new Set();
   DATA.vehicles.forEach(vehicle=>{
-    (vehicle.ops || []).forEach(operation=>{
+    (vehicle.ops || []).filter(WBWorkflow.done).forEach(operation=>{
       const year = operationYear(operation);
       if(year) years.add(year);
     });
@@ -1078,6 +1096,28 @@ function findVehiclePlateDuplicate(plate, excludeId=null){
   ) || null;
 }
 
+function operationWorkflowActions(v,o){
+ const id=escapeHtml(o.id);
+ return `<div class="wb-op-actions"><button type="button" data-wf-report="${id}">${o.reportId?'Ouvrir le rapport':'Créer un rapport'}</button>${WBWorkflow.done(o)?`<button type="button" data-wf-closure="${id}">Modifier la clôture</button><button type="button" data-wf-reopen="${id}">Réouvrir</button>`:`<button type="button" data-wf-complete="${id}">Marquer terminée</button>`}</div>`;
+}
+function pendingOperationsHtml(v,ops){
+ if(!ops.length)return '';
+ return `<div class="wb-flow-section-title">Interventions planifiées / à prévoir</div><div class="wb-flow-section-note">Non comptées dans les statistiques ou l’historique client.</div><div style="padding:0 18px">${ops.map(o=>{
+  const dates=o.plannedDates||[],late=o.status!=='done'&&dates.length&&dates.at(-1)<WBWorkflow.today();
+  return `<div class="wb-flow-panel"><strong>${escapeHtml(o.operation)}</strong><div class="wb-flow-muted">${escapeHtml(dates.map(formatHistoryDate).join(' · ')||'Sans date')}</div><span class="wb-flow-state">${o.status==='planned'?'Planifiée':'À prévoir'}${late?' · En retard':''}</span>${o.internalNotes?`<div class="wb-flow-muted">Notes internes : ${escapeHtml(o.internalNotes)}</div>`:''}${operationWorkflowActions(v,o)}<div class="wb-op-actions"><button type="button" data-op-edit="${escapeHtml(o.id)}" class="del-btn">Modifier le contenu</button></div></div>`;
+ }).join('')}</div>`;
+}
+function bindOperationWorkflow(root,v){
+ const bind=(attribute,fn)=>root.querySelectorAll('['+attribute+']').forEach(b=>b.addEventListener('click',async()=>{
+  const ref={vehicleId:v.id,operationId:b.getAttribute(attribute)};b.disabled=true;
+  try{await fn(ref)}catch(e){alert(e.message)}finally{b.disabled=false}
+ }));
+ bind('data-wf-report',ref=>WBWorkflow.reportAction(ref));
+ bind('data-wf-complete',ref=>WBWorkflow.closeOperation(ref));
+ bind('data-wf-closure',ref=>WBWorkflow.closeOperation(ref));
+ bind('data-wf-reopen',ref=>WBWorkflow.reopen(ref));
+}
+
 function renderMain(){
   const main = document.getElementById('main');
   const v = DATA.vehicles.find(x=>x.id === currentVehicleId);
@@ -1090,7 +1130,7 @@ function renderMain(){
   }
 
   const stats = vehicleStats(v);
-  const latestKmOp = [...v.ops].filter(o=>o && o.km !== '' && o.km != null).sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];
+  const latestKmOp = [...v.ops].filter(WBWorkflow.done).filter(o=>o && o.km !== '' && o.km != null).sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];
   const latestKm = latestKmOp ? Number(latestKmOp.km||0) : 0;
   const avgAll = globalAvgRate();
   let rateFlag = '';
@@ -1104,14 +1144,16 @@ function renderMain(){
     }
   }
 
-  const rows = [...v.ops].sort((a,b)=> (b.date||'').localeCompare(a.date||'')).map(o=>{
+  const completedOps=v.ops.filter(WBWorkflow.done);
+  const pendingOps=v.ops.filter(o=>['planned','todo'].includes(o.status));
+  const rows = [...completedOps].sort((a,b)=> (b.date||'').localeCompare(a.date||'')).map(o=>{
     const tarif = o.temps > 0 ? (o.remuneration/o.temps) : null;
     return `<tr>
       <td class="num-cell" data-label="Date">${escapeHtml(o.date||'—')}</td>
       <td data-label="Opération">
         <div class="op-name">${escapeHtml(o.operation)}</div>
-        ${o.reportId ? `<div class="op-report-badge" title="Cette intervention est liée à un rapport">Rapport lié</div>` : ''}
-        ${o.notes ? `<div class="op-notes">${escapeHtml(o.notes)}</div>` : ''}
+        <div class="wb-flow-state" data-status="done">Terminée</div>${operationWorkflowActions(v,o)}
+        ${[o.notes,o.reportNotes].filter(Boolean).length ? `<div class="op-notes">${escapeHtml([o.notes,o.reportNotes].filter(Boolean).join('\n\n'))}</div>` : ''}
       </td>
       <td class="num-cell" data-label="Km">${o.km ? escapeHtml(o.km)+' km' : '—'}</td>
       <td class="num-cell" data-label="Temps">${fmtH(Number(o.temps||0))}</td>
@@ -1179,9 +1221,9 @@ function renderMain(){
         </div>
       `}
 
-      <div class="operations-heading">Historique des interventions</div>
+      ${pendingOperationsHtml(v,pendingOps)}<div class="operations-heading">Interventions réalisées</div>
       <div style="padding:0 18px 4px;">
-      ${v.ops.length === 0
+      ${completedOps.length === 0
         ? '<div class="empty-note">Pas encore d\'intervention consignée pour ce véhicule.</div>'
         : `<div class="ops-scroll" style="overflow-x:auto; border:1px solid var(--line); border-radius:12px; margin-top:10px;">
             <table class="ops">
@@ -1197,15 +1239,15 @@ function renderMain(){
         <div class="grid3">
           <div class="field date-field"><label for="opDate">Date</label><input type="date" id="opDate" value="${editOpValues.date}"></div>
           <div class="field"><label for="opKm">Kilométrage</label><input type="number" id="opKm" placeholder="ex. 98000" value="${editOpValues.km ?? ''}"></div>
-          <div class="field"><label for="opTemps">Temps passé (h)</label><input type="number" step="0.25" id="opTemps" placeholder="ex. 2.5" value="${editOpValues.temps ?? ''}"></div>
+          
         </div>
         <div class="field"><label for="opOperation">Opération</label><input type="text" id="opOperation" placeholder="ex. Distribution + pompe à eau, révision, plaquettes avant..." value="${escapeHtml(editOpValues.operation||'')}"></div>
         <div class="grid2">
-          <div class="field"><label for="opRemu">Rémunération reçue (€)</label><input type="number" step="1" id="opRemu" placeholder="ex. 150" value="${editOpValues.remuneration ?? ''}"></div>
+          
           <div class="field"><label for="opNotes">Notes (pièces utilisées, difficultés...)</label><textarea id="opNotes" placeholder="facultatif">${escapeHtml(editOpValues.notes||'')}</textarea></div>
         </div>
         <div class="form-actions">
-          <button class="btn" id="btnAddOp" type="button">${editingOpId ? 'Mettre à jour' : "Enregistrer l'intervention"}</button>
+          <button class="btn" id="btnAddOp" type="button">${editingOpId ? 'Mettre à jour' : "Enregistrer et marquer terminée"}</button>
           ${editingOpId ? '<button class="btn ghost" id="btnCancelOpEdit" type="button">Annuler la modification</button>' : ''}
         </div>
         <div class="status-msg" id="opStatus"></div>
@@ -1216,6 +1258,7 @@ function renderMain(){
   `;
 
   document.getElementById('btnAddOp').addEventListener('click', onAddOp);
+  bindOperationWorkflow(main,v);
   document.getElementById('btnDeleteVehicle').addEventListener('click', onDeleteVehicle);
   if(editingVehicleMode){
     initVehiclePlateField('edit', v.plate||'');
@@ -1274,69 +1317,33 @@ async function onSaveVehicleEdit(){
 }
 
 async function onAddOp(){
-  const v = DATA.vehicles.find(x=>x.id === currentVehicleId);
-  if(!v) return;
-  const statusEl = document.getElementById('opStatus');
-
-  const operation = document.getElementById('opOperation').value.trim();
-  const temps = parseFloat(document.getElementById('opTemps').value);
-  const remuneration = parseFloat(document.getElementById('opRemu').value);
-  const date = document.getElementById('opDate').value;
-  const km = document.getElementById('opKm').value.trim();
-  const notes = document.getElementById('opNotes').value.trim();
-
-  if(!operation){
-    statusEl.className='status-msg status-err';
-    statusEl.textContent = "Indique le type d'opération réalisée.";
-    return;
-  }
-  if(isNaN(temps) || temps <= 0){
-    statusEl.className='status-msg status-err';
-    statusEl.textContent = 'Indique un temps passé valide (en heures).';
-    return;
-  }
-  if(isNaN(remuneration) || remuneration < 0){
-    statusEl.className='status-msg status-err';
-    statusEl.textContent = 'Indique une rémunération valide.';
-    return;
-  }
-
+ const v=DATA.vehicles.find(x=>x.id===currentVehicleId);if(!v)return;
+ const statusEl=document.getElementById('opStatus');
+ const patch={operation:document.getElementById('opOperation').value.trim(),date:document.getElementById('opDate').value,km:document.getElementById('opKm').value.trim(),notes:document.getElementById('opNotes').value.trim()};
+ if(!patch.operation){statusEl.textContent='Indique le type d’opération.';return;}
+ const button=document.getElementById('btnAddOp');button.disabled=true;
+ try{
   if(editingOpId){
-    const op = v.ops.find(o=>o.id===editingOpId);
-    if(op) Object.assign(op, { date, operation, km, temps, remuneration, notes });
-    editingOpId = null;
-  } else {
-    v.ops.push({ id: uid(), date, operation, km, temps, remuneration, notes });
+   const old=v.ops.find(o=>o.id===editingOpId);
+   await WBWorkflow.call('editOperation',{vehicleId:v.id,operationId:editingOpId,patch,expected:{operation:old.operation||'',date:old.date||'',km:old.km??'',notes:old.notes||''}});
+  }else{
+   const closure=await WBWorkflow.closureForm({vehicle:v,operation:{...patch,status:'todo'}});if(!closure)return;
+   await WBWorkflow.call('createCompletedOperation',{vehicleId:v.id,patch,closure,creationId:manualOperationKey});
   }
-  v.updatedAt = Date.now();
-
-  statusEl.className='status-msg';
-  statusEl.textContent = 'Enregistrement…';
-  const ok = await saveData();
-  if(ok){
-    renderSidebar();
-    renderMain();
-  } else {
-    statusEl.className='status-msg status-err';
-    statusEl.textContent = "Échec de l'enregistrement, réessaie.";
-  }
+  editingOpId=null;manualOperationKey=uid();renderMain();
+ }catch(e){statusEl.className='status-msg status-err';statusEl.textContent=e.message}
+ finally{button.disabled=false}
 }
-
 async function onDeleteOp(opId){
-  const v = DATA.vehicles.find(x=>x.id === currentVehicleId);
-  if(!v) return;
-  if(!confirm('Supprimer cette intervention ?')) return;
-  v.ops = v.ops.filter(o=>o.id !== opId);
-  v.updatedAt = Date.now();
-  if(editingOpId === opId) editingOpId = null;
-  await saveData();
-  renderSidebar();
-  renderMain();
+ const v=DATA.vehicles.find(x=>x.id===currentVehicleId);if(!v||!confirm('Supprimer cette intervention ? Une intervention terminée doit être réouverte et un rapport détaché au préalable.'))return;
+ try{await WBWorkflow.call('deleteOperation',{vehicleId:v.id,operationId:opId});if(editingOpId===opId)editingOpId=null;}
+ catch(e){alert(e.message)}
 }
 
 async function onDeleteVehicle(){
   const v = DATA.vehicles.find(x=>x.id === currentVehicleId);
   if(!v) return;
+  if(v.ops.some(o=>o.planningId||o.reportId)){alert('Cette fiche contient des interventions liées au Planning ou à des rapports. Retire explicitement ces liens avant de supprimer la fiche.');return;}
   if(!confirm(`Supprimer toute la fiche "${v.modele} — ${v.motorisation}" et ses ${v.ops.length} intervention(s) ?`)) return;
   DATA.vehicles = DATA.vehicles.filter(x=>x.id !== v.id);
   currentVehicleId = null;
@@ -1473,12 +1480,12 @@ window.atelierReady
     flagSyncError(error?.message || "Initialisation impossible.");
   });
 </script>
-<script src="wb-carnet-pro.js?v=54"></script>
+<script src="wb-carnet-pro.js?v=56"></script>
 
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=55.4&build=1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=56&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>

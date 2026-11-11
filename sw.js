@@ -1,29 +1,32 @@
-const CACHE_NAME = 'outils-atelier-v55.5-r1';
+const CACHE_NAME = 'outils-atelier-v56-r1';
 const ASSETS = [
   './',
+  './wb-workflow.js?v=56',
+  './wb-workflow.css?v=56',
+  './report-workflow.js?v=56',
   './index.html',
-  './atelier.html?v=55.5',
-  './rapport.html?v=54',
-  './inventaire.html?v=54',
-  './planning.html?v=55.5',
-  './planning.js?v=55.5',
-  './manifest.json?v=54',
-  './firebase-config.js?v=54',
-  './apple-touch-icon.png?v=54',
+  './atelier.html?v=56',
+  './rapport.html?v=56',
+  './inventaire.html?v=56',
+  './planning.html?v=56',
+  './planning.js?v=56',
+  './manifest.json?v=56',
+  './firebase-config.js?v=56',
+  './apple-touch-icon.png?v=56',
   './icon-192.png',
   './icon-512.png',
   './report-cover-logo.png',
-  './report-ai.css?v=54',
-  './report-ai-config.js?v=54',
-  './report-ai-core.js?v=54',
-  './report-ai.js?v=54',
-  './report-images.js?v=54',
-  './vehicle-info.js?v=54',
-  './vehicle-input.js?v=55.3&build=2',
-  './wb-phone.js?v=55.5',
-  './html2pdf.bundle.min.js?v=54',
-  './wb-carnet-pro.css?v=54',
-  './wb-carnet-pro.js?v=54'
+  './report-ai.css?v=56',
+  './report-ai-config.js?v=56',
+  './report-ai-core.js?v=56',
+  './report-ai.js?v=56',
+  './report-images.js?v=56',
+  './vehicle-info.js?v=56',
+  './vehicle-input.js?v=56&build=2',
+  './wb-phone.js?v=56',
+  './html2pdf.bundle.min.js?v=56',
+  './wb-carnet-pro.css?v=56',
+  './wb-carnet-pro.js?v=56'
 ];
 
 self.addEventListener('install', (event) => {
@@ -34,7 +37,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
+      Promise.all(keys.filter((key) => key.startsWith('outils-atelier-') && key !== CACHE_NAME).map((key) => caches.delete(key)))
     )
   );
   self.clients.claim();
@@ -73,6 +76,6 @@ self.addEventListener('push', event => {
  // FCM notifications are handled by the Firebase messaging service worker integration below.
  if(payload.notification)return;
  const data=payload.data||{};
- event.waitUntil(self.registration.showNotification(data.title||'WheelerBrothers Planning',{body:data.body||'Intervention mise à jour',icon:'./icon-192.png',data:{url:'./planning.html?v=55.5'}}));
+ event.waitUntil(self.registration.showNotification(data.title||'WheelerBrothers Planning',{body:data.body||'Intervention mise à jour',icon:'./icon-192.png',data:{url:'./planning.html?v=56'}}));
 });
-self.addEventListener('notificationclick',event=>{event.notification.close();event.waitUntil(self.clients.openWindow('./planning.html?v=55.5'))});
+self.addEventListener('notificationclick',event=>{event.notification.close();event.waitUntil(self.clients.openWindow('./planning.html?v=56'))});

@@ -237,45 +237,11 @@
   }
 
   async function syncVehicle(vehicle){
-    const vehicleId = vehicle?.wbCarnet?.vehicleId;
-    if(!vehicleId || !auth.currentUser) return;
-    await assertAtelierAdmin(vehicleId);
-    const ref=vehicleRef(vehicleId);
-    await ref.update({
-      model:vehicle.modele || 'Véhicule',engine:vehicle.motorisation || '',plate:vehicle.plate || '',plateKey:normalizePlate(vehicle.plate),
-      ownerName:vehicle.owner || '',sourceVehicleId:vehicle.id,updatedAt:serverTimestamp()
-    });
-    const existingSnap=await ref.collection('operations').get();
-    const existingAtelier=new Map(existingSnap.docs.filter(doc=>doc.data().source==='atelier' && doc.data().sourceVehicleId===vehicle.id).map(doc=>[doc.id,doc]));
-    const keep=new Set();const actions=[];
-    for(const operation of (vehicle.ops || [])){
-      const id=safeOperationId(operation.id);keep.add(id);
-      const linkedReportId=(operation.source==='rapport' && operation.reportId) ? String(operation.reportId) : '';
-      actions.push(batch=>batch.set(ref.collection('operations').doc(id),{
-        source:'atelier',sourceType:linkedReportId?'rapport':'atelier',sourceVehicleId:vehicle.id,sourceOperationId:String(operation.id || ''),
-        date:operation.date || '',mileage:Number(operation.km) || null,title:operation.operation || 'Intervention',
-        details:operation.notes || '',performedBy:'WheelerBrothers',createdBy:auth.currentUser.uid,
-        reportId:linkedReportId || null,reportSpaceId:linkedReportId?ensureSharedCode():null,
-        updatedAt:serverTimestamp(),createdAt:existingAtelier.has(id)?(existingAtelier.get(id).data().createdAt || serverTimestamp()):serverTimestamp()
-      },{merge:true}));
-    }
-    for(const [id] of existingAtelier){ if(!keep.has(id)) actions.push(batch=>batch.delete(ref.collection('operations').doc(id))); }
-    if(actions.length) await commitChunks(actions);
-
-    const reportIds=[...new Set((vehicle.ops || [])
-      .filter(operation=>operation && operation.source==='rapport' && operation.reportId)
-      .map(operation=>String(operation.reportId)))];
-    for(const reportId of reportIds){
-      const reportRef=sharedCollectionRef('reports').doc(reportId);
-      const reportSnap=await reportRef.get();
-      if(!reportSnap.exists) continue;
-      await reportRef.set({
-        sharedReport:true,
-        sharedVehicleId:vehicleId,
-        sourceVehicleId:vehicle.id,
-        sharedUpdatedAt:serverTimestamp()
-      },{merge:true});
-    }
+    if(!vehicle?.wbCarnet?.vehicleId || !auth.currentUser)return;
+    await ensureSignedIn();
+    // v56: reads current server data and projects completed operations only.
+    // Report drafts are never automatically shared by the pro extension.
+    await WBWorkflow.call('syncVehicle',{vehicleId:vehicle.id});
   }
 
   function scheduleSyncAll(){
