@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=56">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56">
+<link rel="manifest" href="manifest.json?v=56.1">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -16,16 +16,16 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
-<script src="firebase-config.js?v=56"></script>
-<script src="html2pdf.bundle.min.js?v=56"></script>
-<script src="report-images.js?v=56"></script>
-<script src="vehicle-info.js?v=56"></script>
-<script src="wb-workflow.js?v=56"></script>
-<link rel="stylesheet" href="wb-workflow.css?v=56">
-<script src="vehicle-input.js?v=56&build=2"></script>
-<link rel="stylesheet" href="report-ai.css?v=56">
-<script src="report-ai-config.js?v=56"></script>
-<script src="report-ai-core.js?v=56"></script>
+<script src="firebase-config.js?v=56.1"></script>
+<script src="html2pdf.bundle.min.js?v=56.1"></script>
+<script src="report-images.js?v=56.1"></script>
+<script src="vehicle-info.js?v=56.1"></script>
+<script src="wb-workflow.js?v=56.1"></script>
+<link rel="stylesheet" href="wb-workflow.css?v=56.1">
+<script src="vehicle-input.js?v=56.1&build=2"></script>
+<link rel="stylesheet" href="report-ai.css?v=56.1">
+<script src="report-ai-config.js?v=56.1"></script>
+<script src="report-ai-core.js?v=56.1"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -505,12 +505,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=56" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=56.1" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 56</span>
+          <span class="sub">Version 56.1</span>
         </div>
       </div>
       <div class="app-bar-notices">
@@ -2801,11 +2801,11 @@ window.WBReportWorkflowHost={
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=56&build=2',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=56.1&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
-<script src="report-workflow.js?v=56"></script>
-<script src="report-ai.js?v=56"></script>
+<script src="report-workflow.js?v=56.1"></script>
+<script src="report-ai.js?v=56.1"></script>
 </body>
 </html>

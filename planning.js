@@ -1,4 +1,4 @@
-/* WheelerBrothers Planning v56 — journées entières, synchronisation Firestore */
+/* WheelerBrothers Planning v56.1 — journées entières, synchronisation Firestore */
 (()=>{'use strict';
 const $=id=>document.getElementById(id), MS=86400000;
 const today=()=>{const d=new Date();return localISO(d)};
@@ -390,27 +390,76 @@ window.addEventListener('pointerup',()=>{if(pointerDown){pointerDown=false;if(dr
 picker.addEventListener('click',e=>{const b=e.target.closest('button[data-date]');if(!b||dragged)return;chooseDate(b.dataset.date)});
 
 
-let messaging=null;
-async function activatePush(){
- const label=$('pushStatus');
- if(!('serviceWorker' in navigator)||!('Notification' in window)||!firebase.messaging?.isSupported){label.textContent='Notifications non prises en charge sur cet appareil.';return}
- const vapid=window.WB_PUSH_VAPID_KEY||'';
- if(!vapid||vapid.startsWith('REMPLACER')){label.textContent='Configuration Firebase : clé VAPID manquante.';return}
- try{
-  const permission=await Notification.requestPermission();
-  if(permission!=='granted'){label.textContent='Notifications non autorisées.';return}
-  const registration=await navigator.serviceWorker.register('sw.js?v=56',{updateViaCache:'none'});
-  messaging=firebase.messaging();
-  const token=await messaging.getToken({vapidKey:vapid,serviceWorkerRegistration:registration});
-  if(!token)throw Error('Aucun jeton de notification obtenu');
-  const id=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token));
-  const key=Array.from(new Uint8Array(id)).map(b=>b.toString(16).padStart(2,'0')).join('');
-  await db.collection('spaces').doc(activeSpaceId).collection('planningPushDevices').doc(key).set({token,updatedAt:firebase.firestore.FieldValue.serverTimestamp(),userAgent:navigator.userAgent.slice(0,220)}, {merge:true});
-  label.textContent='Notifications activées sur cet appareil.';
-  messaging.onMessage(payload=>{label.textContent=payload.notification?.title||'Nouvelle notification Planning';});
- }catch(err){label.textContent='Activation impossible : '+err.message}
+// v56.1: optional push lifecycle. Never awaited by save(), WBWorkflow or SMS actions.
+let messaging=null,pushTask=null,pushMessageUnsubscribe=null;
+function waitForPushWorker(registration){
+ if(registration.active)return Promise.resolve(registration);
+ return new Promise((resolve,reject)=>{
+  const started=Date.now();
+  const timer=setInterval(()=>{
+   if(registration.active){clearInterval(timer);resolve(registration);}
+   else if(Date.now()-started>15000){clearInterval(timer);reject(new Error('Le service worker ne s’est pas activé.'));}
+  },100);
+ });
 }
+async function refreshPushRegistration(requestPermission=false){
+ if(pushTask)return pushTask;
+ pushTask=(async()=>{
+  const label=$('pushStatus'),button=$('enablePush');
+  try{
+   if(!('serviceWorker' in navigator)||!('Notification' in window)||typeof firebase.messaging?.isSupported!=='function'){
+    label.textContent='Notifications non prises en charge ici. L’enregistrement reste disponible.';return;
+   }
+   const vapid=String(window.WB_PUSH_VAPID_KEY||'').trim();
+   if(!vapid||vapid.startsWith('REMPLACER')){
+    label.textContent='Notifications : clé VAPID à configurer. L’enregistrement reste disponible.';return;
+   }
+   let permission=Notification.permission;
+   // Ask only on an explicit click, and only when permission was never granted/refused.
+   if(permission==='default'&&requestPermission)permission=await Notification.requestPermission();
+   if(permission!=='granted'){
+    label.textContent=permission==='denied'?'Notifications désactivées dans les réglages de cet appareil.':'Notifications non activées sur cet appareil.';
+    return;
+   }
+   button.disabled=true;label.textContent='Vérification des notifications…';
+   if(!await firebase.messaging.isSupported()){
+    label.textContent='Notifications non prises en charge ici. L’enregistrement reste disponible.';return;
+   }
+   const {spaceId}=await window.atelierReady;
+   const workerUrl=new URL('sw.js?v=56.1&build=1',location.href);
+   const scope=new URL('./',location.href).href;
+   const registration=await navigator.serviceWorker.register(workerUrl.href,{scope,updateViaCache:'none'});
+   await waitForPushWorker(registration);
+   messaging=messaging||firebase.messaging();
+   const token=await messaging.getToken({vapidKey:vapid,serviceWorkerRegistration:registration});
+   if(!token)throw new Error('Aucun jeton de notification obtenu.');
+   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token));
+   const deviceKey=Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');
+   await db.collection('spaces').doc(spaceId).collection('planningPushDevices').doc(deviceKey).set({
+    token,updatedAt:firebase.firestore.FieldValue.serverTimestamp(),userAgent:navigator.userAgent.slice(0,220)
+   },{merge:true});
+   label.textContent='Notifications activées sur cet appareil.';button.textContent='Vérifier les notifications';
+   if(!pushMessageUnsubscribe){
+    pushMessageUnsubscribe=messaging.onMessage(payload=>{
+     label.textContent=payload.data?.title||payload.notification?.title||'Nouvelle notification Planning';
+    });
+   }
+  }catch(error){
+   label.textContent='Notifications temporairement indisponibles. Tu peux quand même enregistrer les interventions.';
+   // Do not copy this error to formError or reject the independent save operation.
+   console.warn('WheelerBrothers : notifications indisponibles',error?.code||error?.message||'Erreur inconnue');
+  }finally{button.disabled=false;}
+ })();
+ try{await pushTask;}finally{pushTask=null;}
+}
+function activatePush(){return refreshPushRegistration(true);}
 $('enablePush').onclick=activatePush;
+// Existing permission survives an app update; refresh FCM explicitly with our own worker.
+window.atelierReady.then(()=>{
+ if('Notification' in window&&Notification.permission==='granted')void refreshPushRegistration(false);
+ else if('Notification' in window&&Notification.permission==='denied')$('pushStatus').textContent='Notifications désactivées dans les réglages de cet appareil.';
+}).catch(()=>{});
+
 
 window.atelierReady.then(({spaceId})=>{activeSpaceId=spaceId;document.querySelectorAll('[data-firebase-status]').forEach(e=>{e.classList.add('is-connected');e.classList.remove('is-disconnected')});collection=db.collection('spaces').doc(spaceId).collection('planningItems');unsubscribe=collection.onSnapshot(snapshot=>{items=snapshot.docs.map(doc=>{const x=doc.data();return{id:doc.id,vehicleId:x.vehicleId||null,operationId:x.operationId||null,reportId:x.reportId||null,vehicle:String(x.vehicle||''),plate:String(x.plate||''),brand:String(x.brand||''),model:String(x.model||''),owner:String(x.owner||''),phone:String(x.phone||''),job:String(x.job||''),notes:String(x.notes||''),status:['todo','planned','done'].includes(x.status)?x.status:'todo',dates:unique(Array.isArray(x.dates)?x.dates:[])}});items.sort((a,b)=>a.job.localeCompare(b.job,'fr'));message('Planning synchronisé avec Firebase');render();if($('editor').open)renderPicker()},err=>message('Accès au planning refusé : '+err.message,true))}).catch(err=>message('Connexion impossible : '+err.message,true));
 render();

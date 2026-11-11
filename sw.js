@@ -1,46 +1,60 @@
-const CACHE_NAME = 'outils-atelier-v56-r1';
+const CACHE_NAME = 'outils-atelier-v56.1-r1';
 const ASSETS = [
   './',
-  './wb-workflow.js?v=56',
-  './wb-workflow.css?v=56',
-  './report-workflow.js?v=56',
+  './wb-workflow.js?v=56.1',
+  './wb-workflow.css?v=56.1',
+  './report-workflow.js?v=56.1',
   './index.html',
-  './atelier.html?v=56',
-  './rapport.html?v=56',
-  './inventaire.html?v=56',
-  './planning.html?v=56',
-  './planning.js?v=56',
-  './manifest.json?v=56',
-  './firebase-config.js?v=56',
-  './apple-touch-icon.png?v=56',
+  './atelier.html?v=56.1',
+  './rapport.html?v=56.1',
+  './inventaire.html?v=56.1',
+  './planning.html?v=56.1',
+  './planning.js?v=56.1',
+  './manifest.json?v=56.1',
+  './firebase-config.js?v=56.1',
+  './apple-touch-icon.png?v=56.1',
   './icon-192.png',
   './icon-512.png',
   './report-cover-logo.png',
-  './report-ai.css?v=56',
-  './report-ai-config.js?v=56',
-  './report-ai-core.js?v=56',
-  './report-ai.js?v=56',
-  './report-images.js?v=56',
-  './vehicle-info.js?v=56',
-  './vehicle-input.js?v=56&build=2',
-  './wb-phone.js?v=56',
-  './html2pdf.bundle.min.js?v=56',
-  './wb-carnet-pro.css?v=56',
-  './wb-carnet-pro.js?v=56'
+  './report-ai.css?v=56.1',
+  './report-ai-config.js?v=56.1',
+  './report-ai-core.js?v=56.1',
+  './report-ai.js?v=56.1',
+  './report-images.js?v=56.1',
+  './vehicle-info.js?v=56.1',
+  './vehicle-input.js?v=56.1&build=2',
+  './wb-phone.js?v=56.1',
+  './html2pdf.bundle.min.js?v=56.1',
+  './wb-carnet-pro.css?v=56.1',
+  './wb-carnet-pro.js?v=56.1'
 ];
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS.map(url => new Request(url, { cache: 'reload' })))));
-  self.skipWaiting();
+self.addEventListener('install', event => {
+  event.waitUntil((async () => {
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const results = await Promise.allSettled(ASSETS.map(url =>
+        cache.add(new Request(new URL(url, self.location.href), {cache:'reload'}))
+      ));
+      results.forEach((result,index) => {
+        if(result.status === 'rejected')console.warn('Cache Atelier : ressource non disponible', ASSETS[index]);
+      });
+    } catch (_) {
+      console.warn('Cache Atelier indisponible : fonctionnement réseau conservé.');
+    }
+    await self.skipWaiting();
+  })());
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key.startsWith('outils-atelier-') && key !== CACHE_NAME).map((key) => caches.delete(key)))
-    )
-  );
-  self.clients.claim();
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter(key => key.startsWith('outils-atelier-') && key !== CACHE_NAME)
+        .map(key => caches.delete(key)));
+    } catch (_) { /* A cache issue must not prevent the worker from taking control. */ }
+    await self.clients.claim();
+  })());
 });
 
 // Toujours demander au réseau la version actuelle des fichiers de l'application.
@@ -55,8 +69,10 @@ self.addEventListener('fetch', (event) => {
     try {
       const response = await fetch(event.request, { cache: 'no-store' });
       if (response && response.ok) {
-        const cache = await caches.open(CACHE_NAME);
-        cache.put(event.request, response.clone()).catch(() => {});
+        try {
+          const cache = await caches.open(CACHE_NAME);
+          cache.put(event.request, response.clone()).catch(() => {});
+        } catch (_) { /* Return the successful network response anyway. */ }
       }
       return response;
     } catch (_) {
@@ -73,9 +89,9 @@ self.addEventListener('fetch', (event) => {
 // Notifications push Planning (Firebase Cloud Messaging)
 self.addEventListener('push', event => {
  let payload={};try{payload=event.data?.json()||{}}catch{}
- // FCM notifications are handled by the Firebase messaging service worker integration below.
- if(payload.notification)return;
- const data=payload.data||{};
- event.waitUntil(self.registration.showNotification(data.title||'WheelerBrothers Planning',{body:data.body||'Intervention mise à jour',icon:'./icon-192.png',data:{url:'./planning.html?v=56'}}));
+ // Existing v55/v56 server sends data-only messages; also accept a notification payload.
+
+ const data={...(payload.notification||{}),...(payload.data||{})};
+ event.waitUntil(self.registration.showNotification(data.title||'WheelerBrothers Planning',{body:data.body||'Intervention mise à jour',icon:'./icon-192.png',data:{url:'./planning.html?v=56.1'}}));
 });
-self.addEventListener('notificationclick',event=>{event.notification.close();event.waitUntil(self.clients.openWindow('./planning.html?v=56'))});
+self.addEventListener('notificationclick',event=>{event.notification.close();event.waitUntil(self.clients.openWindow('./planning.html?v=56.1'))});

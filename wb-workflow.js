@@ -1,4 +1,4 @@
-/* WheelerBrothers v56 — shared UI for the server-authoritative workflow. */
+/* WheelerBrothers v56.1 — shared UI for the server-authoritative workflow. */
 (function(global){'use strict';
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const key=v=>String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
@@ -14,7 +14,70 @@
    d.querySelector('[data-close]').onclick=()=>end(null);d.addEventListener('cancel',e=>{e.preventDefault();end(null);});document.body.append(d);if(setup)setup(d);d.showModal();
   });
  }
- async function raw(action,args={}){await global.atelierReady;const fn=firebase.app().functions('europe-west1').httpsCallable('wbWorkflow',{timeout:70000});return (await fn({action,...args})).data;}
+ // v56.1: authenticated callable transport, deliberately independent of FCM.
+ // The optional Firebase-Instance-ID-Token header is not used by wbWorkflow.
+ // Do NOT await a push token or register a service worker before saving data.
+ function callableError(code,message,details){
+  const error=new Error(message);error.code='functions/'+code;
+  if(details!==undefined)error.details=details;
+  return error;
+ }
+ const callableCodes=new Set(['cancelled','unknown','invalid-argument','deadline-exceeded',
+  'not-found','already-exists','permission-denied','resource-exhausted','failed-precondition',
+  'aborted','out-of-range','unimplemented','internal','unavailable','data-loss','unauthenticated']);
+ function responseError(response,body){
+  const fallback=({400:'invalid-argument',401:'unauthenticated',403:'permission-denied',
+   404:'not-found',409:'aborted',429:'resource-exhausted',500:'internal',501:'unimplemented',
+   503:'unavailable',504:'deadline-exceeded'})[response.status]||'internal';
+  const status=String(body?.error?.status||'').toLowerCase().replace(/_/g,'-');
+  return callableError(callableCodes.has(status)?status:fallback,
+   body?.error?.message||'La synchronisation a été refusée par le serveur.',body?.error?.details);
+ }
+ async function raw(action,args={}){
+  await global.atelierReady;
+  const app=global.firebase.app();
+  const user=app.auth().currentUser;
+  if(!user)throw callableError('unauthenticated','Reconnecte-toi à l’Atelier avant d’enregistrer.');
+  const projectId=String(app.options.projectId||'');
+  if(!/^[a-z][a-z0-9-]{4,61}[a-z0-9]$/.test(projectId)){
+   throw callableError('failed-precondition','Configuration du projet Firebase invalide.');
+  }
+  const idToken=await user.getIdToken();
+  if(!idToken)throw callableError('unauthenticated','La session Atelier ne fournit pas de jeton valide.');
+  const headers={'Content-Type':'application/json','Authorization':'Bearer '+idToken};
+  // Preserve App Check when the application has enabled it. Never bypass a failed check.
+  if(typeof app.appCheck==='function'){
+   const check=await app.appCheck().getToken(false);
+   if(!check?.token)throw callableError('failed-precondition','Vérification App Check indisponible.');
+   headers['X-Firebase-AppCheck']=check.token;
+  }
+  const controller=new AbortController();
+  let timedOut=false;
+  const timer=global.setTimeout(()=>{timedOut=true;controller.abort();},70000);
+  try{
+   // No automatic retry: a network failure can occur after a transaction was committed.
+   const response=await global.fetch('https://europe-west1-'+projectId+'.cloudfunctions.net/wbWorkflow',{
+    method:'POST',headers,body:JSON.stringify({data:{...args,action}}),
+    mode:'cors',credentials:'omit',cache:'no-store',redirect:'error',signal:controller.signal
+   });
+   let body;
+   try{body=await response.json();}
+   catch(error){
+    if(timedOut)throw error;
+    throw callableError('internal','Réponse serveur illisible. Vérifie le Planning avant de réessayer.');
+   }
+   if(!response.ok||body?.error)throw responseError(response,body);
+   if(!body||typeof body!=='object')throw callableError('internal','Réponse serveur invalide.');
+   if(Object.prototype.hasOwnProperty.call(body,'data'))return body.data;
+   if(Object.prototype.hasOwnProperty.call(body,'result'))return body.result;
+   throw callableError('internal','Réponse serveur incomplète. Vérifie le Planning avant de réessayer.');
+  }catch(error){
+   if(timedOut)throw callableError('deadline-exceeded','Délai de réponse dépassé. L’enregistrement peut avoir abouti : vérifie le Planning avant de réessayer.');
+   if(error?.code)throw error;
+   throw callableError('unavailable','Connexion au serveur interrompue. Vérifie le Planning avant de réessayer.');
+  }finally{global.clearTimeout(timer);}
+ }
+
  async function call(action,args={}){
   let request={...args};for(let n=0;n<6;n++){
    try{return await raw(action,request);}catch(error){
