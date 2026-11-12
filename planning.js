@@ -1,4 +1,4 @@
-/* WheelerBrothers Planning v56.1 — journées entières, synchronisation Firestore */
+/* WheelerBrothers Planning v56.2 — journées entières, synchronisation Firestore */
 (()=>{'use strict';
 const $=id=>document.getElementById(id), MS=86400000;
 const today=()=>{const d=new Date();return localISO(d)};
@@ -426,7 +426,7 @@ async function refreshPushRegistration(requestPermission=false){
     label.textContent='Notifications non prises en charge ici. L’enregistrement reste disponible.';return;
    }
    const {spaceId}=await window.atelierReady;
-   const workerUrl=new URL('sw.js?v=56.1&build=1',location.href);
+   const workerUrl=new URL('sw.js?v=56.2&build=1',location.href);
    const scope=new URL('./',location.href).href;
    const registration=await navigator.serviceWorker.register(workerUrl.href,{scope,updateViaCache:'none'});
    await waitForPushWorker(registration);

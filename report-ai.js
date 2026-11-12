@@ -1,4 +1,4 @@
-/* WheelerBrothers 54 — préparation volontaire, relecture obligatoire, nouveau rapport uniquement. */
+/* WheelerBrothers 56.2 — préparation volontaire, relecture obligatoire, nouveau rapport uniquement. */
 (function(){
   'use strict';
   const C=window.WBReportAICore,H=window.WBReportAIHost,CFG=window.WB_REPORT_AI_CONFIG;
@@ -38,9 +38,9 @@
     </section>
     <div id="aiStatus" class="wb-ai-status" role="status" aria-live="polite"></div>
     <div class="wb-ai-actions" id="aiRetryArea" hidden><button class="btn" type="button" id="aiRetry">Réessayer (nouvel appel API)</button><button class="btn ghost" type="button" id="aiRefresh">Vérifier le résultat existant</button></div>
-    <div class="wb-ai-actions"><button type="button" class="btn ghost" id="aiDiscard" hidden>Abandonner ce brouillon</button></div><section id="aiReview" hidden><h3>Relire le classement</h3><p class="wb-ai-muted">Corrige les titres et affectations. L’ordre numérique classe les photos au sein de chaque galerie. « Ne pas inclure » est un choix explicite, jamais automatique.</p>
+    <div class="wb-ai-actions"><button type="button" class="btn ghost" id="aiDiscard" hidden>Abandonner ce brouillon</button></div><section id="aiReview" hidden><h3>Relire le classement</h3><p class="wb-ai-muted">Corrige les titres et affectations. Les photos sont regroupées dans l’ordre du rapport. Utilise les flèches ‹ et › pour les déplacer au sein de leur galerie. « Ne pas inclure » est un choix explicite, jamais automatique.</p>
       <label for="aiSummary">Résumé</label><textarea id="aiSummary" maxlength="1600"></textarea>
-      <div id="aiSections"></div><label class="filebtn btn ghost" for="aiExtraFiles">Ajouter des photos manquantes (sans nouvel appel IA)</label><input id="aiExtraFiles" type="file" accept="image/*" multiple><div id="aiReviewGallery" class="wb-ai-gallery"></div>
+      <div id="aiSections"></div><label class="filebtn btn ghost" for="aiExtraFiles">Ajouter des photos manquantes (sans nouvel appel IA)</label><input id="aiExtraFiles" type="file" accept="image/*" multiple><div id="aiReviewGallery" class="wb-ai-review-groups"></div><p id="aiPhotoOrderStatus" class="wb-ai-sr-only" role="status" aria-live="polite"></p>
       <div id="aiInvoiceReview" class="wb-ai-muted"></div><div id="aiWarnings" class="wb-ai-warnings"></div><div id="aiProblems" class="wb-ai-problems" role="status"></div><p id="aiUsage" class="wb-ai-usage"></p>
       <label class="wb-ai-check"><input type="checkbox" id="aiApprove"><span>J’ai relu les informations et le classement des photos. Créer le rapport ; si une intervention est sélectionnée, y rattacher le document sans la terminer ni le partager.</span></label>
       <div class="wb-ai-actions"><button class="btn primary" type="button" id="aiApply" disabled>Créer le rapport dans l’éditeur</button></div>
@@ -56,6 +56,7 @@
     ['aiClose','aiGenerate','aiFiles','aiPdfFiles','aiVerify','aiRetry','aiRefresh','aiResumeBtn','aiForget','aiDiscard','aiApply'].forEach(k=>{$(k).disabled=value;});
     $('aiInput').querySelectorAll('input,textarea').forEach(el=>el.disabled=value);
     $('aiReview').querySelectorAll('input,textarea,select').forEach(el=>el.disabled=value);
+    $('aiReview').querySelectorAll('.wb-ai-photo-move').forEach(el=>el.disabled=value||el.dataset.boundary==='true');
     if(!value)updateProblems();
   }
   async function call(action,extra={}){
@@ -216,16 +217,67 @@
     $('aiProblems').textContent=problems.length?'À corriger avant de créer le rapport :\n'+problems.join('\n'):'';
     $('aiApply').disabled=busy||problems.length>0||!$('aiApprove').checked;
   }
+  function reviewPhotos(target){
+    // Match makeReport's stable sort, including equal AI order values.
+    return plan.photos.filter(p=>entryValue(p)===target).sort((a,b)=>a.order-b.order);
+  }
+  function reviewGroups(){
+    // Follow the printable report: cover, contents, prestations, maintenance,
+    // engine bay, then invoices. Left/right galleries stay independent.
+    const groups=[{target:'overview',title:'Couverture — véhicule'},{target:'products',title:'Sommaire — produits / pièces'}];
+    plan.sections.forEach((s,i)=>{
+      const title=`${i+1}. ${s.title||'Prestation sans titre'}`;
+      if(s.type==='sym') ['L','R'].forEach(side=>groups.push({target:`section|${s.id}|${side}`,title:title+' — '+(side==='L'?'Gauche':'Droite')}));
+      else groups.push({target:`section|${s.id}|`,title});
+    });
+    groups.push(
+      {target:'labelR',title:'Étiquette d’entretien — recto'},
+      {target:'labelV',title:'Étiquette d’entretien — verso'},
+      {target:'baieAvant',title:'Baie moteur — avant'},
+      {target:'baieApres',title:'Baie moteur — après'},
+      {target:'invoice',title:'Factures en annexe'},
+      {target:'unassigned',title:'Photos à classer'},
+      {target:'excluded',title:'Photos non incluses'}
+    );
+    return groups.map(group=>({...group,photos:reviewPhotos(group.target)})).filter(group=>group.photos.length);
+  }
+  function focusReviewPhoto(photoId,selector){
+    const tile=[...$('aiReviewGallery').querySelectorAll('[data-photo]')].find(el=>el.dataset.photo===photoId);
+    const control=tile?.querySelector(selector)||tile?.querySelector('.wb-ai-photo-move:not(:disabled)')||tile?.querySelector('.wb-ai-target');
+    control?.focus({preventScroll:true});
+    tile?.scrollIntoView({block:'nearest',inline:'nearest'});
+  }
+  function moveReviewPhoto(photoId,step){
+    if(busy||!plan)return;
+    const photo=plan.photos.find(p=>p.id===photoId);if(!photo)return;
+    const photos=reviewPhotos(entryValue(photo)),from=photos.indexOf(photo),to=from+step;
+    if(to<0||to>=photos.length)return;
+    [photos[from],photos[to]]=[photos[to],photos[from]];
+    // Renumber the gallery rather than swapping equal order values. Other
+    // galleries and their assignments are untouched.
+    photos.forEach((p,i)=>p.order=i);
+    renderReviewPhotos();resetApproval();
+    focusReviewPhoto(photoId,`.wb-ai-photo-move[data-step="${step}"]:not(:disabled)`);
+    const name=assets.find(a=>a.id===photoId)?.name||'Photo';
+    $('aiPhotoOrderStatus').textContent=`${name} : position ${to+1} sur ${photos.length}.`;
+  }
   function renderReviewPhotos(){
-    const opts=options();
-    $('aiReviewGallery').innerHTML=plan.photos.map(p=>{
-      const a=assets.find(a=>a.id===p.id);
-      return `<div class="wb-ai-tile" data-photo="${p.id}" data-unassigned="${p.kind==='unassigned'}"><a href="${esc(a.url)}" target="_blank" rel="noopener"><img src="${esc(a.preview||a.url)}" loading="lazy" alt="${esc(a.name)}"></a><div class="wb-ai-name">${esc(a.name)}</div><select class="wb-ai-target" aria-label="Affectation de ${esc(a.name)}">${opts}</select><div class="wb-ai-reason">${esc(p.reason)}</div><label>Ordre<input class="wb-ai-order" type="number" min="0" max="10000" value="${p.order}"></label><label>Légende (facultative)<textarea class="wb-ai-cap" maxlength="350">${esc(p.caption)}</textarea></label></div>`;
-    }).join('');
+    const opts=options(),assetById=new Map(assets.map(a=>[a.id,a]));
+    $('aiReviewGallery').innerHTML=reviewGroups().map(group=>`<section class="wb-ai-photo-group" data-photo-group="${esc(group.target)}" aria-label="${esc(group.title)}"><h4>${esc(group.title)}</h4><div class="wb-ai-gallery">${group.photos.map((p,i)=>{
+      const a=assetById.get(p.id);
+      const arrow=(step,boundary)=>`<button type="button" class="btn ghost wb-ai-photo-move" data-step="${step}" data-boundary="${boundary}" title="${step<0?'Déplacer avant':'Déplacer après'}" aria-label="${step<0?'Avancer':'Reculer'} ${esc(a.name)} d’une place"${busy||boundary?' disabled':''}>${step<0?'‹':'›'}</button>`;
+      return `<div class="wb-ai-tile" data-photo="${esc(p.id)}" data-unassigned="${p.kind==='unassigned'}"><div class="wb-ai-photo-tools">${arrow(-1,i===0)}<span class="wb-ai-photo-position" aria-label="Photo ${i+1} sur ${group.photos.length}">${i+1} / ${group.photos.length}</span>${arrow(1,i===group.photos.length-1)}</div><a href="${esc(a.url)}" target="_blank" rel="noopener"><img src="${esc(a.preview||a.url)}" loading="lazy" alt="${esc(a.name)}"></a><div class="wb-ai-name">${esc(a.name)}</div><select class="wb-ai-target" aria-label="Affectation de ${esc(a.name)}"${busy?' disabled':''}>${opts}</select><div class="wb-ai-reason">${esc(p.reason)}</div><label>Légende (facultative)<textarea class="wb-ai-cap" maxlength="350"${busy?' disabled':''}>${esc(p.caption)}</textarea></label></div>`;
+    }).join('')}</div></section>`).join('');
     $('aiReviewGallery').querySelectorAll('[data-photo]').forEach(tile=>{
-      const p=plan.photos.find(p=>p.id===tile.dataset.photo),select=tile.querySelector('select');select.value=entryValue(p);
-      select.onchange=()=>{const parts=select.value.split('|');p.kind=parts[0];p.sectionId=parts[1]||'';p.side=parts[2]||'';p.reason='';tile.querySelector('.wb-ai-reason').textContent='';tile.dataset.unassigned=String(p.kind==='unassigned');resetApproval();};
-      tile.querySelector('.wb-ai-order').oninput=e=>{p.order=Math.max(0,Math.min(10000,Number(e.target.value)||0));resetApproval();};
+      const p=plan.photos.find(p=>p.id===tile.dataset.photo),select=tile.querySelector('.wb-ai-target');select.value=entryValue(p);
+      select.onchange=()=>{
+        if(busy)return;
+        const parts=select.value.split('|');p.kind=parts[0];p.sectionId=parts[1]||'';p.side=parts[2]||'';p.reason='';
+        const destination=reviewPhotos(entryValue(p)).filter(photo=>photo!==p);
+        destination.push(p);destination.forEach((photo,i)=>photo.order=i);
+        renderReviewPhotos();resetApproval();focusReviewPhoto(p.id,'.wb-ai-target');
+      };
+      tile.querySelectorAll('.wb-ai-photo-move').forEach(button=>button.onclick=()=>moveReviewPhoto(p.id,Number(button.dataset.step)));
       tile.querySelector('.wb-ai-cap').oninput=e=>{p.caption=e.target.value;resetApproval();};
     });
   }
@@ -235,7 +287,7 @@
     $('aiSections').innerHTML=plan.sections.map((s,i)=>`<div class="wb-ai-section" data-section="${s.id}"><label>${i+1}. Titre<input class="ai-stitle" maxlength="160" value="${esc(s.title)}"></label><label>Références / description<textarea class="ai-sdesc" maxlength="1600">${esc(s.description)}</textarea></label><label>Présentation<select class="ai-stype"><option value="normal">Simple</option><option value="sym">Gauche / droite</option></select></label></div>`).join('');
     $('aiSections').querySelectorAll('[data-section]').forEach(card=>{
       const s=plan.sections.find(s=>s.id===card.dataset.section);card.querySelector('.ai-stype').value=s.type;
-      card.querySelector('.ai-stitle').oninput=e=>{s.title=e.target.value;resetApproval();};
+      card.querySelector('.ai-stitle').oninput=e=>{s.title=e.target.value;renderReviewPhotos();resetApproval();};
       card.querySelector('.ai-sdesc').oninput=e=>{s.description=e.target.value;resetApproval();};
       card.querySelector('.ai-stype').onchange=e=>{s.type=e.target.value;plan.photos.filter(p=>p.sectionId===s.id).forEach(p=>{p.side='';if(s.type==='sym'){p.kind='unassigned';p.reason='Choisir le côté gauche ou droit.';}});renderReviewPhotos();resetApproval();};
     });
