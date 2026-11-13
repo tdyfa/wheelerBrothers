@@ -1,4 +1,4 @@
-/* WheelerBrothers 56.3 — préparation volontaire, relecture obligatoire, nouveau rapport uniquement. */
+/* WheelerBrothers 56.4 — préparation volontaire, relecture obligatoire, nouveau rapport uniquement. */
 (function(){
   'use strict';
   const C=window.WBReportAICore,H=window.WBReportAIHost,CFG=window.WB_REPORT_AI_CONFIG;
@@ -13,7 +13,7 @@
   const checks=H.blank().checkpoints;
   dialog.innerHTML=`<header class="wb-ai-head"><h2 id="aiTitle">Créer un rapport avec l’IA</h2><button type="button" class="btn ghost" id="aiClose" aria-label="Fermer">✕</button></header>
     <div class="wb-ai-body"><p class="wb-ai-notice">Ajoute tes photos et décris les travaux. L’IA propose un classement ; tu le relis avant de créer un <strong>nouveau</strong> rapport. Aucun ancien rapport n’est remplacé. Le rattachement reste facultatif ; la création ne termine pas l’intervention et ne partage pas le rapport.</p>
-    <div id="aiResume" class="wb-ai-resume" hidden>Une préparation précédente est disponible.<div class="wb-ai-actions"><button class="btn" id="aiResumeBtn" type="button">Reprendre (lots restants potentiellement facturables)</button><button class="btn ghost" id="aiForget" type="button">Abandonner ce brouillon</button></div></div>
+    <div id="aiResume" class="wb-ai-resume" hidden>Une préparation précédente est disponible. Si le transfert a été interrompu avant l'analyse, sélectionne de nouveau les mêmes fichiers : ceux déjà envoyés ne seront pas renvoyés.<div class="wb-ai-actions"><button class="btn" id="aiResumeBtn" type="button">Reprendre (lots restants potentiellement facturables)</button><button class="btn ghost" id="aiForget" type="button">Abandonner ce brouillon</button></div></div>
     <section id="aiInput">
       <div class="wb-ai-grid">
         <div><label for="aiVehicleSelect">Véhicule du Carnet d’atelier (facultatif)</label><select id="aiVehicleSelect"><option value="">Saisie manuelle d’une immatriculation</option></select><button type="button" class="btn ghost" id="aiReloadVehicles">Actualiser la liste</button><p class="wb-ai-muted" id="aiVehicleListStatus">Sélectionne une fiche ou saisis une plaque ci-dessous.</p></div>
@@ -28,7 +28,7 @@
       <div class="wb-flow-panel"><label for="aiLinkedOperation">Intervention liée (facultatif)</label><select id="aiLinkedOperation"><option value="">Aucune — rapport indépendant</option></select><p id="aiWorkflowHint" class="wb-flow-muted">Clique sur « Vérifier » pour afficher les interventions du véhicule. Les opérations possédant déjà un rapport sont grisées.</p></div><label for="aiNotes">Travaux effectués, pièces et précisions *</label><textarea id="aiNotes" maxlength="12000" placeholder="Ex. : vidange moteur et remplacement du filtre à huile ; nettoyage du filtre à air réutilisable. Préciser les côtés ou les références si nécessaire."></textarea>
       <h3>Photos de l’intervention</h3><p class="wb-ai-muted">Jusqu’à ${LIMIT} photos originales, sans compression ni redimensionnement. Envoi privé sur Storage, analyse IA en plusieurs lots automatiques. Les formats HEIC/HEIF sont conservés à l’identique et nécessitent une copie PNG sans perte pour l’analyse. Les formats ou photos incompatibles sont signalés avant le lancement.</p>
       <label class="filebtn btn" for="aiFiles">Ajouter des photos</label><input id="aiFiles" type="file" accept="image/*" multiple>
-      <p id="aiCount" class="wb-ai-muted">Aucune photo sélectionnée.</p><div id="aiPhotoErrors" class="wb-ai-problems" hidden></div><label class="wb-ai-check" id="aiPartialLabel" hidden><input type="checkbox" id="aiPartialConfirm"><span>Je confirme analyser seulement les photos acceptées malgré les photos refusées ci-dessus.</span></label><div id="aiGallery" class="wb-ai-gallery"></div>
+      <p id="aiCount" class="wb-ai-muted">Aucune photo sélectionnée.</p><p id="aiUploadProgress" class="wb-ai-muted" role="status" aria-live="polite"></p><div id="aiPhotoErrors" class="wb-ai-problems" hidden></div><label class="wb-ai-check" id="aiPartialLabel" hidden><input type="checkbox" id="aiPartialConfirm"><span>Je confirme analyser seulement les photos acceptées malgré les photos refusées ci-dessus.</span></label><div id="aiGallery" class="wb-ai-gallery"></div>
       <h3>Factures PDF</h3><p class="wb-ai-muted">Les PDF sont analysés pour relever les références des pièces et toutes leurs pages sont ajoutées en fin de rapport, dans l’ordre de sélection. Maximum 3 PDF, 8 Mio chacun et 20 pages au total. Vérifie les références avant validation.</p>
       <label class="filebtn btn" for="aiPdfFiles">Ajouter des factures PDF</label><input id="aiPdfFiles" type="file" accept="application/pdf,.pdf" multiple><div id="aiPdfList" class="wb-ai-muted"></div>
       <details><summary>Contrôles confirmés et recommandations (facultatif)</summary><p class="wb-ai-muted">Cocher seulement les contrôles réellement effectués. L’IA ne coche rien automatiquement.</p>
@@ -49,7 +49,29 @@
   document.body.appendChild(dialog);
   const $=name=>dialog.querySelector('#'+name);
   function status(message,kind=''){ $('aiStatus').textContent=message;$('aiStatus').dataset.kind=kind; }
-  function remember(){$('aiDiscard').hidden=!jobId;try{localStorage.setItem(KEY,JSON.stringify({jobId,workflowRef}));}catch(e){/* reprise non disponible si stockage local interdit */}}
+  function remember(){
+    $('aiDiscard').hidden=!jobId;
+    try{
+      const old=remembered();
+      const current=assets.map(a=>({id:a.id,name:a.name,size:a.sourceSize||a.original?.size||0,lastModified:a.lastModified||0,
+        ext:a.ext,originalExt:a.originalExt,uploaded:Boolean(a.uploaded||a.url),originalUploaded:Boolean(a.originalUploaded)}));
+      const oldEntries=old?.jobId===jobId&&old.uploadPending&&Array.isArray(old.manifest)?old.manifest:[];
+      const currentById=new Map(current.map(a=>[a.id,a]));
+      // On a resumed iPhone session, keep metadata for all the 85 original
+      // selections even when the user has only reselected the first 10.
+      const manifest=oldEntries.length>current.length
+        ? oldEntries.map(a=>currentById.get(a.id)||a)
+        : current;
+      const docs=documents.map(d=>({id:d.id,name:d.name,size:d.sourceSize||d.blob?.size||0,lastModified:d.lastModified||0,uploaded:Boolean(d.uploaded),pages:(d.pages||[]).map(p=>({id:p.id}))}));
+      const oldDocs=old?.jobId===jobId&&old.uploadPending&&Array.isArray(old.docManifest)?old.docManifest:[];
+      const docsById=new Map(docs.map(d=>[d.id,d]));
+      const docManifest=oldDocs.length>docs.length?oldDocs.map(d=>docsById.get(d.id)||d):docs;
+      const data={...(old?.jobId===jobId?old:{}),jobId,workflowRef,
+        uploadPending:!requestInput,manifest,docManifest};
+      if(!requestInput){data.meta=metaFromForm();data.notes=$('aiNotes').value;}
+      localStorage.setItem(KEY,JSON.stringify(data));
+    }catch(e){console.warn('Reprise locale indisponible, garde cette page ouverte.',e);}
+  }
   function remembered(){try{return JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){return null;}}
   function forget(){try{localStorage.removeItem(KEY);}catch(e){}$('aiResume').hidden=true;}
   function setBusy(value){
@@ -108,7 +130,7 @@
       vehicleRecords=await H.listVehicles();
       select.replaceChildren();
       const empty=document.createElement('option');empty.value='';empty.textContent='Saisie manuelle d’une immatriculation';select.append(empty);
-      vehicleRecords.forEach(v=>{const option=document.createElement('option');option.value=v.id;option.textContent=[v.plate||'Sans immatriculation',v.label||'',v.brand||''].filter(Boolean).join(' — ');select.append(option);});
+      vehicleRecords.forEach(v=>{const option=document.createElement('option');option.value=v.id;option.textContent=[v.brand,v.label,v.plate||'Sans immatriculation',v.owner].filter(Boolean).join(' — ');select.append(option);});
       select.value=vehicleRecords.some(v=>v.id===current)?current:'';
       $('aiVehicleListStatus').textContent=vehicleRecords.length+' véhicule(s) disponible(s).';
     }catch(e){$('aiVehicleListStatus').textContent='Liste indisponible : '+e.message+' — la saisie manuelle reste possible.';}
@@ -131,7 +153,9 @@
     $('aiPdfList').querySelectorAll('[data-pdf-remove]').forEach(b=>b.onclick=()=>{if(busy||jobId)return;documents=documents.filter(d=>d.id!==b.dataset.pdfRemove);renderDocuments();});
   }
   $('aiPdfFiles').addEventListener('change',async e=>{
-    const files=[...e.target.files];e.target.value='';if(busy||jobId)return;setBusy(true);const errors=[];
+    const files=[...e.target.files];e.target.value='';if(busy||(jobId&&requestInput)||(!jobId&&remembered()?.jobId&&!remembered()?.uploadPending))return;setBusy(true);const errors=[];
+    const pending=remembered();const recovering=Boolean(pending?.uploadPending&&pending?.jobId&&pending.docManifest?.length);
+    if(recovering&&!jobId){jobId=pending.jobId;setMeta(pending.meta||{});$('aiNotes').value=pending.notes||'';}
     try{for(const f of files){
       try{
         if(documents.length>=3)throw new Error('Maximum 3 factures PDF');
@@ -140,11 +164,22 @@
         status('Conversion locale des pages de '+f.name+'…');
         const images=await H.pdfPages(f,1.35);
         if(!images.length||images.length+documents.reduce((n,d)=>n+d.pages.length,0)>20)throw new Error('Maximum 20 pages de factures au total');
+        const previous=recovering?pending.docManifest.find(d=>d.name===f.name.slice(0,160)&&d.size===f.size&&d.lastModified===f.lastModified&&!documents.some(x=>x.id===d.id)):null;
+        if(recovering&&!previous)throw new Error('Facture différente du transfert interrompu.');
+        if(previous && previous.pages.length!==images.length)throw new Error('Le nombre de pages a changé : la facture ne correspond plus au brouillon.');
         const pages=[];
-        for(const data of images){const blob=await (await fetch(data)).blob();if(blob.size>2*1024*1024)throw new Error('Page PDF trop volumineuse');pages.push({id:id('a',12),blob});}
-        documents.push({id:id('d',12),name:f.name.slice(0,160),blob:f,pages});
+        for(let i=0;i<images.length;i++){
+          const blob=await (await fetch(images[i])).blob();if(blob.size>2*1024*1024)throw new Error('Page PDF trop volumineuse');
+          pages.push({id:previous?.pages[i]?.id||id('a',12),blob});
+        }
+        documents.push({id:previous?.id||id('d',12),name:f.name.slice(0,160),sourceSize:f.size,lastModified:f.lastModified,uploaded:Boolean(previous?.uploaded),blob:f,pages});
+        if(jobId)remember();
       }catch(err){errors.push(f.name+' : '+err.message);}
-    }}finally{setBusy(false);renderDocuments();status(errors.length?errors.join('\n'):'Factures préparées localement. Elles seront analysées avec les photos.',errors.length?'error':'');}
+    }}finally{
+      setBusy(false);renderDocuments();
+      const pending=remembered();const missing=pending?.uploadPending?(pending.docManifest?.length||0)-documents.length:0;
+      status(errors.length?errors.join('\n'):(missing>0?`${missing} facture(s) du transfert précédent restent à resélectionner.`:'Factures préparées localement. Elles seront analysées avec les photos.'),errors.length?'error':'');
+    }
   });
   const MAX_IMAGE_BYTES=20*1024*1024;
   const contentType={jpg:'image/jpeg',png:'image/png',webp:'image/webp'};
@@ -189,7 +224,8 @@
   }
   function renderInputPhotos(){
     const total=assets.reduce((n,a)=>n+(a.blob?.size||0),0);
-    $('aiCount').textContent=`${assets.length} / ${LIMIT} photos — ${(total/1024/1024).toFixed(1)} Mio transférés pour l’analyse (fichiers d’origine, ou PNG sans perte pour HEIC). Analyse par lots.`;
+    const remaining=remembered()?.uploadPending&&remembered()?.manifest?.length>assets.length?` — ${remembered().manifest.length-assets.length} fichier(s) à resélectionner pour reprendre`:'';
+    $('aiCount').textContent=`${assets.length} / ${LIMIT} photos — ${(total/1024/1024).toFixed(1)} Mio à transférer (fichiers originaux, ou PNG sans perte pour HEIC)${remaining}.`;
     $('aiGallery').innerHTML=assets.map(a=>`<div class="wb-ai-tile"><img src="${esc(a.preview||a.url)}" alt="${esc(a.name)}" loading="lazy"><div class="wb-ai-name">${esc(a.name)}</div><button class="btn ghost" type="button" data-remove="${a.id}">Retirer</button></div>`).join('');
     renderPhotoErrors();
     $('aiGallery').querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{
@@ -199,21 +235,42 @@
     });
   }
   $('aiFiles').addEventListener('change',async e=>{
-    if(busy||jobId)return;
+    if(busy||(jobId&&requestInput)||(!jobId&&remembered()?.jobId&&!remembered()?.uploadPending)){
+      status('Une analyse existe déjà. Utilise « Reprendre » ou « Abandonner » avant de changer les photos.','error');return;
+    }
     const files=[...e.target.files];e.target.value='';setBusy(true);const errors=[];
+    const pending=remembered();
+    const recovering=Boolean(pending?.jobId&&pending.uploadPending&&Array.isArray(pending.manifest)&&pending.manifest.length);
+    if(recovering && !jobId){jobId=pending.jobId;setMeta(pending.meta||{});$('aiNotes').value=pending.notes||'';}
     try{
       for(let i=0;i<files.length;i++){
-        if(assets.length>=LIMIT){const extra=files.slice(i);extra.forEach(f=>rejectedFiles.set(f.name+'-'+f.size,f.name+' : limite de '+LIMIT+' images atteinte.'));errors.push('Limite de '+LIMIT+' images atteinte. Les suivantes n’ont pas été ajoutées.');break;}
+        if(assets.length>=LIMIT){errors.push('Limite de '+LIMIT+' images atteinte.');break;}
         const f=files[i];status(`Préparation locale de la photo ${i+1} / ${files.length}… Aucun appel IA.`);
         try{
+          let existing=null;
+          if(recovering){
+            const used=new Set(assets.map(a=>a.id));
+            existing=pending.manifest.find(a=>!used.has(a.id)&&a.name===f.name.slice(0,200)&&a.size===f.size&&a.lastModified===f.lastModified);
+            if(!existing){errors.push('Fichier inattendu : '+f.name+'. Choisis uniquement les photos du transfert interrompu.');continue;}
+          }
           const prepared=await preparePhoto(f),blob=prepared.blob;
-          // A selection is not silently de-duplicated: 85 selections mean
-          // 85 distinct photo references, even if two files look identical.
-          assets.push({id:id('a',12),name:f.name.slice(0,200),...prepared,preview:URL.createObjectURL(blob)});
+          if(existing && existing.ext!==prepared.ext)throw new Error('Format différent de la préparation initiale.');
+          assets.push({id:existing?.id||id('a',12),name:f.name.slice(0,200),sourceSize:f.size,lastModified:f.lastModified,
+            ...prepared,uploaded:Boolean(existing?.uploaded),originalUploaded:Boolean(existing?.originalUploaded),preview:URL.createObjectURL(blob)});
           rejectedFiles.delete(f.name+'-'+f.size);
-        }catch(err){const message=f.name+' : '+err.message;errors.push(message);rejectedFiles.set(f.name+'-'+f.size,message);} 
+        }catch(err){const message=f.name+' : '+err.message;errors.push(message);rejectedFiles.set(f.name+'-'+f.size,message);}
       }
-    }finally{setBusy(false);renderInputPhotos();status(errors.length?errors.join('\n'):'Toutes les photos affichées sont prêtes sans compression. Tu peux en ajouter d’autres avant l’analyse.',errors.length?'error':'');}
+      if(recovering){
+        const positions=new Map(pending.manifest.map((a,i)=>[a.id,i]));
+        assets.sort((a,b)=>(positions.get(a.id)??999)-(positions.get(b.id)??999));
+        $('aiGenerate').disabled=false;
+        remember();
+      }
+    }finally{
+      setBusy(false);renderInputPhotos();
+      const missing=recovering?pending.manifest.length-assets.length:0;
+      status(errors.length?errors.join('\n'):(missing?`${assets.length} / ${pending.manifest.length} fichiers retrouvés. Resélectionne les ${missing} autres.`:'Toutes les photos sont prêtes sans compression. Tu peux lancer l’analyse.'),errors.length?'error':'');
+    }
   });
   function metaFromForm(){
     const m={};[['plate','Plate'],['km','Km'],['brand','Brand'],['model','Model'],['date','Date'],['engine','Engine'],['reg','Reg'],['closing','Closing']].forEach(([key,suffix])=>m[key]=$('ai'+suffix).value.trim());
@@ -225,24 +282,66 @@
     $('aiKm').value=WBVehicleInput.mileage(m.km);
     checks.forEach((_,i)=>$('aiCp'+i).checked=m.checkpoints?.[i]===true);
   }
+  // Three simultaneous uploads: avoids 85 serialized round-trips while keeping
+  // iPhone memory/network usage bounded. Progress uses real byte counters.
+  // A Storage file is only marked uploaded after its URL is resolved; interrupted
+  // transfers can be reselected with their original IDs, with verification.
   async function upload(){
-    const space=H.space();
-    for(let i=0;i<assets.length;i++){
-      const a=assets[i];if(a.url)continue;
-      status(`Envoi sécurisé des photos : ${i+1} / ${assets.length}… Aucun appel IA à ce stade.`);
-      const path=`spaces/${space}/reports/${jobId}/ai-${a.id}.${a.ext}`;
-      if(a.original!==a.blob && !a.originalUploaded){
-        const originalPath=`spaces/${space}/reports/${jobId}/ai-original-${a.id}.${a.originalExt}`;
-        await H.storage().ref().child(originalPath).put(a.original,{contentType:a.original.type||'application/octet-stream'});
-        a.originalUploaded=true;
-      }
-      const ref=H.storage().ref().child(path);
-      await ref.put(a.blob,{contentType:contentType[a.ext],cacheControl:'private,max-age=3600'});
-      a.url=await ref.getDownloadURL();
+    const space=H.space(), parallel=3;
+    const totalFiles=assets.length;
+    const bytesOf=a=>a.blob.size+(a.original!==a.blob?a.original.size:0);
+    const totalBytes=assets.reduce((n,a)=>n+bytesOf(a),0);
+    const progress=new Map(),failures=[];
+    let completed=0,nextIndex=0;
+    function paint(){
+      const sent=Math.min(totalBytes,[...progress.values()].reduce((n,x)=>n+x,0));
+      const text=`Envoi sécurisé : ${(sent/1048576).toFixed(1)} / ${(totalBytes/1048576).toFixed(1)} Mio — ${completed} / ${totalFiles} photos terminées`;
+      $('aiUploadProgress').textContent=text;
+      status(text+'\nAucun appel OpenAI à cette étape.');
     }
+    async function transfer(ref,blob,contentType,key){
+      const task=ref.put(blob,{contentType,cacheControl:'private,max-age=3600'});
+      progress.set(key,0);
+      task.on('state_changed',snap=>{progress.set(key,snap.bytesTransferred||0);paint();});
+      await task;
+      progress.set(key,blob.size);paint();
+    }
+    async function sendPhoto(a){
+      const key=a.id+':main',originalKey=a.id+':original';
+      const raw=a.original!==a.blob;
+      const originalPath=`spaces/${space}/reports/${jobId}/ai-original-${a.id}.${a.originalExt}`;
+      const path=`spaces/${space}/reports/${jobId}/ai-${a.id}.${a.ext}`;
+      const ref=H.storage().ref().child(path);
+      if(raw){
+        if(a.originalUploaded){
+          try{await H.storage().ref().child(originalPath).getMetadata();progress.set(originalKey,a.original.size);}
+          catch{a.originalUploaded=false;}
+        }
+        if(!a.originalUploaded){await transfer(H.storage().ref().child(originalPath),a.original,a.original.type||'application/octet-stream',originalKey);a.originalUploaded=true;remember();}
+      }
+      if(a.uploaded&&!a.url){
+        try{a.url=await ref.getDownloadURL();progress.set(key,a.blob.size);}catch{a.uploaded=false;}
+      }
+      if(!a.url){
+        await transfer(ref,a.blob,contentType[a.ext],key);
+        a.url=await ref.getDownloadURL();a.uploaded=true;
+      }
+      progress.set(key,a.blob.size);completed++;remember();paint();
+    }
+    async function worker(){
+      while(nextIndex<assets.length){
+        const index=nextIndex++,a=assets[index];
+        try{await sendPhoto(a);}catch(error){failures.push(a.name+' : '+(error?.message||'échec réseau'));remember();}
+      }
+    }
+    paint();await Promise.all(Array.from({length:Math.min(parallel,assets.length)},()=>worker()));
+    if(failures.length)throw new Error(failures.length+' photo(s) non transmises :\n'+failures.join('\n')+'\nLes photos déjà envoyées seront conservées. Relance « Préparer le rapport » après vérification de ta connexion, ou resélectionne les mêmes fichiers si la page a été fermée.');
+    $('aiUploadProgress').textContent=`${totalFiles} / ${totalFiles} photos envoyées — ${(totalBytes/1048576).toFixed(1)} Mio. Prêt pour l'analyse.`;
     for(const d of documents){
-      if(!d.uploaded){status('Envoi sécurisé de la facture '+d.name+'…');await H.storage().ref().child(`spaces/${space}/reports/${jobId}/ai-doc-${d.id}.pdf`).put(d.blob,{contentType:'application/pdf'});d.uploaded=true;}
-      for(const page of d.pages){if(page.url)continue;const ref=H.storage().ref().child(`spaces/${space}/reports/${jobId}/ai-inv-${page.id}.jpg`);await ref.put(page.blob,{contentType:'image/jpeg'});page.url=await ref.getDownloadURL();}
+      const docRef=H.storage().ref().child(`spaces/${space}/reports/${jobId}/ai-doc-${d.id}.pdf`);
+      if(d.uploaded){try{await docRef.getMetadata();}catch{d.uploaded=false;}}
+      if(!d.uploaded){status('Envoi sécurisé de la facture '+d.name+'…');await docRef.put(d.blob,{contentType:'application/pdf'});d.uploaded=true;remember();}
+      for(const page of d.pages){if(page.url)continue;const ref=H.storage().ref().child(`spaces/${space}/reports/${jobId}/ai-inv-${page.id}.jpg`);try{page.url=await ref.getDownloadURL();}catch{await ref.put(page.blob,{contentType:'image/jpeg'});page.url=await ref.getDownloadURL();}}
     }
   }
   function entryValue(p){
@@ -400,7 +499,13 @@
   async function generate(retry=false){
     if(busy)return;
     if(!retry && !$('aiPlate').reportValidity())return;
-    if(!retry && ((jobId&&requestInput)||(remembered()?.jobId&&!jobId))){status('Une préparation est déjà ouverte. Reprends-la ou abandonne-la avant un nouvel envoi.','error');return;}
+    if(!retry && ((jobId&&requestInput)||(remembered()?.jobId&&!jobId&&!remembered()?.uploadPending))){status('Une préparation IA existe déjà. Reprends-la ou abandonne-la avant un nouvel envoi.','error');return;}
+    if(!retry && remembered()?.uploadPending && remembered()?.manifest?.length && assets.length!==remembered().manifest.length){
+      status(`Transfert interrompu : ${assets.length} / ${remembered().manifest.length} fichiers retrouvés. Resélectionne les autres photos avant de continuer.`,'error');return;
+    }
+    if(!retry && remembered()?.uploadPending && remembered()?.docManifest?.length && documents.length!==remembered().docManifest.length){
+      status(`Transfert interrompu : ${documents.length} / ${remembered().docManifest.length} factures PDF retrouvées. Resélectionne les factures manquantes avant de continuer.`,'error');return;
+    }
     if(!retry && (!assets.length || $('aiNotes').value.trim().length<10 || !$('aiConsent').checked)){
       status('Ajoute au moins une photo, décris les travaux et confirme l’envoi à OpenAI.','error');return;
     }
@@ -415,16 +520,22 @@
         if(caps.version!=='56.3'||caps.mode!=='batches')throw new Error('Serveur IA v56.3 requis. Déploie wbReportAI v56.3 avant de traiter les photos originales.');
         if(!jobId)jobId=id('rai',16);remember();await upload();
         requestInput={jobId,assets:assets.map(a=>({id:a.id,name:a.name,ext:a.ext})),documents:documents.map(d=>({id:d.id,name:d.name,pages:d.pages.map(p=>({id:p.id}))})),notes:$('aiNotes').value.trim(),meta:metaFromForm(),consent:true,mode:'batches'};
+        remember();
       }
       $('aiInput').hidden=true;status('Analyse et préparation du classement… L’appel API est en cours.');
       const result=await runBatches(retry);await consume(result);
     }catch(e){
-      status(e.message+'\nNe relance pas immédiatement : vérifie d’abord le résultat existant.', 'error');
+      status(e.message+(requestInput?'\nVérifie d’abord le résultat côté serveur avant tout nouvel appel IA.':'\nAucun appel OpenAI n’a été fait. Réessaie l’envoi des fichiers manquants.'), 'error');
       if(jobId){$('aiRetryArea').hidden=false;$('aiRetry').hidden=true;$('aiResume').hidden=false;}
     }finally{setBusy(false);}
   }
   async function resume(){
-    if(busy)return;const stored=remembered();if(!jobId && stored?.jobId)jobId=stored.jobId;if(!jobId)return;
+    if(busy)return;const stored=remembered();if(stored?.uploadPending){
+      if(!jobId)jobId=stored.jobId;
+      status(`Transfert non terminé. Resélectionne les ${stored.manifest?.length||0} mêmes photos et ${stored.docManifest?.length||0} facture(s) PDF éventuelles, puis clique sur « Préparer le rapport ». Les fichiers déjà reçus seront vérifiés et réutilisés.`);
+      $('aiInput').hidden=false;$('aiReview').hidden=true;$('aiGenerate').disabled=false;return;
+    }
+    if(!jobId && stored?.jobId)jobId=stored.jobId;if(!jobId)return;
     setBusy(true);status('Récupération du brouillon existant… Aucun nouvel appel IA.');
     try{const result=await call('status',{jobId});await consume(result,stored?.review||null);if(result.status==='partial' && requestInput){await consume(await runBatches(false));}}catch(e){status(e.message,'error');}finally{setBusy(false);}
   }
@@ -452,7 +563,7 @@
   function reset(){
     $('aiVehicleSelect').value='';
     assets.forEach(a=>{if(a.preview)URL.revokeObjectURL(a.preview);});assets=[];documents=[];vehicleKm=null;vehiclePlate='';rejectedFiles.clear();renderDocuments();plan=null;jobId='';requestInput=null;usage=null;workflowRef=null;workflowOptions=[];renderWorkflowOptions();
-    $('aiDiscard').hidden=true;$('aiInput').hidden=false;$('aiReview').hidden=true;$('aiRetryArea').hidden=true;setMeta({});$('aiNotes').value='';$('aiConsent').checked=false;renderInputPhotos();setBusy(false);
+    $('aiUploadProgress').textContent='';$('aiDiscard').hidden=true;$('aiInput').hidden=false;$('aiReview').hidden=true;$('aiRetryArea').hidden=true;setMeta({});$('aiNotes').value='';$('aiConsent').checked=false;renderInputPhotos();setBusy(false);
   }
   async function abandon(){
     if(busy)return;const pending=remembered();const target=jobId||pending?.jobId;if(!target)return;
@@ -493,7 +604,7 @@
       workflowRef=context.ref;workflowOptions=[{...op,vehicleId:v.id}];renderWorkflowOptions();
       $('aiWorkflowHint').textContent+=' Travaux initialement prévus : '+(op.operation||'');
     }
-    if(!plan && !jobId){const previous=remembered();if(previous?.workflowRef){workflowRef=previous.workflowRef;const info=await WBWorkflow.call('operationInfo',workflowRef);workflowOptions=[{...info.operation,vehicleId:info.vehicle.id}];renderWorkflowOptions();}$('aiResume').hidden=!previous?.jobId;$('aiGenerate').disabled=Boolean(previous?.jobId);}
+    if(!plan && !jobId){const previous=remembered();if(previous?.workflowRef){workflowRef=previous.workflowRef;const info=await WBWorkflow.call('operationInfo',workflowRef);workflowOptions=[{...info.operation,vehicleId:info.vehicle.id}];renderWorkflowOptions();}$('aiResume').hidden=!previous?.jobId;$('aiGenerate').disabled=Boolean(previous?.jobId&&!previous?.uploadPending);}
     dialog.showModal();void loadVehicles();
   }
   window.WBReportAI={open};window.dispatchEvent(new Event('wb-ai-ready'));

@@ -7,7 +7,7 @@
   'use strict';
   const MAX_IMAGES = 100;
   const KINDS = ['overview','products','labelR','labelV','baieAvant','baieApres','invoice','section','unassigned'];
-  const SINGLE = ['overview','products','labelR','labelV','baieAvant','baieApres'];
+  const SINGLE = ['overview','labelR','labelV','baieAvant','baieApres'];
   function text(value, max=1000){
     if(typeof value !== 'string') throw new Error('Texte IA invalide.');
     return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').trim().slice(0,max);
@@ -98,6 +98,8 @@
       return value;
     }
     SINGLE.forEach(k=>{const p=ordered.find(p=>p.kind===k);report[k]=p?src(p.id):null;});
+    report.products=null;
+    report.productsPhotos=ordered.filter(p=>p.kind==='products').map(p=>({id:'ai_product_'+p.id,src:src(p.id),cap:text(p.caption,350)}));
     report.baieOn=Boolean(report.baieAvant || report.baieApres);
     report.baieTitle='';
     report.invoices=ordered.filter(p=>p.kind==='invoice').map(p=>({id:'ai_inv_'+p.id,kind:'img',src:src(p.id),name:assets.find(a=>a.id===p.id)?.name||'Facture'}));

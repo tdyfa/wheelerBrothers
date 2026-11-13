@@ -121,7 +121,10 @@ const WBReportImages = (() => {
     field('logo','Logo WheelerBrothers');
     // Le moteur prend le logo par défaut si aucun logo n'est enregistré.
     if(!s.logo)list.push({src:DEFAULT_LOGO,path:'logo',label:'Logo WheelerBrothers par défaut'});
-    field('overview',"Vue d’ensemble du véhicule");field('products','Produits / pièces utilisés');
+    field('overview',"Vue d’ensemble du véhicule");
+    if(Array.isArray(s.productsPhotos)&&s.productsPhotos.length){
+      s.productsPhotos.forEach((item,i)=>{if(item?.src)list.push({src:item.src,path:`productsPhotos[${i}].src`,label:`Produits / pièces utilisés — photo ${i+1}`,id:item.id,caption:item.cap,item,arrayKey:'productsPhotos'});});
+    }else field('products','Produits / pièces utilisés');
     (s.sections||[]).forEach((sec,i)=>{
       const keys=sec.type==='sym'?['photosL','photosR']:['photos'];
       keys.forEach(key=>(sec[key]||[]).forEach((item,j)=>{

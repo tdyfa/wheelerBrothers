@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=56.3">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.3">
+<link rel="manifest" href="manifest.json?v=56.4">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.4">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -16,16 +16,16 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
-<script src="firebase-config.js?v=56.3"></script>
-<script src="html2pdf.bundle.min.js?v=56.3"></script>
-<script src="report-images.js?v=56.3"></script>
-<script src="vehicle-info.js?v=56.3"></script>
-<script src="wb-workflow.js?v=56.3"></script>
-<link rel="stylesheet" href="wb-workflow.css?v=56.3">
-<script src="vehicle-input.js?v=56.3&build=2"></script>
-<link rel="stylesheet" href="report-ai.css?v=56.3">
-<script src="report-ai-config.js?v=56.3"></script>
-<script src="report-ai-core.js?v=56.3"></script>
+<script src="firebase-config.js?v=56.4"></script>
+<script src="html2pdf.bundle.min.js?v=56.4"></script>
+<script src="report-images.js?v=56.4"></script>
+<script src="vehicle-info.js?v=56.4"></script>
+<script src="wb-workflow.js?v=56.4"></script>
+<link rel="stylesheet" href="wb-workflow.css?v=56.4">
+<script src="vehicle-input.js?v=56.4&build=2"></script>
+<link rel="stylesheet" href="report-ai.css?v=56.4">
+<script src="report-ai-config.js?v=56.4"></script>
+<script src="report-ai-core.js?v=56.4"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -505,12 +505,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=56.3" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=56.4" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 56.3</span>
+          <span class="sub">Version 56.4</span>
         </div>
       </div>
       <div class="app-bar-notices">
@@ -632,10 +632,13 @@
           <div class="hint">Redimensionnée automatiquement. <a href="#" id="clearOverview">Retirer</a></div>
         </div>
         <div class="field">
-          <label>Photo des produits / pièces utilisés — page sommaire (optionnel)</label>
-          <label class="filebtn" for="f_products">📦 Choisir une photo…</label>
-          <input type="file" id="f_products" accept="image/*">
-          <div class="hint">Ex : les cartons des pièces. <a href="#" id="clearProducts">Retirer</a></div>
+          <label>Photos des produits / pièces utilisés — page sommaire (optionnel)</label>
+          <label class="filebtn" for="f_products">📦 Ajouter des photos…</label>
+          <input type="file" id="f_products" accept="image/*" multiple>
+          <div class="hint">Plusieurs photos possibles. Réorganise-les avec les flèches, ou retire-les individuellement.</div>
+          <div id="productPhotosStatus" class="hint" role="status" aria-live="polite"></div>
+          <div id="productPhotosList" class="thumbs" role="list" aria-label="Photos des pièces utilisées"></div>
+          <div class="hint"><a href="#" id="clearProducts">Tout retirer</a></div>
         </div>
         <div class="field">
           <label>Logo (déjà intégré — change-le si besoin)</label>
@@ -777,7 +780,7 @@ function normChecklist(){
 const state = {
   title: "RAPPORT D'INTERVENTION",
   date: "", plate:"", brand:"", model:"", engine:"", reg:"", km:"",
-  summary:"", overview:null, products:null, logo:DEFAULT_LOGO,
+  summary:"", overview:null, products:null, productsPhotos:[], logo:DEFAULT_LOGO,
   genDate:"",
   labelR:null, labelV:null,
   baieOn:false, baieTitle:"", baieAvant:null, baieApres:null,
@@ -1093,7 +1096,7 @@ function newReportId(){
 }
 
 function blankState(){
-  return {title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,checkpoints:makeDefaultCheckpoints(),invoicesOn:false,invoices:[],closing:"",sections:[]};
+  return {title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,productsPhotos:[],logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,checkpoints:makeDefaultCheckpoints(),invoicesOn:false,invoices:[],closing:"",sections:[]};
 }
 
 /* ---------- migration : bascule vers Storage toute image encore en base64
@@ -1111,6 +1114,9 @@ function migrateEmbeddedImages(){
   if(typeof state.logo === 'string' && state.logo.startsWith('data:') && state.logo !== DEFAULT_LOGO){
     uploads.push(uploadAndSwapField('logo', state.logo));
   }
+  (state.productsPhotos||[]).forEach(item=>{
+    if(item && typeof item.src==='string' && item.src.startsWith('data:')) uploads.push(uploadAndSwapArrayItem(item,item.src,'productsPhotos'));
+  });
   (state.invoices||[]).forEach(item=>{
     if(item && typeof item.src === 'string' && item.src.startsWith('data:')){
       uploads.push(uploadAndSwapArrayItem(item, item.src, 'invoices'));
@@ -1134,6 +1140,7 @@ function refreshEditorFromState(){
   // Les champs simples sont liés une seule fois au démarrage. Les relier ici
   // empilerait des gestionnaires à chaque mise à jour distante.
   buildSections();
+  buildProductsPhotos();
   buildBaie();
   buildChecklist();
   buildInvoices();
@@ -1676,10 +1683,15 @@ function renderReport(){
       html += `<li><span class="n">${i+1}</span><span class="t">${(esc(sec.title)+esc(tag))|| '<span class="empty-note">(prestation sans titre)</span>'}</span></li>`;
     });
     html += `</ul>`;
-    if(state.products){
-      html += `<div class="cover-photo" style="margin-top:9mm"><img src="${state.products}"><div class="cap">Produits / pièces utilisés</div></div>`;
-    }
+    const products=productPhotosOf(s);
+    if(products.length===1)html+=`<div class="cover-photo" style="margin-top:9mm"><img src="${esc(products[0].src)}"><div class="cap">${esc(products[0].cap||'Produits / pièces utilisés')}</div></div>`;
     html += `</div>`;
+    for(let start=0;products.length>1&&start<products.length;start+=2){
+      const subset=products.slice(start,start+2);
+      html += `<div class="page">${wm}<h2 class="doc-h2">Produits / pièces utilisés${products.length>2?' ('+(start+1)+'–'+(start+subset.length)+' / '+products.length+')':''}</h2>`;
+      for(const photo of subset)html+=`<div class="cover-photo" style="margin:4mm 0 0;padding-top:0"><img style="max-height:85mm" src="${esc(photo.src)}"><div class="cap">${esc(photo.cap||'Produits / pièces utilisés')}</div></div>`;
+      html += `</div>`;
+    }
   }
 
   // SECTIONS — flow into pages; honour "new page"
@@ -1782,14 +1794,108 @@ document.getElementById('f_overview').addEventListener('change', async (e)=>{
   uploadAndSwapField('overview', dataUrl);
 });
 document.getElementById('clearOverview').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.overview); state.overview=null; renderReport(); save();});
-document.getElementById('f_products').addEventListener('change', async (e)=>{
-  if(!e.target.files[0]) return;
-  const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
-  state.products = dataUrl;
-  renderReport(); save(); e.target.value='';
-  uploadAndSwapField('products', dataUrl);
+// Legacy v56.3 reports stored a single photo in `products`. Keep it readable
+// and convert it to the multi-photo gallery only when the user edits that gallery.
+function productPhotosOf(report=state){
+  const photos=Array.isArray(report.productsPhotos)?report.productsPhotos.filter(p=>p&&typeof p.src==='string'&&p.src):[];
+  return photos.length?photos:(report.products?[{id:'legacy-product-photo',src:report.products,cap:''}]:[]);
+}
+function ensureProductsArray(){
+  if(!Array.isArray(state.productsPhotos))state.productsPhotos=[];
+  if(state.products){
+    if(!state.productsPhotos.some(p=>p.src===state.products))state.productsPhotos.unshift({id:nid(),src:state.products,cap:''});
+    state.products=null;
+  }
+  return state.productsPhotos;
+}
+function buildProductsPhotos(){
+  const host=document.getElementById('productPhotosList');if(!host)return;
+  host.replaceChildren();
+  productPhotosOf().forEach((p,i,all)=>{
+    const item=document.createElement('div');item.className='thumb';item.setAttribute('role','listitem');
+    item.innerHTML=`<div class="tbar"><button type="button" class="pup" title="Avancer" aria-label="Avancer la photo ${i+1}" ${i===0?'disabled':''}>‹</button><button type="button" class="pdown" title="Reculer" aria-label="Reculer la photo ${i+1}" ${i===all.length-1?'disabled':''}>›</button><button type="button" class="pdel" title="Supprimer" aria-label="Supprimer la photo ${i+1}">✕</button></div><img alt="Pièce ${i+1}"><input class="cap" placeholder="Légende (optionnel)" aria-label="Légende photo ${i+1}">`;
+    item.querySelector('img').src=p.src;
+    const cap=item.querySelector('.cap');cap.value=p.cap||'';
+    cap.oninput=()=>{ensureProductsArray()[i].cap=cap.value;save();renderReport();};
+    const change=step=>{const arr=ensureProductsArray(),target=i+step;if(target<0||target>=arr.length)return;[arr[i],arr[target]]=[arr[target],arr[i]];buildProductsPhotos();renderReport();save();};
+    item.querySelector('.pup').onclick=()=>change(-1);
+    item.querySelector('.pdown').onclick=()=>change(1);
+    item.querySelector('.pdel').onclick=()=>{const arr=ensureProductsArray();retainReportAsset(arr[i].src);arr.splice(i,1);buildProductsPhotos();renderReport();save();};
+    host.appendChild(item);
+  });
+}
+// v56.4 : ne jamais sérialiser plusieurs photos de pièces en base64 dans
+// Firestore. Le fichier original compatible est transféré tel quel dans
+// Storage, puis seul son URL est ajoutée au rapport (aucun réencodage).
+async function uploadProductFile(file,reportId,itemId){
+  const mime=String(file.type||'').toLowerCase(),name=String(file.name||'');
+  const ext=name.split('.').pop().toLowerCase();
+  const direct= ['jpg','jpeg','png','webp'].includes(ext)||['image/jpeg','image/png','image/webp'].includes(mime);
+  const heic=['heic','heif'].includes(ext)||/image\/(heic|heif)/.test(mime);
+  if(!direct&&!heic)throw new Error('Format non pris en charge : JPEG, PNG, WebP ou HEIC/HEIF uniquement.');
+  if(!file.size)throw new Error('Le fichier est vide.');
+  const root=`spaces/${ensureSharedCode()}/reports/${reportId}/`;
+  if(heic){
+    // Les originaux HEIC restent conservés. Une copie PNG sans perte visuelle
+    // est utilisée pour l'affichage dans les PDF, sans encodage JPEG.
+    const originalRef=storage.ref().child(root+`products-original-${itemId}.${ext==='heif'?'heif':'heic'}`);
+    await originalRef.put(file,{contentType:mime||'application/octet-stream'});
+    let bitmap,url;
+    try{
+      try{bitmap=await createImageBitmap(file,{imageOrientation:'from-image'});}
+      catch{
+        url=URL.createObjectURL(file);
+        bitmap=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('Ce navigateur ne décode pas HEIC. Exporte un PNG sans perte.'));img.src=url;});
+      }
+      const w=bitmap.width||bitmap.naturalWidth,h=bitmap.height||bitmap.naturalHeight;
+      if(!w||!h||w*h>60000000)throw new Error('Dimensions trop importantes pour la conversion PNG sans perte.');
+      const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+      const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Conversion PNG impossible sur cet appareil.');
+      ctx.drawImage(bitmap,0,0);
+      const png=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error('Conversion PNG impossible.')),'image/png'));
+      canvas.width=canvas.height=1;
+      const ref=storage.ref().child(root+`products-${itemId}.png`);
+      await ref.put(png,{contentType:'image/png'});
+      return {src:await ref.getDownloadURL(),originalSrc:await originalRef.getDownloadURL()};
+    }finally{if(bitmap?.close)bitmap.close();if(url)URL.revokeObjectURL(url);}
+  }
+  const fileExt=(mime==='image/png'||ext==='png')?'png':(mime==='image/webp'||ext==='webp')?'webp':'jpg';
+  const ref=storage.ref().child(root+`products-${itemId}.${fileExt}`);
+  await ref.put(file,{contentType:fileExt==='jpg'?'image/jpeg':`image/${fileExt}`});
+  return {src:await ref.getDownloadURL()};
+}
+document.getElementById('f_products').addEventListener('change',async e=>{
+  const files=[...e.target.files];e.target.value='';if(!files.length)return;
+  if(!currentReportId){alert('Ouvre d’abord un rapport pour ajouter des photos.');return;}
+  const reportId=currentReportId,progress=document.getElementById('productPhotosStatus');
+  const input=document.getElementById('f_products');input.disabled=true;
+  const errors=[];
+  try{
+    for(let i=0;i<files.length;i++){
+      const file=files[i],itemId=nid();progress.textContent=`Envoi de la photo ${i+1} / ${files.length} : ${file.name}…`;
+      try{
+        const entry=await uploadProductFile(file,reportId,itemId);
+        if(reportId!==currentReportId){
+          // L'utilisateur a changé de rapport durant le transfert : ne jamais
+          // rattacher la photo au mauvais document.
+          try{await storage.refFromURL(entry.src).delete();}catch{}
+          errors.push(file.name+' : le rapport a changé pendant le transfert.');continue;
+        }
+        ensureProductsArray().push({id:itemId,...entry,cap:''});
+        buildProductsPhotos();renderReport();save();
+      }catch(error){errors.push(file.name+' : '+(error?.message||'échec'));console.warn('Photo de pièce non importée',error);}
+    }
+  }finally{
+    input.disabled=false;
+    progress.textContent=errors.length?errors.join('\n'):`${files.length} photo(s) traitée(s). Les photos ajoutées sont conservées en qualité originale.`;
+  }
 });
-document.getElementById('clearProducts').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.products); state.products=null; renderReport(); save();});
+document.getElementById('clearProducts').addEventListener('click',e=>{
+  e.preventDefault();if(!productPhotosOf().length)return;
+  if(!confirm('Retirer toutes les photos des produits / pièces ?'))return;
+  productPhotosOf().forEach(p=>retainReportAsset(p.src));state.products=null;state.productsPhotos=[];
+  buildProductsPhotos();renderReport();save();
+});
 document.getElementById('f_logo').addEventListener('change', async (e)=>{
   if(!e.target.files[0]) return;
   const dataUrl = await processImage(e.target.files[0], 700, 0.92);
@@ -2068,15 +2174,26 @@ async function lookupAtelierVehicle(){
     if(isCurrent()){button.disabled=false;button.textContent='Vérifier';}
   }
 }
-// v56.3 — même carnet source pour l'éditeur classique et la relecture IA.
+// v56.4 — même carnet source pour l'éditeur classique et la relecture IA.
 async function listAtelierVehicles(){
   const snap=await sharedDocRef('atelier').get({source:'server'});
   const data=snap.exists?JSON.parse(snap.data().payload||'{"vehicles":[]}'):{vehicles:[]};
   if(!Array.isArray(data.vehicles))throw new Error('Carnet d’atelier illisible.');
-  return data.vehicles.filter(v=>v && typeof v.id==='string').map(v=>({
-    id:v.id,plate:String(v.plate||''),label:String(v.modele||v.modeleComplet||v.nom||''),
-    brand:String(v.marque||''),info:WBVehicleInfo.fromVehicle(v)
-  })).sort((a,b)=>[a.plate,a.label].join(' ').localeCompare([b.plate,b.label].join(' '),'fr'));
+  const collator=new Intl.Collator('fr',{sensitivity:'base',numeric:true});
+  return data.vehicles.filter(v=>v && typeof v.id==='string').map(v=>{
+    const info=WBVehicleInfo.fromVehicle(v);
+    return {
+      id:v.id,plate:String(v.plate||'').trim(),label:String(info.model||v.modeleDetail||v.modele||'').trim(),
+      brand:String(info.brand||v.marque||'').trim(),owner:String(v.owner||'').trim(),info
+    };
+  }).sort((a,b)=>{
+    // Même tri que le Planning : marque, puis modèle, puis plaque, puis propriétaire.
+    for(const key of ['brand','label','plate','owner']){
+      const comparison=collator.compare(a[key],b[key]);
+      if(comparison)return comparison;
+    }
+    return collator.compare(a.id,b.id);
+  });
 }
 let classicVehicleOptions=[];
 async function reloadClassicVehicles(){
@@ -2086,7 +2203,7 @@ async function reloadClassicVehicles(){
   try{
     classicVehicleOptions=await listAtelierVehicles();
     select.replaceChildren();const none=document.createElement('option');none.value='';none.textContent='Saisie manuelle d’une immatriculation';select.append(none);
-    classicVehicleOptions.forEach(v=>{const option=document.createElement('option');option.value=v.id;option.textContent=[v.plate||'Sans plaque',v.label||v.info.model||'',v.info.brand||''].filter(Boolean).join(' — ');select.append(option);});
+    classicVehicleOptions.forEach(v=>{const option=document.createElement('option');option.value=v.id;option.textContent=[v.brand,v.label,v.plate||'Sans immatriculation',v.owner].filter(Boolean).join(' — ');select.append(option);});
     select.value=classicVehicleOptions.some(v=>v.id===was)?was:'';
     label.textContent=classicVehicleOptions.length+' véhicule(s) disponible(s).';
   }catch(e){label.textContent='Impossible de charger les véhicules. La saisie manuelle reste disponible : '+e.message;}
@@ -2382,12 +2499,25 @@ async function renderReportPdfPages(options={}){
       p.ctx.strokeStyle='#d9dde4';p.ctx.lineWidth=2;p.ctx.beginPath();p.ctx.moveTo(REPORT_PDF_MARGIN,p.y+58);p.ctx.lineTo(REPORT_PDF_W-REPORT_PDF_MARGIN,p.y+58);p.ctx.stroke();
       p.y+=66;
     }
-    if(s.products){
-      const img=await loadReportPdfImage(s.products,imageCache);
+    const products=productPhotosOf(s);
+    if(products.length===1){
+      const img=await loadReportPdfImage(products[0].src,imageCache);
       if(p.y+500>REPORT_PDF_H-REPORT_PDF_MARGIN){finish(p);p=contentPage('Produits / pièces utilisés');}
       pdfDrawContain(p.ctx,img,REPORT_PDF_MARGIN,p.y,contentW,Math.min(600,REPORT_PDF_H-p.y-REPORT_PDF_MARGIN-45),{border:true,background:'#fafbfc'});
     }
     finish(p);
+    if(products.length>1){
+      let page=contentPage('Produits / pièces utilisés');
+      for(let i=0;i<products.length;i++){
+        if(i>0&&i%2===0){finish(page);page=contentPage('Produits / pièces utilisés (suite)');}
+        const img=await loadReportPdfImage(products[i].src,imageCache);
+        const imageHeight=640;
+        pdfDrawContain(page.ctx,img,REPORT_PDF_MARGIN,page.y,contentW,imageHeight,{border:true,background:'#fafbfc'});
+        page.y+=imageHeight+25;
+        if(products[i].cap){page.ctx.fillStyle='#475569';page.ctx.font='20px Arial';page.ctx.fillText(products[i].cap.slice(0,120),REPORT_PDF_MARGIN,page.y);page.y+=32;}
+      }
+      finish(page);
+    }
   }
 
   /* Détail des prestations */
@@ -2623,7 +2753,7 @@ document.getElementById('importFile').addEventListener('change',(e)=>{
 document.getElementById('btnReset').addEventListener('click', ()=>{
   if(!confirm('Tout effacer et repartir de zéro ?')) return;
   // v56: keep uploaded files; a validated snapshot may still reference them.
-  Object.assign(state,{title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,checkpoints:makeDefaultCheckpoints(),invoicesOn:false,invoices:[],closing:"",sections:[]});
+  Object.assign(state,{title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,productsPhotos:[],logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,checkpoints:makeDefaultCheckpoints(),invoicesOn:false,invoices:[],closing:"",sections:[]});
   try{ localStorage.removeItem('rapport_state'); }catch(e){}
   initFields(); buildSections(); buildBaie(); buildChecklist(); buildInvoices(); renderReport();
   save();
@@ -2783,6 +2913,7 @@ setMobileView('editor');
   void reloadClassicVehicles();
   initFields();
   buildSections();
+  buildProductsPhotos();
   buildBaie();
   buildChecklist();
   buildInvoices();
@@ -2852,11 +2983,11 @@ window.WBReportWorkflowHost={
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=56.3&build=1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=56.4&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
-<script src="report-workflow.js?v=56.3"></script>
-<script src="report-ai.js?v=56.3"></script>
+<script src="report-workflow.js?v=56.4"></script>
+<script src="report-ai.js?v=56.4"></script>
 </body>
 </html>
