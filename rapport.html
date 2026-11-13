@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=56.2">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.2">
+<link rel="manifest" href="manifest.json?v=56.3">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.3">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -16,16 +16,16 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
-<script src="firebase-config.js?v=56.2"></script>
-<script src="html2pdf.bundle.min.js?v=56.2"></script>
-<script src="report-images.js?v=56.2"></script>
-<script src="vehicle-info.js?v=56.2"></script>
-<script src="wb-workflow.js?v=56.2"></script>
-<link rel="stylesheet" href="wb-workflow.css?v=56.2">
-<script src="vehicle-input.js?v=56.2&build=2"></script>
-<link rel="stylesheet" href="report-ai.css?v=56.2">
-<script src="report-ai-config.js?v=56.2"></script>
-<script src="report-ai-core.js?v=56.2"></script>
+<script src="firebase-config.js?v=56.3"></script>
+<script src="html2pdf.bundle.min.js?v=56.3"></script>
+<script src="report-images.js?v=56.3"></script>
+<script src="vehicle-info.js?v=56.3"></script>
+<script src="wb-workflow.js?v=56.3"></script>
+<link rel="stylesheet" href="wb-workflow.css?v=56.3">
+<script src="vehicle-input.js?v=56.3&build=2"></script>
+<link rel="stylesheet" href="report-ai.css?v=56.3">
+<script src="report-ai-config.js?v=56.3"></script>
+<script src="report-ai-core.js?v=56.3"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -505,12 +505,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=56.2" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=56.3" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 56.2</span>
+          <span class="sub">Version 56.3</span>
         </div>
       </div>
       <div class="app-bar-notices">
@@ -596,6 +596,12 @@
         </div>
         <div class="grid2">
           <div class="field"><label>Date d'intervention</label><input type="date" id="f_date"></div>
+          <div class="field">
+            <label for="f_vehicle_select">Véhicule existant (Carnet d’atelier)</label>
+            <select id="f_vehicle_select"><option value="">Saisie manuelle d’une immatriculation</option></select>
+            <button class="btn ghost" type="button" id="btnReloadReportVehicles">Actualiser les véhicules</button>
+            <div class="hint" id="reportVehicleListStatus" role="status">Choisis une fiche existante ou utilise la plaque ci-dessous.</div>
+          </div>
           <div class="field">
             <label for="f_plate">Immatriculation</label>
             <div class="plate-lookup-controls">
@@ -2062,7 +2068,50 @@ async function lookupAtelierVehicle(){
     if(isCurrent()){button.disabled=false;button.textContent='Vérifier';}
   }
 }
+// v56.3 — même carnet source pour l'éditeur classique et la relecture IA.
+async function listAtelierVehicles(){
+  const snap=await sharedDocRef('atelier').get({source:'server'});
+  const data=snap.exists?JSON.parse(snap.data().payload||'{"vehicles":[]}'):{vehicles:[]};
+  if(!Array.isArray(data.vehicles))throw new Error('Carnet d’atelier illisible.');
+  return data.vehicles.filter(v=>v && typeof v.id==='string').map(v=>({
+    id:v.id,plate:String(v.plate||''),label:String(v.modele||v.modeleComplet||v.nom||''),
+    brand:String(v.marque||''),info:WBVehicleInfo.fromVehicle(v)
+  })).sort((a,b)=>[a.plate,a.label].join(' ').localeCompare([b.plate,b.label].join(' '),'fr'));
+}
+let classicVehicleOptions=[];
+async function reloadClassicVehicles(){
+  const select=document.getElementById('f_vehicle_select'),button=document.getElementById('btnReloadReportVehicles');
+  const label=document.getElementById('reportVehicleListStatus'),was=select.value;
+  button.disabled=true;label.textContent='Chargement des véhicules…';
+  try{
+    classicVehicleOptions=await listAtelierVehicles();
+    select.replaceChildren();const none=document.createElement('option');none.value='';none.textContent='Saisie manuelle d’une immatriculation';select.append(none);
+    classicVehicleOptions.forEach(v=>{const option=document.createElement('option');option.value=v.id;option.textContent=[v.plate||'Sans plaque',v.label||v.info.model||'',v.info.brand||''].filter(Boolean).join(' — ');select.append(option);});
+    select.value=classicVehicleOptions.some(v=>v.id===was)?was:'';
+    label.textContent=classicVehicleOptions.length+' véhicule(s) disponible(s).';
+  }catch(e){label.textContent='Impossible de charger les véhicules. La saisie manuelle reste disponible : '+e.message;}
+  finally{button.disabled=false;}
+}
+async function selectClassicVehicle(){
+  const select=document.getElementById('f_vehicle_select'),v=classicVehicleOptions.find(x=>x.id===select.value);
+  if(!v)return;
+  if(!currentReportId||document.body.dataset.reportView!=='editor'){
+    document.getElementById('reportVehicleListStatus').textContent='Ouvre un rapport en édition pour choisir un véhicule.';return;
+  }
+  if(!v.plate){document.getElementById('reportVehicleListStatus').textContent='Fiche sans immatriculation. Saisis la plaque manuellement.';return;}
+  if(state.plate&&normalizePlate(state.plate)!==normalizePlate(v.plate)
+    && !confirm('Remplacer l’immatriculation déjà saisie par '+v.plate+' ? Les autres champs seront comparés sans écrasement silencieux.')){
+    select.value='';return;
+  }
+  state.plate=v.plate;
+  WBVehicleInput.loadPlate(document.getElementById('f_plate'),document.getElementById('f_plate_other'),v.plate);
+  resetVehicleLookup();renderReport();save();
+  await lookupAtelierVehicle();
+}
 function installVehicleLookup(){
+  document.getElementById('btnReloadReportVehicles').addEventListener('click',reloadClassicVehicles);
+  document.getElementById('f_vehicle_select').addEventListener('change',selectClassicVehicle);
+  document.getElementById('f_plate').addEventListener('input',()=>{document.getElementById('f_vehicle_select').value='';});
   document.getElementById('f_plate').addEventListener('input',vehicleLookupPlateChanged);
   // Aucun appel sur input, blur, change, Entrée dans la plaque, chargement ou ouverture.
   document.getElementById('btnLookupVehicle').addEventListener('click',lookupAtelierVehicle);
@@ -2731,6 +2780,7 @@ setMobileView('editor');
   preserveLegacyLocalDraft(); // conserver le cache, sans ouvrir ni écrire de rapport Firebase
   bindAll();
   installVehicleLookup();
+  void reloadClassicVehicles();
   initFields();
   buildSections();
   buildBaie();
@@ -2759,6 +2809,7 @@ window.WBReportAIHost = {
   space: ensureSharedCode,
   closeArchive,
   pdfPages: (file,scale) => pdfToImages(file,scale),
+  listVehicles: listAtelierVehicles,
   async lookupVehicle(key){
     const snap=await sharedDocRef('atelier').get({source:'server'});
     const data=snap.exists?JSON.parse(snap.data().payload||'{"vehicles":[]}'):{vehicles:[]};
@@ -2801,11 +2852,11 @@ window.WBReportWorkflowHost={
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=56.2&build=1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=56.3&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
-<script src="report-workflow.js?v=56.2"></script>
-<script src="report-ai.js?v=56.2"></script>
+<script src="report-workflow.js?v=56.3"></script>
+<script src="report-ai.js?v=56.3"></script>
 </body>
 </html>
