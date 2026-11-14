@@ -115,6 +115,42 @@ const WBReportImages = (() => {
       throw wrapped;
     }
   }
+  // v56.5.1 : copie réduite réservée au rendu A4 sur écran.
+  // Le fichier conservé dans Storage et le PDF final ne sont jamais modifiés.
+  async function loadPreview(src,cache) {
+    if(!src) return null;
+    if(cache.has(src)) return cache.get(src);
+    const promise=(async()=>{
+      const blob=await sourceAsBlob(src);
+      const original=await decode(blob);
+      try {
+        const width=original.width||original.naturalWidth;
+        const height=original.height||original.naturalHeight;
+        if(!width||!height)throw failure('image-decode','Dimensions invalides');
+        const factor=Math.min(1,1250/Math.max(width,height));
+        const canvas=document.createElement('canvas');
+        canvas.width=Math.max(1,Math.round(width*factor));
+        canvas.height=Math.max(1,Math.round(height*factor));
+        const ctx=canvas.getContext('2d');
+        if(!ctx)throw failure('image-decode','Canvas inaccessible');
+        ctx.drawImage(original,0,0,canvas.width,canvas.height);
+        if(typeof createImageBitmap==='function') {
+          try { return await createImageBitmap(canvas); }
+          catch(_) { /* Safari peut conserver le canvas réduit. */ }
+        }
+        return canvas;
+      } finally { original.close?.(); }
+    })();
+    cache.set(src,promise);
+    try { return await promise; }
+    catch(error) {
+      if(cache.get(src)===promise)cache.delete(src);
+      const wrapped=failure(error.code||'report-image-load-failed',error.message,
+        {source:sourceInfo(src),httpStatus:error.httpStatus,sdkCode:error.sdkCode,mime:error.mime,bytes:error.bytes});
+      wrapped.imageLocations=entries().filter(entry=>entry.src===src).map(publicEntry);
+      throw wrapped;
+    }
+  }
   function entries() {
     const s=state, list=[];
     const field=(key,label)=>{if(s[key])list.push({src:s[key],path:key,label,field:key});};
@@ -277,5 +313,5 @@ const WBReportImages = (() => {
     panel.style.cssText='padding:16px;background:var(--panel,#fff);border:1px solid var(--line);border-radius:10px;margin-bottom:12px';
     tools.after(panel);
   }
-  return {remoteBlob,sourceAsBlob,load,entries,sourceInfo,explain,message,previewError,diagnose,replace,install};
+  return {remoteBlob,sourceAsBlob,load,loadPreview,entries,sourceInfo,explain,message,previewError,diagnose,replace,install};
 })();

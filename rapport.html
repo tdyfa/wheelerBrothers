@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=56.5">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.5">
+<link rel="manifest" href="manifest.json?v=56.5.1">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.5.1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -16,17 +16,16 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
-<script src="firebase-config.js?v=56.5"></script>
-<script src="html2pdf.bundle.min.js?v=56.5"></script>
-<script src="report-images.js?v=56.5"></script>
-<script src="vehicle-info.js?v=56.5"></script>
-<script src="wb-workflow.js?v=56.5"></script>
-<link rel="stylesheet" href="wb-workflow.css?v=56.5">
-<script src="vehicle-input.js?v=56.5&build=2"></script>
-<link rel="stylesheet" href="report-ai.css?v=56.5">
-<script src="report-ai-config.js?v=56.5"></script>
-<script src="report-ai-review.js?v=56.5"></script>
-<script src="report-ai-core.js?v=56.5"></script>
+<script src="firebase-config.js?v=56.5.1"></script>
+<script src="html2pdf.bundle.min.js?v=56.5.1"></script>
+<script src="report-images.js?v=56.5.1"></script>
+<script src="vehicle-info.js?v=56.5.1"></script>
+<script src="wb-workflow.js?v=56.5.1"></script>
+<link rel="stylesheet" href="wb-workflow.css?v=56.5.1">
+<script src="vehicle-input.js?v=56.5.1&build=2"></script>
+<link rel="stylesheet" href="report-ai.css?v=56.5.1">
+<script src="report-ai-config.js?v=56.5.1"></script>
+<script src="report-ai-core.js?v=56.5.1"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -506,12 +505,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=56.5" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=56.5.1" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 56.5</span>
+          <span class="sub">Version 56.5.1</span>
         </div>
       </div>
       <div class="app-bar-notices">
@@ -1825,7 +1824,7 @@ function buildProductsPhotos(){
     host.appendChild(item);
   });
 }
-// v56.5 : ne jamais sérialiser plusieurs photos de pièces en base64 dans
+// v56.5.1 : ne jamais sérialiser plusieurs photos de pièces en base64 dans
 // Firestore. Le fichier original compatible est transféré tel quel dans
 // Storage, puis seul son URL est ajoutée au rapport (aucun réencodage).
 async function uploadProductFile(file,reportId,itemId){
@@ -2175,7 +2174,7 @@ async function lookupAtelierVehicle(){
     if(isCurrent()){button.disabled=false;button.textContent='Vérifier';}
   }
 }
-// v56.5 — même carnet source pour l'éditeur classique et la relecture IA.
+// v56.5.1 — même carnet source pour l'éditeur classique et la relecture IA.
 async function listAtelierVehicles(){
   const snap=await sharedDocRef('atelier').get({source:'server'});
   const data=snap.exists?JSON.parse(snap.data().payload||'{"vehicles":[]}'):{vehicles:[]};
@@ -2415,13 +2414,32 @@ function reportDateFr(value){
 async function renderReportPdfPages(options={}){
   const s=state;
   const pages=[];
+  const previewMode=!!options.previewMode;
+  const pixelScale=previewMode ? .48 : 1;
   const imageCache=options.imageCache||new Map();
-  const logo=await loadReportPdfImage(s.logo||DEFAULT_LOGO,imageCache);
+  // Cache borné : les 82 originaux décodés ne doivent pas coexister en RAM.
+  const previewLimit=7;
+  const logoSrc=s.logo||DEFAULT_LOGO;
+  const loadReportPdfImage=async(src,cache)=>{
+    if(!previewMode)return WBReportImages.load(src,cache);
+    const result=await WBReportImages.loadPreview(src,cache);
+    if(cache.size>previewLimit){
+      for(const [key,promise] of cache){
+        if(cache.size<=previewLimit)break;
+        if(key===logoSrc || key===src)continue;
+        cache.delete(key);
+        Promise.resolve(promise).then(img=>img?.close?.()).catch(()=>{});
+      }
+    }
+    return result;
+  };
+  const logo=await loadReportPdfImage(logoSrc,imageCache);
   const contentW=REPORT_PDF_W-REPORT_PDF_MARGIN*2;
   const newCanvas=()=>{
     const canvas=document.createElement('canvas');
-    canvas.width=REPORT_PDF_W;canvas.height=REPORT_PDF_H;
+    canvas.width=Math.round(REPORT_PDF_W*pixelScale);canvas.height=Math.round(REPORT_PDF_H*pixelScale);
     const ctx=canvas.getContext('2d');
+    if(pixelScale!==1)ctx.setTransform(pixelScale,0,0,pixelScale,0,0);
     ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.textBaseline='top';ctx.fillStyle='#101216';
     return {canvas,ctx,y:REPORT_PDF_MARGIN};
@@ -2434,7 +2452,16 @@ async function renderReportPdfPages(options={}){
     page.ctx.drawImage(logo,REPORT_PDF_W-REPORT_PDF_MARGIN-logo.width*ratio,28,logo.width*ratio,logo.height*ratio);
     page.ctx.restore();
   };
-  const finish=page=>pages.push({dataUrl:page.canvas.toDataURL('image/jpeg',.94),width:page.canvas.width,height:page.canvas.height});
+  let pageIndex=0;
+  const finish=page=>{
+    if(options.shouldAbort?.())throw Object.assign(new Error('Aperçu remplacé'),{code:'preview-cancelled'});
+    const item={dataUrl:page.canvas.toDataURL('image/jpeg',previewMode?.78:.94),width:page.canvas.width,height:page.canvas.height};
+    // En aperçu : ne pas accumuler les JPEG de toutes les pages dans deux tableaux.
+    if(options.onPage)options.onPage(item,pageIndex);
+    if(options.collectPages!==false)pages.push(item);
+    pageIndex++;
+    page.canvas.width=0;page.canvas.height=0;
+  };
   const contentPage=(title)=>{
     const page=newCanvas();drawWatermark(page);
     if(title){
@@ -2704,7 +2731,7 @@ async function generatePdf(){
   btn.disabled=true;btn.textContent='⏳ Génération…';
   try{
     save();flushPendingSave();
-    const pages=await renderReportPdfPages({imageCache:reportPreviewImageCache});
+    const pages=await renderReportPdfPages({imageCache:new Map()});
     if(!pages.length)throw new Error('Aucune page générée');
     const blob=buildReportImagePdf(pages);
     const url=URL.createObjectURL(blob);
@@ -2845,9 +2872,9 @@ function updatePreviewScale(){
 // L'aperçu utilise exactement le même moteur canvas que le PDF final.
 // Il est différé de quelques millisecondes pour rester fluide pendant la saisie.
 const _legacyRenderReport = renderReport; // conservé uniquement pour compatibilité interne
-const reportPreviewImageCache = new Map();
 let reportPreviewTimer = null;
 let reportPreviewRevision = 0;
+let previewRenderQueue = Promise.resolve();
 
 function shouldRenderA4Preview(){
   return currentReportId && document.body.dataset.reportView==='editor'
@@ -2858,28 +2885,66 @@ async function refreshA4Preview(revision){
   const report=document.getElementById('report');
   const status=document.getElementById('previewStatus');
   if(!report || !currentReportId || document.body.dataset.reportView!=='editor')return;
-  if(status)status.textContent='Aperçu A4 — génération en cours…';
-  if(!report.children.length)report.innerHTML='<div class="pdf-preview-message">⏳ Préparation des pages A4…</div>';
-  try{
-    const pages=await renderReportPdfPages({imageCache:reportPreviewImageCache});
-    if(revision!==reportPreviewRevision)return;
-    report.innerHTML='';
-    pages.forEach((page,index)=>{
-      const holder=document.createElement('div');
-      holder.className='pdf-preview-page';
-      holder.setAttribute('aria-label',`Page ${index+1} sur ${pages.length}`);
-      const img=document.createElement('img');
-      img.src=page.dataUrl;img.alt=`Aperçu de la page ${index+1}`;
-      holder.appendChild(img);report.appendChild(holder);
+  report.replaceChildren();
+  if(status)status.textContent='Aperçu A4 — préparation…';
+  const mobile=isMobile();
+  let count=0;
+  const previews=[];
+  let visibleRange={first:0,last:2};
+  // L'image de chaque page n'est montée que près de la zone visible.
+  // Les pages éloignées redeviennent des placeholders, ce qui libère leur décodage.
+  function updateMounted(){
+    previews.forEach((item,i)=>{
+      const active=i>=visibleRange.first-2&&i<=visibleRange.last+2;
+      if(active){if(!item.img.src)item.img.src=item.dataUrl;}
+      else if(item.img.hasAttribute('src'))item.img.removeAttribute('src');
     });
-    if(status)status.textContent=`Aperçu A4 — ${pages.length} page${pages.length>1?'s':''}, identique au PDF.`;
-    requestAnimationFrame(()=>updatePreviewScale());
-  }catch(error){
+  }
+  function onScroll(){
+    const parentRect=report.getBoundingClientRect();
+    const factor=mobile?Number(getComputedStyle(report).getPropertyValue('--mscale'))||1:1;
+    const top=Math.max(0,-parentRect.top/factor);
+    const height=window.innerHeight/factor;
+    const step=1123+24;
+    visibleRange={first:Math.max(0,Math.floor(top/step)),last:Math.ceil((top+height)/step)};
+    updateMounted();
+  }
+  // Éviter une accumulation d'écouteurs lorsque la page est recalculée.
+  if(refreshA4Preview.scrollHandler)window.removeEventListener('scroll',refreshA4Preview.scrollHandler);
+  refreshA4Preview.scrollHandler=onScroll;
+  window.addEventListener('scroll',onScroll,{passive:true});
+  const previewCache=new Map();
+  try {
+    await renderReportPdfPages({
+      imageCache:previewCache,
+      previewMode:mobile, collectPages:false,
+      shouldAbort:()=>revision!==reportPreviewRevision,
+      onPage:(page,index)=>{
+        if(revision!==reportPreviewRevision)return;
+        const holder=document.createElement('div');holder.className='pdf-preview-page';
+        holder.setAttribute('aria-label',`Page ${index+1}`);
+        const img=document.createElement('img');img.alt=`Aperçu de la page ${index+1}`;
+        holder.appendChild(img);report.appendChild(holder);
+        previews.push({img,dataUrl:page.dataUrl});count++;
+        if(index===0 || index%4===0){
+          if(status)status.textContent=`Aperçu A4 — ${count} page${count>1?'s':''} préparée${count>1?'s':''}…`;
+          updateMounted();
+          requestAnimationFrame(()=>updatePreviewScale());
+        }
+      }
+    });
     if(revision!==reportPreviewRevision)return;
+    if(status)status.textContent=`Aperçu A4 — ${count} page${count>1?'s':''}.`;
+    onScroll();requestAnimationFrame(()=>updatePreviewScale());
+  }catch(error){
+    if(revision!==reportPreviewRevision||error.code==='preview-cancelled')return;
     console.error('Aperçu A4 impossible',error);
     WBReportImages.previewError(error);
     if(status)status.textContent=error.imageLocations ? 'Aperçu A4 indisponible — '+(error.imageLocations[0]?.description||'image en échec') : 'Aperçu A4 — erreur de génération.';
     requestAnimationFrame(()=>updatePreviewScale());
+  }finally{
+    for(const promise of previewCache.values())Promise.resolve(promise).then(img=>img?.close?.()).catch(()=>{});
+    previewCache.clear();
   }
 }
 
@@ -2890,7 +2955,13 @@ renderReport = function(force=false){
   clearTimeout(reportPreviewTimer);
   if(!currentReportId || document.body.dataset.reportView!=='editor')return;
   if(!force&&!shouldRenderA4Preview())return;
-  reportPreviewTimer=setTimeout(()=>refreshA4Preview(revision),320);
+  reportPreviewTimer=setTimeout(()=>{
+    // Une seule génération à la fois, y compris lors des passages rapides
+    // entre Éditeur et Aperçu sur iPhone.
+    previewRenderQueue=previewRenderQueue.catch(()=>{}).then(()=>{
+      if(revision===reportPreviewRevision)return refreshA4Preview(revision);
+    });
+  },320);
 };
 
 WBReportImages.install();
@@ -2984,11 +3055,11 @@ window.WBReportWorkflowHost={
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=56.5&build=1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=56.5.1&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
-<script src="report-workflow.js?v=56.5"></script>
-<script src="report-ai.js?v=56.5"></script>
+<script src="report-workflow.js?v=56.5.1"></script>
+<script src="report-ai.js?v=56.5.1"></script>
 </body>
 </html>
