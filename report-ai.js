@@ -579,8 +579,20 @@
     setBusy(true);
     try{
       if(!retry){
-        status('Vérification du service IA… Aucun appel OpenAI.');const caps=await call('capabilities');
-        if(caps.version!=='56.5'||caps.mode!=='batches'||!caps.globalSynthesis)throw new Error('Serveur IA v56.5 requis : déploie wbReportAI avant de lancer une nouvelle analyse. Un ancien brouillon peut être repris sans appel IA.');
+        status('Vérification des capacités du serveur IA… Aucun appel OpenAI.');
+        let caps;
+        try { caps=await call('capabilities'); }
+        catch (error) {
+          throw new Error('Diagnostic IA — appel capabilities impossible. '+(error?.message||String(error))+'. Aucun appel OpenAI effectué.');
+        }
+        const expected={version:'56.5',mode:'batches',globalSynthesis:true};
+        const valid=!!caps && typeof caps==='object' && caps.version===expected.version && caps.mode===expected.mode && caps.globalSynthesis===expected.globalSynthesis;
+        if(!valid){
+          const printable=v=>v===undefined?'absent':v===null?'null':JSON.stringify(v);
+          const actual=caps && typeof caps==='object'?caps:{};
+          const details='Version reçue : '+printable(actual.version)+' (attendue : 56.5) ; mode : '+printable(actual.mode)+' (attendu : batches) ; globalSynthesis : '+printable(actual.globalSynthesis)+' (attendu : true).';
+          throw new Error('Diagnostic IA — réponse capabilities incompatible. '+details+' Fonction appelée : '+String(CFG.functionName)+' ; région : '+String(CFG.region)+'. Aucun appel OpenAI effectué. Transmets ce message pour identifier la différence, sans redéployer à l’aveugle.');
+        }
         if(!jobId)jobId=id('rai',16);remember();await upload();
         requestInput={jobId,assets:assets.map(a=>({id:a.id,name:a.name,ext:a.ext})),documents:documents.map(d=>({id:d.id,name:d.name,pages:d.pages.map(p=>({id:p.id}))})),notes:$('aiNotes').value.trim(),meta:metaFromForm(),consent:true,mode:'batches'};
         remember();
