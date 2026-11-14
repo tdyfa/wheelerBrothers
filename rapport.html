@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=56.5.3">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.5.3">
+<link rel="manifest" href="manifest.json?v=56.5.4">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.5.4">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -16,16 +16,16 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
-<script src="firebase-config.js?v=56.5.3"></script>
-<script src="html2pdf.bundle.min.js?v=56.5.3"></script>
-<script src="report-images.js?v=56.5.3"></script>
-<script src="vehicle-info.js?v=56.5.3"></script>
-<script src="wb-workflow.js?v=56.5.3"></script>
-<link rel="stylesheet" href="wb-workflow.css?v=56.5.3">
-<script src="vehicle-input.js?v=56.5.3&build=2"></script>
-<link rel="stylesheet" href="report-ai.css?v=56.5.3">
-<script src="report-ai-config.js?v=56.5.3"></script>
-<script src="report-ai-core.js?v=56.5.3"></script>
+<script src="firebase-config.js?v=56.5.4"></script>
+<script src="html2pdf.bundle.min.js?v=56.5.4"></script>
+<script src="report-images.js?v=56.5.4"></script>
+<script src="vehicle-info.js?v=56.5.4"></script>
+<script src="wb-workflow.js?v=56.5.4"></script>
+<link rel="stylesheet" href="wb-workflow.css?v=56.5.4">
+<script src="vehicle-input.js?v=56.5.4&build=2"></script>
+<link rel="stylesheet" href="report-ai.css?v=56.5.4">
+<script src="report-ai-config.js?v=56.5.4"></script>
+<script src="report-ai-core.js?v=56.5.4"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -505,12 +505,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=56.5.3" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=56.5.4" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 56.5.3</span>
+          <span class="sub">Version 56.5.4</span>
         </div>
       </div>
       <div class="app-bar-notices">
@@ -1837,7 +1837,7 @@ function buildProductsPhotos(){
     host.appendChild(item);
   });
 }
-// v56.5.3 : ne jamais sérialiser plusieurs photos de pièces en base64 dans
+// v56.5.4 : ne jamais sérialiser plusieurs photos de pièces en base64 dans
 // Firestore. Le fichier original compatible est transféré tel quel dans
 // Storage, puis seul son URL est ajoutée au rapport (aucun réencodage).
 async function uploadProductFile(file,reportId,itemId){
@@ -2187,7 +2187,7 @@ async function lookupAtelierVehicle(){
     if(isCurrent()){button.disabled=false;button.textContent='Vérifier';}
   }
 }
-// v56.5.3 — même carnet source pour l'éditeur classique et la relecture IA.
+// v56.5.4 — même carnet source pour l'éditeur classique et la relecture IA.
 async function listAtelierVehicles(){
   const snap=await sharedDocRef('atelier').get({source:'server'});
   const data=snap.exists?JSON.parse(snap.data().payload||'{"vehicles":[]}'):{vehicles:[]};
@@ -2452,7 +2452,7 @@ async function renderReportPdfPages(options={}){
     const canvas=document.createElement('canvas');
     canvas.width=Math.round(REPORT_PDF_W*pixelScale);canvas.height=Math.round(REPORT_PDF_H*pixelScale);
     const ctx=canvas.getContext('2d');
-    // v56.5.3 : peindre le fond opaque en pixels réels AVANT la mise à l'échelle.
+    // v56.5.4 : peindre le fond opaque en pixels réels AVANT la mise à l'échelle.
     // Après setTransform, canvas.width/height seraient réduits une seconde fois :
     // le fond resterait transparent en partie et deviendrait noir à l'export JPEG.
     ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -3071,11 +3071,69 @@ window.WBReportWorkflowHost={
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=56.5.3&build=1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=56.5.4&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
-<script src="report-workflow.js?v=56.5.3"></script>
-<script src="report-ai.js?v=56.5.3"></script>
+<script src="report-workflow.js?v=56.5.4"></script>
+<script src="report-ai.js?v=56.5.4"></script>
+<script>
+/* v56.5.4 : récupération du module IA après un chargement incomplet/cache PWA ancien.
+   Aucun brouillon ni donnée Firebase n'est supprimé. */
+(function(){
+  'use strict';
+  const ids=['btnHomeAI','btnArchiveAI'];
+  let attempted=false,loading=false;
+  function buttons(){return ids.map(id=>document.getElementById(id)).filter(Boolean);}
+  function explain(message){
+    buttons().forEach(button=>{
+      button.disabled=false;
+      button.textContent='Réessayer la création IA';
+      button.title=message;
+      button.onclick=()=>{void recover(true);};
+      if(!button.nextElementSibling?.classList?.contains('wb-ai-boot-note')){
+        const note=document.createElement('p');note.className='wb-ai-boot-note';note.style.cssText='font-size:12px;color:#a04418;margin:6px 0 10px;';
+        button.insertAdjacentElement('afterend',note);
+      }
+      button.nextElementSibling.textContent=message;
+    });
+  }
+  function clearNotes(){document.querySelectorAll('.wb-ai-boot-note').forEach(el=>el.remove());}
+  function load(name){return new Promise((resolve,reject)=>{
+    const script=document.createElement('script');
+    script.src=name+'?v=56.5.4&retry=1';script.async=false;
+    script.onload=resolve;script.onerror=()=>reject(new Error('Impossible de charger '+name));
+    document.body.appendChild(script);
+  });}
+  async function recover(manual){
+    if(loading)return;
+    if(window.WBReportAI){clearNotes();return;}
+    if(attempted&&!manual)return;
+    attempted=true;loading=true;
+    try{
+      // Une erreur initiale peut avoir laissé une fenêtre IA incomplète.
+      document.getElementById('wbAiDialog')?.remove();
+      if(!window.WB_REPORT_AI_CONFIG?.enabled)await load('report-ai-config.js');
+      if(!window.WBReportAICore)await load('report-ai-core.js');
+      window.WBReportAIBootError='';
+      await load('report-ai.js');
+      if(!window.WBReportAI)throw new Error(window.WBReportAIBootError||'Initialisation IA incomplète');
+      clearNotes();
+      await Promise.resolve(window.WBReportAIHost?.ready);
+      buttons().forEach(b=>{b.disabled=false;b.title='';b.textContent='Créer avec l’IA';});
+    }catch(error){
+      console.error('WheelerBrothers : récupération IA impossible',error);
+      explain('Module IA indisponible : '+String(error?.message||error)+'. Appuie ici pour réessayer.');
+    }finally{loading=false;}
+  }
+  window.addEventListener('wb-ai-ready',clearNotes);
+  window.setTimeout(()=>{
+    if(!window.WBReportAI)void recover(false);
+    else Promise.resolve(window.WBReportAIHost?.ready).then(()=>{
+      buttons().forEach(b=>{b.disabled=false;});
+    }).catch(error=>explain('Connexion au module IA impossible : '+String(error?.message||error)));
+  },800);
+})();
+</script>
 </body>
 </html>

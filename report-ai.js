@@ -1,19 +1,20 @@
 /* WheelerBrothers 56.5 — préparation volontaire, relecture obligatoire, nouveau rapport uniquement. */
 (function(){
   'use strict';
-  const R=window.WBReportAIReview,C=window.WBReportAICore,H=window.WBReportAIHost,CFG=window.WB_REPORT_AI_CONFIG;
-  if(!R || !C || !H || !CFG?.enabled)return;
+  try {
+  const C=window.WBReportAICore,H=window.WBReportAIHost,CFG=window.WB_REPORT_AI_CONFIG;
+  if(!C || !H || !CFG?.enabled){window.WBReportAIBootError='Dépendance IA indisponible : '+(!C?'report-ai-core.js ': '')+(!H?'passerelle rapport ': '')+(!CFG?.enabled?'configuration IA désactivée':'');return;}
   const KEY='wb_ai_pending_v1';
   const LIMIT=Math.min(C.MAX_IMAGES,CFG.maxImages||100);
   const id=(prefix,n)=>prefix+Array.from(crypto.getRandomValues(new Uint8Array(n))).map(v=>v.toString(16).padStart(2,'0')).join('');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  let assets=[],documents=[],plan=null,jobId='',busy=false,requestInput=null,usage=null,vehicleKm=null,vehiclePlate='',workflowRef=null,workflowOptions=[],vehicleRecords=[],rejectedFiles=new Map();
+  let assets=[],documents=[],plan=null,jobId='',busy=false,requestInput=null,usage=null,vehicleKm=null,vehiclePlate='',workflowRef=null,workflowOptions=[],vehicleRecords=[],rejectedFiles=new Map(),reviewUndo=[],synthesisRetry=false;
   const dialog=document.createElement('dialog');dialog.className='wb-ai-dialog no-print';dialog.id='wbAiDialog';
   dialog.setAttribute('aria-labelledby','aiTitle');
   const checks=H.blank().checkpoints;
   dialog.innerHTML=`<header class="wb-ai-head"><h2 id="aiTitle">Créer un rapport avec l’IA</h2><button type="button" class="btn ghost" id="aiClose" aria-label="Fermer">✕</button></header>
     <div class="wb-ai-body"><p class="wb-ai-notice">Ajoute tes photos et décris les travaux. L’IA propose un classement ; tu le relis avant de créer un <strong>nouveau</strong> rapport. Aucun ancien rapport n’est remplacé. Le rattachement reste facultatif ; la création ne termine pas l’intervention et ne partage pas le rapport.</p>
-    <div id="aiResume" class="wb-ai-resume" hidden>Une préparation précédente est disponible. Si le transfert a été interrompu avant l'analyse, sélectionne de nouveau les mêmes fichiers : ceux déjà envoyés ne seront pas renvoyés.<div class="wb-ai-actions"><button class="btn" id="aiResumeBtn" type="button">Reprendre la préparation / relecture</button><button class="btn ghost" id="aiForget" type="button">Abandonner ce brouillon</button></div></div>
+    <div id="aiResume" class="wb-ai-resume" hidden>Une préparation précédente est disponible. Si le transfert a été interrompu avant l'analyse, sélectionne de nouveau les mêmes fichiers : ceux déjà envoyés ne seront pas renvoyés.<div class="wb-ai-actions"><button class="btn" id="aiResumeBtn" type="button">Reprendre (lots restants potentiellement facturables)</button><button class="btn ghost" id="aiExportPending" type="button">Sauvegarder le brouillon local (.json)</button><button class="btn ghost" id="aiForget" type="button">Abandonner ce brouillon</button></div></div>
     <section id="aiInput">
       <div class="wb-ai-grid">
         <div><label for="aiVehicleSelect">Véhicule du Carnet d’atelier (facultatif)</label><select id="aiVehicleSelect"><option value="">Saisie manuelle d’une immatriculation</option></select><button type="button" class="btn ghost" id="aiReloadVehicles">Actualiser la liste</button><p class="wb-ai-muted" id="aiVehicleListStatus">Sélectionne une fiche ou saisis une plaque ci-dessous.</p></div>
@@ -34,20 +35,17 @@
       <details><summary>Contrôles confirmés et recommandations (facultatif)</summary><p class="wb-ai-muted">Cocher seulement les contrôles réellement effectués. L’IA ne coche rien automatiquement.</p>
       ${checks.map((cp,i)=>`<label class="wb-ai-check"><input type="checkbox" id="aiCp${i}"><span>${esc(cp.label)}</span></label>`).join('')}
       <label for="aiClosing">Recommandations / prochaine révision</label><textarea id="aiClosing" maxlength="2000" placeholder="Reprendre uniquement les recommandations et échéances que tu confirmes."></textarea></details>
-      <label class="wb-ai-check"><input type="checkbox" id="aiConsent"><span>J’autorise l’envoi de ces photos, factures PDF et notes à OpenAI pour préparer ce rapport. Plusieurs appels API facturables peuvent être nécessaires (analyse des photos puis une synthèse globale texte) lorsque je cliquerai sur « Préparer le rapport ».</span></label>
+      <label class="wb-ai-check"><input type="checkbox" id="aiConsent"><span>J’autorise l’envoi de ces photos, factures PDF et notes à OpenAI pour préparer ce rapport. Plusieurs appels API facturables sont nécessaires (un par lot, puis une synthèse globale textuelle, sans renvoyer les photos) lorsque je cliquerai sur « Préparer le rapport ».</span></label>
       <div class="wb-ai-actions"><button type="button" class="btn primary" id="aiGenerate">Préparer le rapport</button></div>
     </section>
     <div id="aiStatus" class="wb-ai-status" role="status" aria-live="polite"></div>
     <div class="wb-ai-actions" id="aiRetryArea" hidden><button class="btn" type="button" id="aiRetry">Réessayer (nouvel appel API)</button><button class="btn ghost" type="button" id="aiRefresh">Vérifier le résultat existant</button></div>
-    <div class="wb-ai-actions"><button type="button" class="btn ghost" id="aiDiscard" hidden>Abandonner ce brouillon</button></div><section id="aiReview" hidden><h3>Relire le classement</h3><p class="wb-ai-muted">Corrige les textes, fusionne ou supprime les doublons et ordonne les prestations. Pour les photos : choisis leur affectation, utilise les flèches ou saisis directement leur position dans la galerie. « Retirer du rapport » reste réversible, sans supprimer le fichier original.</p>
-      <p id="aiReviewCount" class="wb-ai-muted"></p><div class="wb-ai-actions"><button type="button" class="btn ghost" id="aiConsolidate">Consolider les textes et doublons</button><button type="button" class="btn ghost" id="aiUndoReview" disabled>Annuler la dernière action</button><button type="button" class="btn ghost" id="aiExportReview">Exporter la relecture</button><label class="filebtn btn ghost" for="aiImportReview">Restaurer une relecture</label><input type="file" id="aiImportReview" accept="application/json,.json"></div><p class="wb-ai-muted">La consolidation utilise un appel texte facturable, sans réanalyser les photos. Le classement manuel est conservé ; une copie permet d’annuler.</p>
-      <label for="aiSummary">Résumé global des travaux</label><textarea id="aiSummary" maxlength="1600"></textarea>
-      <button type="button" class="btn ghost" id="aiSummaryFromTitles">Recomposer le résumé à partir des titres (sans IA)</button>
-      <div id="aiSections"></div><button type="button" class="btn ghost" id="aiAddSection">+ Ajouter une prestation</button>
-      <section class="wb-ai-bay-panel" id="aiBayPanel"><h4>Entretien baie moteur — bloc séparé</h4><p class="wb-ai-muted">Ce bloc avant/après n’est pas une prestation du sommaire. Affecte les photos à « Baie moteur : avant » ou « après ». Si le stade est incertain, confirme-le : le nom du fichier ne suffit pas.</p><label class="wb-ai-check"><input type="checkbox" id="aiBayExpected"><span>Entretien baie moteur effectué — au moins une photo nécessaire.</span></label></section><label class="filebtn btn ghost" for="aiExtraFiles">Ajouter des photos manquantes (sans nouvel appel IA)</label><input id="aiExtraFiles" type="file" accept="image/*" multiple><div id="aiReviewGallery" class="wb-ai-review-groups"></div><p id="aiPhotoOrderStatus" class="wb-ai-sr-only" role="status" aria-live="polite"></p>
-      <div id="aiInvoiceReview" class="wb-ai-muted"></div><div id="aiWarnings" class="wb-ai-warnings"></div><div id="aiProblems" class="wb-ai-problems" role="status"></div><p id="aiUsage" class="wb-ai-usage"></p>
-      <p id="aiReadyStatus" class="wb-ai-muted" role="status"></p><label class="wb-ai-check"><input type="checkbox" id="aiApprove"><span>J’ai relu les informations et le classement des photos. Créer le rapport ; si une intervention est sélectionnée, y rattacher le document sans la terminer ni le partager.</span></label>
-      <div class="wb-ai-actions"><button class="btn primary" type="button" id="aiApply" disabled>Créer le rapport dans l’éditeur</button></div>
+    <div class="wb-ai-actions"><button type="button" class="btn ghost" id="aiDiscard" hidden>Abandonner ce brouillon</button></div><section id="aiReview" hidden><h3>Relire le classement</h3><p id="aiReviewCounts" class="wb-ai-muted" role="status"></p><div class="wb-ai-actions wb-ai-review-toolbar"><button type="button" class="btn ghost" id="aiUndo" disabled>Annuler le dernier déplacement / retrait</button><button type="button" class="btn ghost" id="aiTextSynthesis">Refaire la synthèse globale (textes)</button><button type="button" class="btn ghost" id="aiExportReview">Sauvegarder le brouillon (.json)</button><label class="filebtn btn ghost" for="aiImportReview">Importer un brouillon</label><input id="aiImportReview" type="file" accept="application/json,.json"></div><p class="wb-ai-muted">Les retraits sont réversibles : aucune photo originale n’est effacée de Storage. Le brouillon garde tes corrections sur cet appareil ; le fichier JSON permet aussi une sauvegarde de secours, sans inclure les photos elles-mêmes.</p><p class="wb-ai-muted">Corrige les titres et affectations. Pour déplacer une photo du chapitre A vers D, utilise la liste « Affectation » sous la miniature (avec choix gauche/droite), puis les flèches ‹ et › ou le champ Position pour régler son ordre directement dans le chapitre cible. Les opérations peuvent aussi être déplacées, fusionnées ou retirées. « Ne pas inclure » est un choix explicite, jamais automatique.</p>
+      <label for="aiSummary">Résumé</label><textarea id="aiSummary" maxlength="1600"></textarea><button type="button" class="btn ghost" id="aiSummaryFromSections">Reconstruire le résumé depuis les opérations</button><p class="wb-ai-muted">Une synthèse globale, jamais une liste des lots. Ce bouton reconstruit localement le résumé à partir des intitulés retenus ; il ne relance pas l’IA.</p>
+      <div id="aiSynthesisPreview" class="wb-ai-section-action" hidden></div><div id="aiSections"></div><div id="aiSectionAction" class="wb-ai-section-action" hidden></div><p class="wb-ai-notice">La baie moteur est un bloc avant / après séparé, après les recommandations. Affecte ses photos à « Baie moteur : avant » ou « après », pas à une prestation ordinaire. Si le stade est inconnu, il reste à préciser.</p><label class="filebtn btn ghost" for="aiExtraFiles">Ajouter des photos manquantes (sans nouvel appel IA)</label><input id="aiExtraFiles" type="file" accept="image/*" multiple><div id="aiReviewGallery" class="wb-ai-review-groups"></div><p id="aiPhotoOrderStatus" class="wb-ai-sr-only" role="status" aria-live="polite"></p>
+      <div id="aiInvoiceReview" class="wb-ai-muted"></div><details id="aiWarningsBox"><summary>Points à vérifier (non imprimés)</summary><div id="aiWarnings" class="wb-ai-warnings"></div></details><div id="aiProblems" class="wb-ai-problems" role="status"></div><p id="aiUsage" class="wb-ai-usage"></p>
+      <label class="wb-ai-check"><input type="checkbox" id="aiApprove"><span>J’ai relu les informations et le classement des photos. Créer le rapport ; si une intervention est sélectionnée, y rattacher le document sans la terminer ni le partager.</span></label>
+      <p id="aiApplyHint" class="wb-ai-muted" role="status"></p><div class="wb-ai-actions"><button class="btn ghost" type="button" id="aiFixProblems" hidden>Voir les corrections nécessaires</button><button class="btn primary" type="button" id="aiApply" disabled>Créer le rapport dans l’éditeur</button></div>
     </section></div>`;
   document.body.appendChild(dialog);
   const $=name=>dialog.querySelector('#'+name);
@@ -82,9 +80,10 @@
     ['aiClose','aiGenerate','aiFiles','aiPdfFiles','aiVerify','aiRetry','aiRefresh','aiResumeBtn','aiForget','aiDiscard','aiApply','aiVehicleSelect','aiReloadVehicles'].forEach(k=>{$(k).disabled=value;});
     $('aiInput').querySelectorAll('input,textarea').forEach(el=>el.disabled=value);
     $('aiReview').querySelectorAll('input,textarea,select').forEach(el=>el.disabled=value);
-    $('aiReview').querySelectorAll('button').forEach(el=>el.disabled=value);
-    $('aiReview').querySelectorAll('[data-boundary]').forEach(el=>el.disabled=value||el.dataset.boundary==='true');
+    $('aiReview').querySelectorAll('.wb-ai-photo-move').forEach(el=>el.disabled=value||el.dataset.boundary==='true');
+    $('aiReview').querySelectorAll('button').forEach(el=>{el.disabled=value;});
     if(!value)updateProblems();
+    if(!value && plan){renderReviewPhotos();renderSectionControls();$('aiUndo').disabled=!reviewUndo.length;$('aiExportReview').disabled=false;$('aiSummaryFromSections').disabled=false;$('aiFixProblems').disabled=false;}
   }
   async function call(action,extra={}){
     await H.ready;
@@ -348,214 +347,172 @@
       for(const page of d.pages){if(page.url)continue;const ref=H.storage().ref().child(`spaces/${space}/reports/${jobId}/ai-inv-${page.id}.jpg`);try{page.url=await ref.getDownloadURL();}catch{await ref.put(page.blob,{contentType:'image/jpeg'});page.url=await ref.getDownloadURL();}}
     }
   }
-  function entryValue(p){return R.galleryKey(p);}
+  function entryValue(p){
+    if(p.kind==='section')return 'section|'+p.sectionId+'|'+(p.side||'');
+    return p.kind;
+  }
   function options(){
     let html='<option value="unassigned">À classer</option><option value="excluded">Ne pas inclure (choix manuel)</option>';
-    const labels={overview:'Couverture : véhicule',products:'Sommaire : produits/pièces',labelR:'Étiquette entretien : recto',labelV:'Étiquette entretien : verso',baieAvant:'Baie moteur : avant',baieApres:'Baie moteur : après',baiePending:'Baie moteur : stade à préciser',invoice:'Facture en annexe'};
+    const labels={overview:'Couverture : véhicule',products:'Sommaire : produits/pièces',labelR:'Étiquette entretien : recto',labelV:'Étiquette entretien : verso',baieAvant:'Baie moteur : avant',baieApres:'Baie moteur : après',invoice:'Facture en annexe'};
     Object.entries(labels).forEach(([k,v])=>html+=`<option value="${k}">${v}</option>`);
     plan.sections.forEach((s,i)=>{
       if(s.type==='sym') ['L','R'].forEach(side=>html+=`<option value="section|${s.id}|${side}">${i+1}. ${esc(s.title)} — ${side==='L'?'Gauche':'Droite'}</option>`);
       else html+=`<option value="section|${s.id}|">${i+1}. ${esc(s.title)}</option>`;
-    });return html;
+    });
+    return html;
   }
-  let reviewUndo=null,reviewCharges={};
   function persistReview(){
-    if(!plan||!jobId)return;
-    try{localStorage.setItem(KEY,JSON.stringify({jobId,workflowRef,review:{plan,undo:reviewUndo,charges:reviewCharges,assets:assets.map(a=>({id:a.id,name:a.name,ext:a.ext})),usage}}));}
-    catch(e){status('Le classement reste ouvert, mais sa sauvegarde locale a échoué. Utilise « Exporter la relecture » avant de fermer.','error');}
+    if(!plan || !jobId)return;
+    try{localStorage.setItem(KEY,JSON.stringify({...remembered(),jobId,workflowRef,uploadPending:false,review:{plan,assets:assets.map(a=>({id:a.id,name:a.name,ext:a.ext})),usage}}));}catch(e){status('Le classement reste ouvert, mais les corrections ne peuvent pas être conservées localement.','error');}
   }
-  function checkpointReview(){reviewUndo=R.clone(plan);$('aiUndoReview').disabled=false;}
-  function checkpointText(event){if(!event.target.dataset.editStarted){checkpointReview();event.target.dataset.editStarted='1';}}
-  function resetTextCheckpoint(event){delete event.target.dataset.editStarted;}
   function resetApproval(){$('aiApprove').checked=false;updateProblems();persistReview();}
-  function photoName(id){return assets.find(a=>a.id===id)?.name||id;}
-  function usefulWarnings(){
-    return [...new Set((plan.warnings||[]).filter(w=>!/^Photos? (manquantes?|absentes?)\s*:/i.test(w.trim())&&!/^Lot\s+(partiel|\d)/i.test(w.trim())).map(w=>{
-      for(const a of assets)w=w.split(a.id).join(a.name||a.id);return w;
-    }))];
-  }
-  function showIssue(issue){
-    if(issue.code==='summary'){$('aiSummary').focus();$('aiSummary').scrollIntoView({block:'center'});return;}
-    if(issue.photoId){focusReviewPhoto(issue.photoId,'.wb-ai-target');return;}
-    if(issue.sectionId){
-      const card=[...$('aiSections').querySelectorAll('[data-section]')].find(x=>x.dataset.section===issue.sectionId);
-      if(card){card.scrollIntoView({block:'start',behavior:'smooth'});card.classList.add('wb-ai-highlight');setTimeout(()=>card.classList.remove('wb-ai-highlight'),1800);card.querySelector('.ai-stitle')?.focus({preventScroll:true});}return;
-    }
-    $('aiBayPanel').scrollIntoView({block:'center'});
+  function namedMessage(message){
+    let out=String(message||'');
+    for(const a of assets)out=out.split(a.id).join(a.name||a.id);
+    return out;
   }
   function updateProblems(){
     if(!plan){$('aiApply').disabled=true;return;}
-    const issues=R.issueList(plan),box=$('aiProblems');box.replaceChildren();box.hidden=!issues.length;
-    if(issues.length){
-      const title=document.createElement('strong');title.textContent=issues.length+' point(s) à corriger avant de créer le rapport :';box.append(title);
-      issues.forEach(issue=>{const b=document.createElement('button');b.type='button';b.className='wb-ai-issue';b.textContent=issue.message+(issue.photoId?' — '+photoName(issue.photoId):'');b.onclick=()=>showIssue(issue);box.append(b);});
-      const hint=document.createElement('p');hint.textContent='Touchez un point pour le corriger. Un chapitre en double peut être fusionné ou supprimé ; ses photos sont conservées.';box.append(hint);
-    }
-    // Keep a real action rather than an unexplained inert disabled button. This
-    // never bypasses validation: apply() navigates to the first unresolved issue.
-    $('aiApply').disabled=busy;
-    $('aiApply').textContent=issues.length?`Corriger ${issues.length} point(s) avant de créer le rapport`:'Créer le rapport dans l’éditeur';
-    $('aiReadyStatus').textContent=issues.length?'La création est bloquée uniquement par les points listés ci-dessus.':$('aiApprove').checked?'Prêt : toutes les prestations conservées ont leurs photos.':'Relis le classement puis coche la validation ci-dessous.';
-    $('aiReviewCount').textContent=`${assets.length} photo(s) disponibles · ${plan.photos.filter(p=>p.kind!=='excluded').length} conservée(s) · ${plan.photos.filter(p=>p.kind==='excluded').length} retirée(s) · ${plan.sections.length} prestation(s)`;
-    $('aiUndoReview').disabled=busy||!reviewUndo;
+    const issues=C.reviewIssues(plan),excluded=plan.photos.filter(p=>p.kind==='excluded').length;
+    const unassigned=plan.photos.filter(p=>p.kind==='unassigned').length;
+    $('aiReviewCounts').textContent=`${assets.length} photos comptabilisées : ${plan.photos.length-excluded-unassigned} classées, ${unassigned} à classer, ${excluded} retirées du rapport.`;
+    $('aiProblems').hidden=!issues.length;
+    $('aiProblems').innerHTML=issues.length?'<strong>À corriger avant de créer le rapport :</strong>'+issues.map((issue,i)=>`<div class="wb-ai-issue"><span>${esc(namedMessage(issue.message))}</span><button type="button" class="btn ghost" data-issue="${i}">Corriger</button>${issue.empty?`<button type="button" class="btn ghost" data-empty-section="${esc(issue.sectionId)}">Retirer l’opération vide</button>`:''}</div>`).join(''):'';
+    $('aiProblems').querySelectorAll('[data-issue]').forEach(button=>button.onclick=()=>{
+      const issue=issues[Number(button.dataset.issue)];
+      if(issue.photoId){focusReviewPhoto(issue.photoId,'.wb-ai-target');return;}
+      const el=issue.sectionId?[...$('aiSections').querySelectorAll('[data-section]')].find(x=>x.dataset.section===issue.sectionId):$('aiSummary');
+      el?.scrollIntoView({block:'center'});el?.querySelector('input')?.focus({preventScroll:true});
+    });
+    $('aiProblems').querySelectorAll('[data-empty-section]').forEach(b=>b.onclick=()=>requestSectionRemoval(b.dataset.emptySection));
+    $('aiApply').disabled=busy||issues.length>0||!$('aiApprove').checked;
+    $('aiFixProblems').hidden=!issues.length;
+    $('aiApplyHint').textContent=busy?'Une opération est en cours…':issues.length?`${issues.length} correction(s) requise(s). Réaffecte les photos ou retire les opérations indésirables. Une prestation conservée doit être illustrée.`:!$('aiApprove').checked?'Le contenu est prêt. Coche « J’ai relu… » pour activer la création.':'Tout est prêt : tu peux créer le rapport dans l’éditeur.';
+    $('aiApply').title=$('aiApplyHint').textContent;
   }
-  function reviewPhotos(target){return R.photosIn(plan,target);}
+  function checkpointReview(){
+    reviewUndo.push(JSON.stringify(plan));if(reviewUndo.length>20)reviewUndo.shift();$('aiUndo').disabled=false;
+  }
+  function refreshReview(){renderSections();renderReviewPhotos();resetApproval();}
+  function reviewPhotos(target){
+    // Match makeReport's stable sort, including equal AI order values.
+    return plan.photos.filter(p=>entryValue(p)===target).sort((a,b)=>a.order-b.order);
+  }
   function reviewGroups(){
+    // Follow the printable report: cover, contents, prestations, maintenance,
+    // engine bay, then invoices. Left/right galleries stay independent.
     const groups=[{target:'overview',title:'Couverture — véhicule'},{target:'products',title:'Sommaire — produits / pièces'}];
     plan.sections.forEach((s,i)=>{
       const title=`${i+1}. ${s.title||'Prestation sans titre'}`;
       if(s.type==='sym') ['L','R'].forEach(side=>groups.push({target:`section|${s.id}|${side}`,title:title+' — '+(side==='L'?'Gauche':'Droite')}));
       else groups.push({target:`section|${s.id}|`,title});
     });
-    groups.push({target:'labelR',title:'Étiquette d’entretien — recto'},{target:'labelV',title:'Étiquette d’entretien — verso'},
-      {target:'baieAvant',title:'Baie moteur — avant (bloc séparé)'},{target:'baieApres',title:'Baie moteur — après (bloc séparé)'},
-      {target:'baiePending',title:'Baie moteur — avant / après à préciser'},
-      {target:'invoice',title:'Factures en annexe'},{target:'unassigned',title:'Photos à classer'},{target:'excluded',title:'Photos retirées du rapport — restaurables'});
-    return groups.map(g=>({...g,photos:reviewPhotos(g.target)})).filter(g=>g.photos.length);
+    groups.push(
+      {target:'labelR',title:'Étiquette d’entretien — recto'},
+      {target:'labelV',title:'Étiquette d’entretien — verso'},
+      {target:'baieAvant',title:'Baie moteur — avant'},
+      {target:'baieApres',title:'Baie moteur — après'},
+      {target:'invoice',title:'Factures en annexe'},
+      {target:'unassigned',title:'Photos à classer'},
+      {target:'excluded',title:'Photos non incluses'}
+    );
+    return groups.map(group=>({...group,photos:reviewPhotos(group.target)})).filter(group=>group.photos.length);
   }
   function focusReviewPhoto(photoId,selector){
     const tile=[...$('aiReviewGallery').querySelectorAll('[data-photo]')].find(el=>el.dataset.photo===photoId);
-    const details=tile?.closest('details');if(details)details.open=true;
-    const control=tile?.querySelector(selector)||tile?.querySelector('.wb-ai-target');
-    control?.focus({preventScroll:true});tile?.scrollIntoView({block:'nearest',inline:'nearest'});
+    const control=tile?.querySelector(selector)||tile?.querySelector('.wb-ai-photo-move:not(:disabled)')||tile?.querySelector('.wb-ai-target');
+    control?.focus({preventScroll:true});
+    tile?.scrollIntoView({block:'nearest',inline:'nearest'});
   }
-  function placeReviewPhoto(photoId,position){
+  function moveReviewPhoto(photoId,step,absolute){
     if(busy||!plan)return;
-    const before=R.clone(plan);
-    try{
-      const pos=R.setPosition(plan,photoId,position);reviewUndo=before;
-      renderReviewPhotos();resetApproval();focusReviewPhoto(photoId,'.wb-ai-position');
-      $('aiPhotoOrderStatus').textContent=`${photoName(photoId)} : position ${pos}.`;
-    }catch(e){plan=before;status(e.message,'error');renderReviewPhotos();}
+    const photo=plan.photos.find(p=>p.id===photoId);if(!photo)return;
+    const photos=reviewPhotos(entryValue(photo)),from=photos.indexOf(photo),position=absolute===undefined?from+step+1:absolute;
+    if(!Number.isInteger(position)||position<1||position>photos.length){status(`Position attendue entre 1 et ${photos.length}.`,'error');renderReviewPhotos();return;}
+    if(position===from+1)return;
+    checkpointReview();C.movePhoto(plan,photoId,position);
+    renderReviewPhotos();resetApproval();focusReviewPhoto(photoId,'.wb-ai-position');
+    $('aiPhotoOrderStatus').textContent=`${assets.find(a=>a.id===photoId)?.name||'Photo'} : position ${position} sur ${photos.length}.`;
   }
-  function moveReviewPhoto(photoId,step){const p=plan?.photos.find(x=>x.id===photoId);if(p){const list=reviewPhotos(entryValue(p));placeReviewPhoto(photoId,list.indexOf(p)+step+1);}}
   function renderReviewPhotos(){
     const opts=options(),assetById=new Map(assets.map(a=>[a.id,a]));
-    $('aiReviewGallery').innerHTML=reviewGroups().map(group=>{
-      const tiles=group.photos.map((p,i)=>{
-        const a=assetById.get(p.id)||{id:p.id,name:p.id,url:''};
-        const arrow=(step,boundary)=>`<button type="button" class="btn ghost wb-ai-photo-move" data-step="${step}" data-boundary="${boundary}" title="${step<0?'Déplacer avant':'Déplacer après'}" aria-label="${step<0?'Avancer':'Reculer'} ${esc(a.name)} d’une place"${busy||boundary?' disabled':''}>${step<0?'‹':'›'}</button>`;
-        return `<div class="wb-ai-tile" data-photo="${esc(p.id)}" data-unassigned="${['unassigned','baiePending'].includes(p.kind)}">
-          <div class="wb-ai-photo-tools">${arrow(-1,i===0)}<label class="wb-ai-position-label">Position<input class="wb-ai-position" type="number" inputmode="numeric" min="1" max="${group.photos.length}" step="1" value="${i+1}" aria-label="Position de ${esc(a.name)} dans cette galerie"><span>/ ${group.photos.length}</span></label>${arrow(1,i===group.photos.length-1)}</div>
-          <a href="${esc(a.url||a.preview||'')}" target="_blank" rel="noopener"><img src="${esc(a.preview||a.url||'')}" loading="lazy" alt="${esc(a.name)}"></a>
-          <div class="wb-ai-name">${esc(a.name)}</div><select class="wb-ai-target" aria-label="Affectation de ${esc(a.name)}"${busy?' disabled':''}>${opts}</select>
-          <div class="wb-ai-reason">${esc(p.reason)}</div><label>Légende (facultative)<textarea class="wb-ai-cap" maxlength="350"${busy?' disabled':''}>${esc(p.caption)}</textarea></label>
-          <button type="button" class="btn ghost wb-ai-remove-photo">${p.kind==='excluded'?'Restaurer la photo':'Retirer du rapport'}</button></div>`;
-      }).join('');
-      if(group.target==='excluded')return `<details class="wb-ai-photo-group wb-ai-removed" data-photo-group="excluded"><summary>${esc(group.title)} (${group.photos.length})</summary><p class="wb-ai-muted">Aucun fichier original n’est supprimé de Storage. Les photos retirées ne seront pas dans le rapport.</p><div class="wb-ai-gallery">${tiles}</div></details>`;
-      return `<section class="wb-ai-photo-group" data-photo-group="${esc(group.target)}" aria-label="${esc(group.title)}"><div class="wb-ai-group-head"><h4>${esc(group.title)} (${group.photos.length})</h4>${group.photos.length>1&&group.target!=='invoice'?'<button type="button" class="btn ghost wb-ai-sort-files">Trier par numéro de fichier</button>':''}</div><div class="wb-ai-gallery">${tiles}</div></section>`;
-    }).join('');
+    $('aiReviewGallery').innerHTML=reviewGroups().map(group=>`<section class="wb-ai-photo-group" data-photo-group="${esc(group.target)}" aria-label="${esc(group.title)}"><div class="wb-ai-group-head"><h4>${esc(group.title)} · ${group.photos.length} photo(s)</h4>${group.photos.length>1&&group.target!=='invoice'?`<button type="button" class="btn ghost" data-sort-gallery="${esc(group.target)}">Trier par nom / numéro</button>`:''}</div><div class="wb-ai-gallery">${group.photos.map((p,i)=>{
+      const a=assetById.get(p.id)||{name:p.id,url:''};
+      const arrow=(step,boundary)=>`<button type="button" class="btn ghost wb-ai-photo-move" data-step="${step}" data-boundary="${boundary}" title="${step<0?'Déplacer avant':'Déplacer après'}" aria-label="${step<0?'Avancer':'Reculer'} ${esc(a.name)} d’une place"${busy||boundary?' disabled':''}>${step<0?'‹':'›'}</button>`;
+      return `<div class="wb-ai-tile" data-photo="${esc(p.id)}" data-unassigned="${p.kind==='unassigned'}"><div class="wb-ai-photo-tools">${arrow(-1,i===0)}<label class="wb-ai-position-label">Position<input class="wb-ai-position" type="number" inputmode="numeric" min="1" max="${group.photos.length}" value="${i+1}" aria-label="Position de ${esc(a.name)}"><span>/ ${group.photos.length}</span></label>${arrow(1,i===group.photos.length-1)}</div><a href="${esc(a.url)}" target="_blank" rel="noopener"><img src="${esc(a.preview||a.url)}" loading="lazy" alt="${esc(a.name)}"></a><div class="wb-ai-name">${esc(a.name)}</div><select class="wb-ai-target" aria-label="Affectation de ${esc(a.name)}"${busy?' disabled':''}>${opts}</select><div class="wb-ai-reason">${esc(namedMessage(p.reason))}</div><label>Légende (facultative)<textarea class="wb-ai-cap" maxlength="350"${busy?' disabled':''}>${esc(p.caption)}</textarea></label><button type="button" class="btn ghost wb-ai-remove-photo">${p.kind==='excluded'?'Rétablir la photo':'Retirer du rapport'}</button></div>`;
+    }).join('')}</div></section>`).join('');
+    $('aiReviewGallery').querySelectorAll('[data-sort-gallery]').forEach(b=>b.onclick=()=>{
+      if(busy||!confirm('Remplacer l’ordre de cette galerie par le tri naturel des noms de fichiers ? Les autres galeries ne changent pas.'))return;
+      checkpointReview();C.sortGalleryByFilename(plan,assets,b.dataset.sortGallery);renderReviewPhotos();resetApproval();
+    });
     $('aiReviewGallery').querySelectorAll('[data-photo]').forEach(tile=>{
       const p=plan.photos.find(p=>p.id===tile.dataset.photo),select=tile.querySelector('.wb-ai-target');select.value=entryValue(p);
       select.onchange=()=>{
-        if(busy)return;checkpointReview();R.moveTo(plan,p.id,select.value);renderReviewPhotos();resetApproval();focusReviewPhoto(p.id,'.wb-ai-target');
+        if(busy)return;checkpointReview();
+        if(select.value==='excluded')C.excludePhoto(plan,p.id);
+        else{
+          const parts=select.value.split('|');p.kind=parts[0];p.sectionId=parts[1]||'';p.side=parts[2]||'';p.reason='';delete p.excludedFrom;
+          const destination=reviewPhotos(entryValue(p)).filter(photo=>photo!==p);destination.push(p);destination.forEach((photo,i)=>photo.order=i);
+        }
+        renderReviewPhotos();resetApproval();focusReviewPhoto(p.id,'.wb-ai-target');
       };
-      tile.querySelectorAll('.wb-ai-photo-move').forEach(b=>b.onclick=()=>moveReviewPhoto(p.id,Number(b.dataset.step)));
-      const position=tile.querySelector('.wb-ai-position');position.onchange=()=>placeReviewPhoto(p.id,position.value);
-      position.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();position.blur();}};
-      tile.querySelector('.wb-ai-cap').onfocus=resetTextCheckpoint;tile.querySelector('.wb-ai-cap').oninput=e=>{checkpointText(e);p.caption=e.target.value;resetApproval();};
-      tile.querySelector('.wb-ai-remove-photo').onclick=()=>{
-        if(busy)return;checkpointReview();if(p.kind==='excluded')R.restorePhoto(plan,p.id);else R.excludePhoto(plan,p.id);
-        renderReviewPhotos();resetApproval();status('Photo '+(p.kind==='excluded'?'retirée du rapport (restaurable en bas de la relecture).':'restaurée.'));
-      };
-    });
-    $('aiReviewGallery').querySelectorAll('.wb-ai-sort-files').forEach(button=>button.onclick=()=>{
-      if(busy||!confirm('Remplacer l’ordre de cette galerie par les numéros de fichiers ? Les légendes et les affectations restent inchangées.'))return;
-      checkpointReview();R.sortByFilename(plan,assets,button.closest('[data-photo-group]').dataset.photoGroup);renderReviewPhotos();resetApproval();
+      tile.querySelectorAll('.wb-ai-photo-move').forEach(button=>button.onclick=()=>moveReviewPhoto(p.id,Number(button.dataset.step)));
+      const pos=tile.querySelector('.wb-ai-position');pos.onchange=()=>moveReviewPhoto(p.id,0,Number(pos.value));
+      pos.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();pos.blur();}};
+      tile.querySelector('.wb-ai-cap').oninput=e=>{p.caption=e.target.value;resetApproval();};
+      tile.querySelector('.wb-ai-remove-photo').onclick=()=>{if(busy)return;checkpointReview();p.kind==='excluded'?C.restorePhoto(plan,p.id):C.excludePhoto(plan,p.id);renderReviewPhotos();resetApproval();};
     });
   }
-  function rebuildSummary(){plan.summary=R.summaryFromSections(plan);$('aiSummary').value=plan.summary;}
-  function sectionChanged(oldSummary,oldGenerated){if(oldSummary===oldGenerated)rebuildSummary();}
-  function refreshReviewStructure(){renderSections();renderReviewPhotos();renderWarnings();updateProblems();}
+  function renderSectionControls(){
+    $('aiSections').querySelectorAll('[data-section]').forEach((card,i)=>{
+      card.querySelectorAll('button').forEach(b=>b.disabled=busy);
+      card.querySelector('[data-section-step="-1"]').disabled=busy||i===0;
+      card.querySelector('[data-section-step="1"]').disabled=busy||i===plan.sections.length-1;
+    });
+  }
   function renderSections(){
-    $('aiSections').innerHTML=plan.sections.map((s,i)=>`<div class="wb-ai-section" data-section="${esc(s.id)}">
-      <div class="wb-ai-section-head"><strong>Prestation ${i+1}</strong><div class="wb-ai-section-tools"><button type="button" class="btn ghost ai-section-up" data-boundary="${i===0}"${i===0?' disabled':''} aria-label="Monter la prestation ${i+1}">↑</button><label>Position<input type="number" class="ai-section-position" min="1" max="${plan.sections.length}" value="${i+1}" inputmode="numeric"></label><button type="button" class="btn ghost ai-section-down" data-boundary="${i===plan.sections.length-1}"${i===plan.sections.length-1?' disabled':''} aria-label="Descendre la prestation ${i+1}">↓</button></div></div>
-      <label>Titre<input class="ai-stitle" maxlength="160" value="${esc(s.title)}"></label><label>Références / description<textarea class="ai-sdesc" maxlength="1600" placeholder="Une ligne par produit ou référence : marque, désignation, référence.">${esc(s.description)}</textarea></label>
-      <label>Présentation<select class="ai-stype"><option value="normal">Simple</option><option value="sym">Gauche / droite</option></select></label>
-      <div class="wb-ai-section-merge"><label>Fusionner cette prestation dans<select class="ai-merge-target"><option value="">Choisir une autre prestation…</option>${plan.sections.filter(t=>t.id!==s.id).map(t=>`<option value="${esc(t.id)}">${esc(t.title)}</option>`).join('')}</select></label><button type="button" class="btn ghost ai-merge">Fusionner</button></div>
-      <div class="wb-ai-actions"><button type="button" class="btn ghost ai-to-bay">Déplacer vers le bloc baie moteur</button><button type="button" class="btn ghost ai-section-delete">Supprimer cette prestation</button></div>
-      <p class="wb-ai-muted">${plan.photos.filter(p=>p.kind==='section'&&p.sectionId===s.id).length} photo(s). Supprimer la prestation ne supprime pas ses photos : elles seront à reclasser.</p></div>`).join('');
+    $('aiSections').innerHTML=plan.sections.map((s,i)=>`<div class="wb-ai-section" data-section="${esc(s.id)}"><div class="wb-ai-section-tools"><strong>Opération ${i+1} / ${plan.sections.length}</strong><button type="button" class="btn ghost" data-section-step="-1" aria-label="Monter ${esc(s.title)}">↑</button><button type="button" class="btn ghost" data-section-step="1" aria-label="Descendre ${esc(s.title)}">↓</button><label>Position<input type="number" class="ai-sposition" min="1" max="${plan.sections.length}" value="${i+1}" inputmode="numeric"></label><button type="button" class="btn ghost ai-sremove">Supprimer / fusionner</button></div><label>Titre<input class="ai-stitle" maxlength="160" value="${esc(s.title)}"></label><label>Références / description<textarea class="ai-sdesc" maxlength="1600" placeholder="Marque et référence, une ligne par produit">${esc(s.description)}</textarea></label><button type="button" class="btn ghost ai-sclean">Retirer les lignes répétées</button><label>Présentation<select class="ai-stype"><option value="normal">Simple</option><option value="sym">Gauche / droite</option></select></label>${C.isEngineBay(s.title)?'<p class="wb-ai-warning">La baie moteur appartient au bloc spécial. Utilise « Supprimer / fusionner » puis « Bloc baie moteur » pour y réaffecter les photos.</p>':''}</div>`).join('');
     $('aiSections').querySelectorAll('[data-section]').forEach(card=>{
       const s=plan.sections.find(s=>s.id===card.dataset.section);card.querySelector('.ai-stype').value=s.type;
-      card.querySelector('.ai-stitle').onfocus=resetTextCheckpoint;card.querySelector('.ai-stitle').oninput=e=>{checkpointText(e);s.title=e.target.value;renderReviewPhotos();renderWarnings();resetApproval();};
-      card.querySelector('.ai-sdesc').onfocus=resetTextCheckpoint;card.querySelector('.ai-sdesc').oninput=e=>{checkpointText(e);s.description=e.target.value;resetApproval();};
-      card.querySelector('.ai-stype').onchange=e=>{
-        checkpointReview();s.type=e.target.value;plan.photos.filter(p=>p.kind==='section'&&p.sectionId===s.id).forEach(p=>{p.side='';if(s.type==='sym'){p.kind='unassigned';p.sectionId='';p.reason='Choisir le côté gauche ou droit.';}});refreshReviewStructure();resetApproval();
-      };
-      const place=pos=>{if(busy)return;const before=R.clone(plan);try{R.moveSection(plan,s.id,pos);reviewUndo=before;refreshReviewStructure();resetApproval();showIssue({sectionId:s.id});}catch(e){status(e.message,'error');renderSections();}};
-      card.querySelector('.ai-section-up').onclick=()=>place(plan.sections.indexOf(s));
-      card.querySelector('.ai-section-down').onclick=()=>place(plan.sections.indexOf(s)+2);
-      card.querySelector('.ai-section-position').onchange=e=>place(e.target.value);
-      card.querySelector('.ai-section-delete').onclick=()=>{
-        if(busy||!confirm('Supprimer « '+s.title+' » de la proposition ? Ses photos seront conservées dans « À classer ».'))return;
-        const old=plan.summary,generated=R.summaryFromSections(plan);checkpointReview();R.removeSection(plan,s.id);sectionChanged(old,generated);refreshReviewStructure();resetApproval();
-      };
-      card.querySelector('.ai-merge').onclick=()=>{
-        if(busy)return;const target=card.querySelector('.ai-merge-target').value;
-        if(!target){status('Choisis la prestation qui recevra les photos.','error');return;}
-        if(!confirm('Fusionner « '+s.title+' » dans « '+plan.sections.find(x=>x.id===target).title+' » ? Les photos et leurs légendes seront conservées.'))return;
-        const before=R.clone(plan),old=plan.summary,generated=R.summaryFromSections(plan);
-        try{R.mergeSections(plan,s.id,target);reviewUndo=before;sectionChanged(old,generated);refreshReviewStructure();resetApproval();showIssue({sectionId:target});}
-        catch(e){plan=before;status(e.message,'error');}
-      };
-      card.querySelector('.ai-to-bay').onclick=()=>{
-        if(busy||!confirm('Déplacer cette prestation dans le bloc baie moteur, hors du sommaire ? Choisis ensuite Avant ou Après pour chaque photo ; aucun stade ne sera deviné.'))return;
-        checkpointReview();R.convertEngineBay(plan,s.id);refreshReviewStructure();resetApproval();$('aiBayPanel').scrollIntoView({block:'center'});
-      };
-    });
-    $('aiBayExpected').checked=!!plan.engineBayExpected;
+      card.querySelector('.ai-stitle').oninput=e=>{s.title=e.target.value;renderReviewPhotos();resetApproval();};
+      card.querySelector('.ai-sdesc').oninput=e=>{s.description=e.target.value;resetApproval();};
+      card.querySelector('.ai-sclean').onclick=()=>{checkpointReview();s.description=C.cleanDescription(s.description);refreshReview();};
+      card.querySelector('.ai-stype').onchange=e=>{checkpointReview();s.type=e.target.value;plan.photos.filter(p=>p.kind==='section'&&p.sectionId===s.id).forEach(p=>{p.side='';if(s.type==='sym'){p.kind='unassigned';p.reason='Choisir le côté gauche ou droit.';}});refreshReview();};
+      function move(position){if(busy)return;const from=plan.sections.indexOf(s);if(!Number.isInteger(position)||position<1||position>plan.sections.length){status('Position d’opération invalide.','error');renderSections();return;}if(position===from+1)return;checkpointReview();C.moveSection(plan,s.id,position);refreshReview();const current=[...$('aiSections').querySelectorAll('[data-section]')].find(c=>c.dataset.section===s.id);current?.scrollIntoView({block:'nearest'});}
+      card.querySelectorAll('[data-section-step]').forEach(b=>b.onclick=()=>move(plan.sections.indexOf(s)+1+Number(b.dataset.sectionStep)));
+      card.querySelector('.ai-sposition').onchange=e=>move(Number(e.target.value));
+      card.querySelector('.ai-sposition').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur();}};
+      card.querySelector('.ai-sremove').onclick=()=>requestSectionRemoval(s.id);
+    });renderSectionControls();
   }
-  function renderWarnings(){
-    const warnings=usefulWarnings();
-    const duplicates=R.duplicateHints(plan).map(group=>'Doublon possible : '+group.map(s=>s.title).join(' / ')+'. Utilise « Fusionner » pour les réunir.');
-    const bay=plan.sections.filter(s=>R.isEngineBayTitle(s.title)).map(s=>'« '+s.title+' » doit être déplacée vers le bloc baie moteur avec le bouton de sa prestation.');
-    $('aiWarnings').textContent=[...duplicates,...bay,...warnings].length?'Points à vérifier (non imprimés) :\n'+[...duplicates,...bay,...warnings].join('\n'):'';
-    const values=Object.values(reviewCharges);const input=(usage?.inputTokens||0)+values.reduce((n,x)=>n+(x.inputTokens||0),0),output=(usage?.outputTokens||0)+values.reduce((n,x)=>n+(x.outputTokens||0),0),cost=(Number(usage?.estimatedUsd)||0)+values.reduce((n,x)=>n+(Number(x.estimatedUsd)||0),0);
-    $('aiUsage').textContent=usage?`Utilisation remontée par l’API (photos et synthèse) : ${input} tokens reçus, ${output} générés (raisonnement inclus). Coût indicatif : ${cost.toFixed(3)} $ — hors Firebase/taxes, tarifs ${usage.pricingDate}, pas une facture.`:'';
+  function requestSectionRemoval(sectionId){
+    if(busy)return;
+    const s=plan.sections.find(s=>s.id===sectionId);if(!s)return;
+    const count=plan.photos.filter(p=>p.kind==='section'&&p.sectionId===sectionId).length;
+    if(!count){if(!confirm('Retirer l’opération vide « '+s.title+' » ? Elle ne figurera plus dans le rapport.'))return;checkpointReview();C.dropSection(plan,sectionId);refreshReview();return;}
+    const panel=$('aiSectionAction');panel.hidden=false;
+    panel.innerHTML=`<h4>Supprimer / fusionner : ${esc(s.title)}</h4><p>Cette opération contient ${count} photo(s). Choisis leur destination. Aucun fichier original ne sera effacé.</p><label>Destination des photos<select id="aiSectionDestination"><option value="unassigned">Conserver les photos dans « À classer »</option>${plan.sections.filter(x=>x.id!==sectionId&&(x.type==='normal'||s.type==='sym')).map(x=>`<option value="${esc(x.id)}">Fusionner avec : ${esc(x.title)}</option>`).join('')}<option value="engineBay" ${C.isEngineBay(s.title)?'selected':''}>Bloc baie moteur — préciser avant / après ensuite</option><option value="excluded">Retirer aussi ces photos du rapport (réversible)</option></select></label><div class="wb-ai-actions"><button type="button" class="btn" id="aiSectionConfirm">Confirmer</button><button type="button" class="btn ghost" id="aiSectionCancel">Annuler</button></div>`;
+    panel.scrollIntoView({block:'center'});
+    $('aiSectionCancel').onclick=()=>{panel.hidden=true;};
+    $('aiSectionConfirm').onclick=()=>{
+      const targetId=$('aiSectionDestination').value,target=plan.sections.find(s=>s.id===targetId);checkpointReview();
+      try{
+        if(target)target.description=C.cleanDescription(target.description+'\n'+s.description);
+        C.dropSection(plan,sectionId,targetId);panel.hidden=true;refreshReview();
+        status(target?'Opérations fusionnées. Les photos et références ont été conservées une seule fois ; vérifie leur ordre.':'Opération retirée. Vérifie les affectations des photos avant de créer le rapport.');
+      }catch(e){status(e.message,'error');}
+    };
   }
   function renderReview(){
     $('aiInput').hidden=true;$('aiReview').hidden=false;$('aiResume').hidden=true;$('aiRetryArea').hidden=true;
     $('aiSummary').value=plan.summary;
-    refreshReviewStructure();
+    renderSections();
+    renderReviewPhotos();
     $('aiInvoiceReview').textContent=documents.length?'Factures jointes automatiquement en fin de rapport : '+documents.map(d=>d.name+' ('+d.pages.length+' pages)').join(' ; '):'';
+    const notes=plan.warnings.filter(w=>!(/^(?:Lot \d|Photos? manquantes?\s*:)|dans ce lot|lot partiel|classement du lot|après (?:réunion|fusion)|réunion des (?:autres )?lots/i.test(w)));$('aiWarnings').textContent=notes.map(namedMessage).join('\n');$('aiWarningsBox').hidden=!notes.length;
+    $('aiUsage').textContent=usage?`Utilisation remontée par l’API : ${usage.inputTokens} tokens reçus, ${usage.outputTokens} générés (raisonnement inclus). Coût indicatif : ${Number(usage.estimatedUsd).toFixed(3)} $ — hors Firebase/taxes, tarifs ${usage.pricingDate}, pas une facture.`:'';
     resetApproval();
   }
-  async function consolidateReview(){
-    if(busy||!plan)return;
-    if(!confirm('Consolider les textes et regrouper les doublons ? Un appel API TEXTE sera facturé. Aucune photo ne sera renvoyée ni réanalysée. Les affectations sont conservées, sauf regroupement des doublons et déplacement vers le bloc baie moteur. L’ordre manuel et les légendes restent conservés. Une copie permet d’annuler.'))return;
-    const previous=R.clone(plan);setBusy(true);status('Synthèse globale des textes… Les photos ne sont pas réanalysées.');
-    try{
-      const result=await call('consolidateReview',{jobId,plan:previous,assets:assets.map(a=>({id:a.id,name:a.name,ext:a.ext||'jpg'})),consent:true,retry:true});
-      if(result.usage&&result.usageId)reviewCharges[result.usageId]=result.usage;
-      if(result.status==='running'){status('Synthèse encore en cours. Tes corrections restent conservées. Utilise de nouveau le bouton pour récupérer le résultat.');return;}
-      if(result.status!=='completed')throw new Error(result.error||'Synthèse interrompue. Le classement n’a pas changé.');
-      reviewUndo=previous;plan=C.normalizePlan(result.plan,assets,{manual:true});renderReview();
-      status('Synthèse globale récupérée. Contrôle les textes et les regroupements. « Annuler la dernière action » restaure ta proposition précédente.');
-    }catch(e){status(e.message+' Le brouillon et tes corrections sont conservés.','error');}
-    finally{setBusy(false);renderWarnings();persistReview();}
-  }
-  function exportReview(){
-    if(!plan||!jobId)return;persistReview();
-    const data={format:'wb-ai-review-v1',...remembered()},blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob);
-    const a=document.createElement('a');a.href=url;a.download='WheelerBrothers_relecture_'+jobId+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-  }
-  $('aiConsolidate').onclick=consolidateReview;
-  $('aiSummaryFromTitles').onclick=()=>{if(!plan||busy)return;if(!confirm('Recomposer le résumé à partir des titres actuels des prestations et du bloc baie moteur ? Aucun appel IA.'))return;checkpointReview();rebuildSummary();resetApproval();};
-  $('aiUndoReview').onclick=()=>{if(!reviewUndo||busy)return;const current=R.clone(plan);plan=R.clone(reviewUndo);reviewUndo=current;renderReview();status('La dernière modification structurelle a été annulée.');};
-  $('aiExportReview').onclick=exportReview;
-  $('aiAddSection').onclick=()=>{if(!plan||busy)return;if(plan.sections.length>=35){status('Maximum 35 prestations.','error');return;}checkpointReview();const sid=id('manual',8);plan.sections.push({id:sid,title:'Nouvelle prestation',description:'',type:'normal'});refreshReviewStructure();resetApproval();showIssue({sectionId:sid});};
-  $('aiBayExpected').onchange=()=>{if(!plan||busy)return;checkpointReview();plan.engineBayExpected=$('aiBayExpected').checked;updateProblems();resetApproval();};
-  $('aiImportReview').onchange=async e=>{
-    const file=e.target.files?.[0];e.target.value='';if(!file||busy)return;
-    try{
-      if(file.size>1000000)throw new Error('Fichier de relecture trop volumineux.');
-      const stored=JSON.parse(await file.text());if(stored.format!=='wb-ai-review-v1'||!/^rai[a-f0-9]{32}$/.test(stored.jobId)||!stored.review?.plan)throw new Error('Export de relecture invalide.');
-      if(!confirm('Restaurer cette relecture ? Les photos seront récupérées depuis Firebase, sans analyse IA.'))return;
-      setBusy(true);const result=await call('status',{jobId:stored.jobId});
-      if(!['completed','applied'].includes(result.status))throw new Error('Les analyses de ce brouillon ne sont plus disponibles.');
-      if(plan)checkpointReview();workflowRef=stored.workflowRef||null;jobId=stored.jobId;await consume(result,stored.review);
-    }catch(err){status(err.message,'error');}finally{setBusy(false);}
-  };
   async function consume(result, savedReview=null){
     jobId=result.jobId||jobId;remember();
     if(result.status==='not-found'){status('Ce transfert n’a pas de résultat serveur. Abandonne le brouillon incomplet pour recommencer.','error');return;}
@@ -578,13 +535,13 @@
     usage=result.usage||null;
     if(result.status==='completed'||result.status==='applied'){
       if(savedReview?.plan){
-        // Never overwrite the user's hand-edited order, exclusions or captions on resume.
-        plan=C.normalizePlan(R.clone(savedReview.plan),assets,{manual:true});
-        reviewUndo=null;
-        if(savedReview.undo){try{reviewUndo=C.normalizePlan(R.clone(savedReview.undo),assets,{manual:true});}catch{ /* Invalid old undo must not block the valid saved review. */ }}
-        reviewCharges=savedReview.charges&&typeof savedReview.charges==='object'?savedReview.charges:{};
-      }else{plan=C.normalizePlan(result.plan,assets);reviewUndo=null;reviewCharges={};}
-      renderReview();status('Classement prêt. Vérifie notamment les références, les photos ambiguës et les côtés. Aucun rapport n’a été remplacé.');return;
+        const local=JSON.parse(JSON.stringify(savedReview.plan));
+        const excluded=new Map(local.photos.filter(p=>p.kind==='excluded').map(p=>[p.id,p.excludedFrom||null]));
+        local.photos.forEach(p=>{if(p.kind==='excluded')p.kind='unassigned';});
+        plan=C.normalizePlan(local,assets);
+        plan.photos.forEach(p=>{if(excluded.has(p.id)){p.kind='excluded';if(excluded.get(p.id))p.excludedFrom=excluded.get(p.id);}});
+      }else plan=C.normalizePlan(result.plan,assets);
+      renderReview();status(savedReview?.plan?'Brouillon repris : tes textes, affectations et positions manuelles sont conservés. Aucun nouvel appel IA. Tu peux retirer les doublons ou les chapitres vides avant validation.':'Classement prêt. Vérifie les références, les photos ambiguës et les côtés. Aucun rapport n’a été remplacé.');return;
     }
     $('aiRetryArea').hidden=false;
     $('aiRetry').hidden=result.status!=='failed';
@@ -597,7 +554,7 @@
     let result=await call('prepare',{...requestInput,retry});
     while(result.status==='partial'){
       const done=result.processedImages||0,total=result.totalImages||requestInput.assets.length;
-      status(result.phase==='synthesis'?`Synthèse globale du rapport : ${total} photos analysées. Regroupement des prestations, résumé unique et références (texte uniquement).`:`Analyse IA par lots : ${done} / ${total} photos — ${result.doneBatches} / ${result.totalBatches} lot(s) terminés. Les lots précédents sont conservés.`);
+      status(result.stage==='synthesis'?`Les ${total} photos ont été analysées. Synthèse globale des opérations et références… Un appel textuel, sans renvoyer les images.`:`Analyse IA par lots : ${done} / ${total} photos — ${result.doneBatches} / ${result.totalBatches} lot(s) terminés. Les lots précédents sont conservés.`);
       result=await call('prepare',{...requestInput,retry:false});
     }
     return result;
@@ -618,12 +575,12 @@
     if(!retry && rejectedFiles.size && !$('aiPartialConfirm').checked){
       status(rejectedFiles.size+' photo(s) ont été refusées. Ajoute-les de nouveau ou confirme explicitement une analyse partielle.','error');return;
     }
-    if(retry && !confirm('Relancer uniquement l’étape en échec (lot ou synthèse globale) ? Cet appel est facturable. Les lots réussis ne seront pas réanalysés.'))return;
+    if(retry && !confirm('Relancer uniquement l’étape en échec (lot ou synthèse globale) ? Ce nouvel appel peut consommer du crédit API. Les lots réussis sont conservés.'))return;
     setBusy(true);
     try{
       if(!retry){
         status('Vérification du service IA… Aucun appel OpenAI.');const caps=await call('capabilities');
-        if(caps.version!=='56.3'||caps.mode!=='batches'||!caps.globalSynthesis)throw new Error('Serveur IA v56.5 requis pour la synthèse globale. Déploie wbReportAI avant de lancer une nouvelle analyse. Les anciens brouillons restent récupérables.');
+        if(caps.version!=='56.5'||caps.mode!=='batches'||!caps.globalSynthesis)throw new Error('Serveur IA v56.5 requis : déploie wbReportAI avant de lancer une nouvelle analyse. Un ancien brouillon peut être repris sans appel IA.');
         if(!jobId)jobId=id('rai',16);remember();await upload();
         requestInput={jobId,assets:assets.map(a=>({id:a.id,name:a.name,ext:a.ext})),documents:documents.map(d=>({id:d.id,name:d.name,pages:d.pages.map(p=>({id:p.id}))})),notes:$('aiNotes').value.trim(),meta:metaFromForm(),consent:true,mode:'batches'};
         remember();
@@ -668,8 +625,8 @@
   });
   function reset(){
     $('aiVehicleSelect').value='';
-    assets.forEach(a=>{if(a.preview)URL.revokeObjectURL(a.preview);});assets=[];documents=[];vehicleKm=null;vehiclePlate='';rejectedFiles.clear();renderDocuments();plan=null;jobId='';requestInput=null;usage=null;reviewUndo=null;reviewCharges={};workflowRef=null;workflowOptions=[];renderWorkflowOptions();
-    $('aiUploadProgress').textContent='';$('aiDiscard').hidden=true;$('aiInput').hidden=false;$('aiReview').hidden=true;$('aiRetryArea').hidden=true;setMeta({});$('aiNotes').value='';$('aiConsent').checked=false;renderInputPhotos();setBusy(false);
+    assets.forEach(a=>{if(a.preview)URL.revokeObjectURL(a.preview);});assets=[];documents=[];reviewUndo=[];vehicleKm=null;vehiclePlate='';rejectedFiles.clear();renderDocuments();plan=null;jobId='';requestInput=null;usage=null;workflowRef=null;workflowOptions=[];renderWorkflowOptions();
+    synthesisRetry=false;$('aiSynthesisPreview').hidden=true;$('aiSectionAction').hidden=true;$('aiUploadProgress').textContent='';$('aiDiscard').hidden=true;$('aiInput').hidden=false;$('aiReview').hidden=true;$('aiRetryArea').hidden=true;setMeta({});$('aiNotes').value='';$('aiConsent').checked=false;renderInputPhotos();setBusy(false);
   }
   async function abandon(){
     if(busy)return;const pending=remembered();const target=jobId||pending?.jobId;if(!target)return;
@@ -680,9 +637,7 @@
     finally{setBusy(false);}
   }
   async function apply(){
-    if(busy||!plan)return;
-    const issues=R.issueList(plan);if(issues.length){updateProblems();$('aiProblems').scrollIntoView({block:'center'});status('Le rapport n’est pas encore créé. Corrige les points signalés ; chaque prestation conservée doit avoir ses photos.','error');return;}
-    if(!$('aiApprove').checked){$('aiApprove').focus();$('aiApprove').scrollIntoView({block:'center'});status('Confirme la relecture avant de créer le rapport.','error');return;}
+    if(busy || !plan || C.reviewProblems(plan).length || !$('aiApprove').checked)return;
     setBusy(true);status('Création du nouveau rapport dans Atelier… Aucun nouvel appel IA.');
     try{
       const urls=Object.fromEntries(assets.map(a=>[a.id,a.url]));
@@ -719,8 +674,58 @@
   $('aiGenerate').onclick=()=>generate(false);$('aiRetry').onclick=()=>generate(true);$('aiRefresh').onclick=resume;
   $('aiResumeBtn').onclick=resume;$('aiForget').onclick=abandon;$('aiDiscard').onclick=abandon;
   $('aiClose').onclick=()=>{if(!busy)dialog.close();};dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault();});
-  $('aiApprove').onchange=updateProblems;$('aiSummary').onfocus=resetTextCheckpoint;$('aiSummary').oninput=e=>{if(plan){checkpointText(e);plan.summary=e.target.value;resetApproval();}};
+  $('aiApprove').onchange=updateProblems;$('aiSummary').oninput=e=>{if(plan){plan.summary=e.target.value;resetApproval();}};
+  $('aiTextSynthesis').onclick=async()=>{
+    if(busy||!plan)return;
+    if(!confirm('Refaire uniquement la synthèse des textes et regrouper les opérations en double ? Un appel IA textuel peut être facturé. Aucune photo ne sera renvoyée. Tu verras la proposition avant de l’appliquer ; tes corrections actuelles restent conservées.'+(synthesisRetry?'\nIl s’agit d’une nouvelle tentative de l’étape textuelle.':'')))return;
+    const original=JSON.stringify(plan);persistReview();setBusy(true);status('Synthèse globale textuelle… Tes photos ne sont ni renvoyées ni réanalysées.');
+    try{
+      const result=await call('synthesizeReview',{jobId,plan:JSON.parse(original),assets:assets.map(a=>({id:a.id,name:a.name,ext:a.ext||'jpg'})),consent:true,retry:synthesisRetry});
+      if(result.usage){usage=result.usage;persistReview();$('aiUsage').textContent=`Utilisation cumulée : ${usage.inputTokens} tokens reçus, ${usage.outputTokens} générés. Coût indicatif : ${Number(usage.estimatedUsd).toFixed(3)} $ — hors Firebase/taxes, tarifs ${usage.pricingDate}, pas une facture.`;}
+      if(result.status!=='completed'){
+        synthesisRetry=result.status==='failed';status(result.error||'Synthèse encore en cours. Réutilise ce bouton pour récupérer le résultat mis en cache ; les photos restent intactes.','error');return;
+      }
+      synthesisRetry=false;
+      const proposed=C.normalizeReviewPlan(result.plan,assets),panel=$('aiSynthesisPreview');panel.hidden=false;
+      panel.innerHTML=`<h3>Proposition de synthèse globale</h3><p><strong>Résumé :</strong> ${esc(proposed.summary)}</p>${proposed.sections.map(s=>`<div class="wb-ai-synthesis-section"><strong>${esc(s.title)}</strong><p>${esc(s.description).replace(/\n/g,'<br>')}</p></div>`).join('')}<p>Les ${proposed.photos.length} photos restent comptabilisées, y compris celles retirées. Si des opérations sont fusionnées, les galeries sont réunies en conservant l’ordre relatif choisi dans chaque galerie. Les vues de baie moteur sans stade avant/après certain restent à classer.</p><div class="wb-ai-actions"><button type="button" class="btn" id="aiAcceptSynthesis">Appliquer cette proposition</button><button type="button" class="btn ghost" id="aiRejectSynthesis">Garder mes textes et mon classement</button></div>`;
+      $('aiRejectSynthesis').onclick=()=>{panel.hidden=true;status('Proposition non appliquée. Ton brouillon est inchangé.');};
+      $('aiAcceptSynthesis').onclick=()=>{
+        if(JSON.stringify(plan)!==original){status('Tu as modifié le brouillon depuis cette proposition. Elle n’est pas appliquée pour préserver tes corrections.','error');return;}
+        checkpointReview();plan=proposed;panel.hidden=true;renderReview();persistReview();status('Synthèse appliquée. Vérifie les éventuelles photos de baie moteur à préciser. Le dernier changement peut être annulé.');
+      };
+      panel.scrollIntoView({block:'start'});status('Synthèse prête, non appliquée : relis la proposition puis choisis de la conserver ou non.');
+    }catch(e){synthesisRetry=true;status('Synthèse non appliquée : '+e.message+'. Ton brouillon actuel reste conservé.','error');}
+    finally{setBusy(false);}
+  };
+  $('aiFixProblems').onclick=()=>{$('aiProblems').scrollIntoView({block:'center'});};
+  $('aiUndo').onclick=()=>{if(busy||!reviewUndo.length)return;plan=JSON.parse(reviewUndo.pop());$('aiSectionAction').hidden=true;refreshReview();$('aiSummary').value=plan.summary;$('aiUndo').disabled=!reviewUndo.length;};
+  $('aiSummaryFromSections').onclick=()=>{
+    if(busy||!plan||!confirm('Remplacer le résumé par les intitulés des opérations conservées et le bloc baie moteur présent ? Aucune analyse IA ne sera relancée.'))return;
+    checkpointReview();plan.summary=C.summaryFromSections(plan);$('aiSummary').value=plan.summary;resetApproval();
+  };
+  function exportReview(){
+    if(plan)persistReview();const value=remembered();if(!value?.jobId){status('Aucun brouillon à sauvegarder.','error');return;}
+    const blob=new Blob([JSON.stringify({type:'wheelerbrothers-ai-review',version:'56.5',spaceId:H.space(),...value},null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='WB-brouillon-IA-'+value.jobId+'.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }
+  $('aiExportReview').onclick=exportReview;$('aiExportPending').onclick=exportReview;
+  $('aiImportReview').onchange=async e=>{
+    const f=e.target.files?.[0];e.target.value='';if(!f||busy)return;
+    try{
+      if(f.size>2000000)throw new Error('Brouillon JSON trop volumineux.');
+      const v=JSON.parse(await f.text());
+      if(v.type!=='wheelerbrothers-ai-review'||!/^rai[a-f0-9]{32}$/.test(v.jobId||'')||v.spaceId!==H.space()||!v.review?.plan)throw new Error('Ce fichier n’est pas un brouillon de relecture de cet atelier.');
+      if(jobId&&jobId!==v.jobId)throw new Error('Un autre dossier est ouvert. Ferme-le avant d’importer ce brouillon.');
+      if(!confirm('Reprendre le classement de ce fichier ? Les photos seront récupérées depuis le brouillon privé existant, sans analyse IA.'))return;
+      localStorage.setItem(KEY,JSON.stringify(v));jobId=v.jobId;workflowRef=v.workflowRef||null;await resume();
+    }catch(e){status('Import impossible : '+e.message,'error');}
+  };
   $('aiApply').onclick=apply;
   window.addEventListener('beforeunload',e=>{if(busy){e.preventDefault();e.returnValue='';}});
   ['btnHomeAI','btnArchiveAI'].forEach(name=>{const b=document.getElementById(name);if(b){b.addEventListener('click',()=>{H.closeArchive();open();});H.ready.then(()=>b.disabled=false);}});
+  } catch(error) {
+    window.WBReportAIBootError=String(error?.message||error);
+    console.error('WheelerBrothers : initialisation du module IA impossible',error);
+    window.dispatchEvent(new Event('wb-ai-boot-failed'));
+  }
 })();
