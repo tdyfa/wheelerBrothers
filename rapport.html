@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=56.5.2">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.5.2">
+<link rel="manifest" href="manifest.json?v=56.5.3">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.5.3">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -16,16 +16,16 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
-<script src="firebase-config.js?v=56.5.2"></script>
-<script src="html2pdf.bundle.min.js?v=56.5.2"></script>
-<script src="report-images.js?v=56.5.2"></script>
-<script src="vehicle-info.js?v=56.5.2"></script>
-<script src="wb-workflow.js?v=56.5.2"></script>
-<link rel="stylesheet" href="wb-workflow.css?v=56.5.2">
-<script src="vehicle-input.js?v=56.5.2&build=2"></script>
-<link rel="stylesheet" href="report-ai.css?v=56.5.2">
-<script src="report-ai-config.js?v=56.5.2"></script>
-<script src="report-ai-core.js?v=56.5.2"></script>
+<script src="firebase-config.js?v=56.5.3"></script>
+<script src="html2pdf.bundle.min.js?v=56.5.3"></script>
+<script src="report-images.js?v=56.5.3"></script>
+<script src="vehicle-info.js?v=56.5.3"></script>
+<script src="wb-workflow.js?v=56.5.3"></script>
+<link rel="stylesheet" href="wb-workflow.css?v=56.5.3">
+<script src="vehicle-input.js?v=56.5.3&build=2"></script>
+<link rel="stylesheet" href="report-ai.css?v=56.5.3">
+<script src="report-ai-config.js?v=56.5.3"></script>
+<script src="report-ai-core.js?v=56.5.3"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -505,12 +505,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=56.5.2" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=56.5.3" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 56.5.2</span>
+          <span class="sub">Version 56.5.3</span>
         </div>
       </div>
       <div class="app-bar-notices">
@@ -1069,6 +1069,17 @@ function forgetLocalDraft(id,payload){
   if(payload!==undefined && localReportDrafts[id].payload!==payload)return;
   delete localReportDrafts[id];persistLocalDrafts();
 }
+function discardLocalReport(id){
+  const draft=localReportDrafts[id];if(!draft)return;
+  let label='ce brouillon';try{const r=JSON.parse(draft.payload);label=r.plate||r.title||label;}catch(e){}
+  if(!confirm('Supprimer uniquement la copie locale de « '+label+' » sur cet appareil ?\n\nLe rapport synchronisé dans Firebase ne sera ni modifié ni supprimé. Cette copie locale ne pourra pas être récupérée ensuite.'))return;
+  forgetLocalDraft(id);
+  // Empêcher l'ancien cache de recréer la copie au prochain démarrage.
+  try{if(localStorage.getItem('current_report_id')===id&&localStorage.getItem('rapport_state')===draft.payload){
+    localStorage.removeItem('rapport_state');localStorage.removeItem('current_report_id');
+  }}catch(e){}
+  renderArchiveList(_archiveDocsCache);
+}
 function restoreLocalReport(id){
   const draft=localReportDrafts[id];
   if(!draft)return;
@@ -1316,6 +1327,7 @@ function renderArchiveList(docs){
           <span style="display:block;font-weight:700;font-size:14px;">${escape(data.plate||data.model||data.title||'Sans titre')}</span>
           <span style="display:block;font-size:11.5px;color:#875612;">Copie locale à récupérer${draft.updatedAt?' · '+escape(fmtArchiveDate(draft.updatedAt)):''}</span>
         </button>
+        <button class="btn-del-local" type="button" style="border:0;background:none;color:#b3261e;font-size:12px;text-decoration:underline;cursor:pointer;padding:9px 0;">Supprimer la copie locale</button>
       </div>`];
     }catch(e){return [];}
   }).join('');
@@ -1339,6 +1351,7 @@ function renderArchiveList(docs){
       else openReport(row.dataset.id);
     });
     row.querySelector('.btn-del-report')?.addEventListener('click',event=>deleteReport(row.dataset.id,event));
+    row.querySelector('.btn-del-local')?.addEventListener('click',event=>{event.stopPropagation();discardLocalReport(row.dataset.id);});
   });
 }
 
@@ -1824,7 +1837,7 @@ function buildProductsPhotos(){
     host.appendChild(item);
   });
 }
-// v56.5.2 : ne jamais sérialiser plusieurs photos de pièces en base64 dans
+// v56.5.3 : ne jamais sérialiser plusieurs photos de pièces en base64 dans
 // Firestore. Le fichier original compatible est transféré tel quel dans
 // Storage, puis seul son URL est ajoutée au rapport (aucun réencodage).
 async function uploadProductFile(file,reportId,itemId){
@@ -2174,7 +2187,7 @@ async function lookupAtelierVehicle(){
     if(isCurrent()){button.disabled=false;button.textContent='Vérifier';}
   }
 }
-// v56.5.2 — même carnet source pour l'éditeur classique et la relecture IA.
+// v56.5.3 — même carnet source pour l'éditeur classique et la relecture IA.
 async function listAtelierVehicles(){
   const snap=await sharedDocRef('atelier').get({source:'server'});
   const data=snap.exists?JSON.parse(snap.data().payload||'{"vehicles":[]}'):{vehicles:[]};
@@ -2439,7 +2452,7 @@ async function renderReportPdfPages(options={}){
     const canvas=document.createElement('canvas');
     canvas.width=Math.round(REPORT_PDF_W*pixelScale);canvas.height=Math.round(REPORT_PDF_H*pixelScale);
     const ctx=canvas.getContext('2d');
-    // v56.5.2 : peindre le fond opaque en pixels réels AVANT la mise à l'échelle.
+    // v56.5.3 : peindre le fond opaque en pixels réels AVANT la mise à l'échelle.
     // Après setTransform, canvas.width/height seraient réduits une seconde fois :
     // le fond resterait transparent en partie et deviendrait noir à l'export JPEG.
     ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -3058,11 +3071,11 @@ window.WBReportWorkflowHost={
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=56.5.2&build=1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=56.5.3&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
-<script src="report-workflow.js?v=56.5.2"></script>
-<script src="report-ai.js?v=56.5.2"></script>
+<script src="report-workflow.js?v=56.5.3"></script>
+<script src="report-ai.js?v=56.5.3"></script>
 </body>
 </html>

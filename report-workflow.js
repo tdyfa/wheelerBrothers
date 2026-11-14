@@ -33,7 +33,7 @@
  }
  async function complete(){
   if(busy||!currentRef()||!H.requireSummary())return;setBusy(true);
-  try{await H.flush();const result=await W.closeOperation({...currentRef(),reportId:H.id()},{report:H.state(),writerId:H.writer,expectedPayload:H.expected()});if(result){H.setDate(result.operation.date);message('Rapport enregistré · Carnet mis à jour · Intervention terminée');await refresh();}}
+  try{await H.flush();const result=await W.closeOperation({...currentRef(),reportId:H.id()},{report:H.state(),writerId:H.writer,expectedPayload:H.expected()});if(result){H.setDate(result.operation.date);message(result.reportShareStatus==='published'?'Rapport enregistré · Intervention terminée · Rapport partagé':result.reportShareStatus==='failed'?'Intervention terminée, mais partage du rapport impossible : '+result.reportShareError:'Rapport enregistré · Carnet mis à jour · Intervention terminée',result.reportShareStatus==='failed');await refresh();}}
   catch(e){message(e.message,true)}finally{setBusy(false);render()}
  }
  async function linkSelected(){
@@ -47,8 +47,11 @@
  }
  async function createOperation(){
   if(busy||!H.id()||!H.requireSummary())return;setBusy(true);
-  try{await H.flush();const r=H.state();const closure=await W.closureForm({vehicle:{modele:[r.brand,r.model].filter(Boolean).join(' '),plate:r.plate},operation:{operation:r.summary,status:'todo'},report:r,title:'Créer une opération terminée dans le Carnet'});if(!closure)return;
-   const created=await W.call('createCompletedOperation',{reportId:H.id(),report:r,closure,writerId:H.writer});H.setDate(created.operation.date);await refresh(true);message('Opération terminée créée et liée au rapport. Aucun rendez-vous ajouté au Planning.');
+  try{await H.flush();const r=H.state();const closure=await W.closureForm({vehicle:{modele:[r.brand,r.model].filter(Boolean).join(' '),plate:r.plate},operation:{operation:r.summary,status:'todo'},report:r,title:'Créer une opération terminée dans le Carnet',shareReportId:H.id()});if(!closure)return;
+   const {shareReport,...closureData}=closure;
+   const created=await W.call('createCompletedOperation',{reportId:H.id(),report:r,closure:closureData,writerId:H.writer});H.setDate(created.operation.date);
+   let shareError=null;if(shareReport){try{await W.call('publishReport',{reportId:H.id()});}catch(e){shareError=e.message||String(e);alert('Opération créée et terminée, mais le rapport n’a PAS été partagé : '+shareError);}}
+   await refresh(true);message(shareError?'Opération terminée, partage impossible : '+shareError:shareReport?'Opération terminée et rapport partagé.':'Opération terminée créée et liée au rapport. Aucun rendez-vous ajouté au Planning.',!!shareError);
   }catch(e){message(e.message,true)}finally{setBusy(false);render()}
  }
  async function publish(){

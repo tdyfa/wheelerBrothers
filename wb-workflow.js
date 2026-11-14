@@ -1,4 +1,4 @@
-/* WheelerBrothers v56.1 — shared UI for the server-authoritative workflow. */
+/* WheelerBrothers v56 — shared UI for the server-authoritative workflow. */
 (function(global){'use strict';
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const key=v=>String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
@@ -94,18 +94,27 @@
    }
   }throw new Error('Les données changent sur un autre appareil. Rouvre l’intervention puis réessaie.');
  }
- async function closureForm({vehicle={},operation={},report=null,title}={}){
+ async function closureForm({vehicle={},operation={},report=null,title,shareReportId=null}={}){
   const initialDate=(report?.date||operation.date||today());
-  return dialog(title||(done(operation)?'Modifier les informations de clôture':'Terminer l’intervention'),`<p><strong>${esc(vehicle.modele||[vehicle.marque||vehicle.brand,vehicle.modeleDetail||vehicle.model].filter(Boolean).join(' '))}</strong><br>${esc(vehicle.plate||report?.plate||'')}<br>${esc(operation.operation||report?.summary||'Intervention')}</p><p class="wb-flow-muted">Les valeurs concernent l’ensemble de l’intervention. Les dates prévues dans le Planning sont conservées. Un champ vide conserve une valeur déjà enregistrée.</p><label for="wbCloseDate">Date réelle de réalisation</label><input id="wbCloseDate" type="date" value="${esc(initialDate)}" required><div class="wb-flow-grid"><div><label for="wbCloseHours">Temps passé (heures)</label><input id="wbCloseHours" type="text" inputmode="decimal" placeholder="Ex. 2,5 = 2 h 30" value="${esc(operation.temps??'')}"></div><div><label for="wbClosePay">Argent perçu (€)</label><input id="wbClosePay" type="text" inputmode="decimal" placeholder="0 pour une intervention non rémunérée" value="${esc(operation.remuneration??'')}"></div></div>`,[{label:'Annuler',value:null},{label:done(operation)?'Enregistrer la clôture':'Confirmer la fin de l’intervention',primary:true,read:d=>{
+  return dialog(title||(done(operation)?'Modifier les informations de clôture':'Terminer l’intervention'),`<p><strong>${esc(vehicle.modele||[vehicle.marque||vehicle.brand,vehicle.modeleDetail||vehicle.model].filter(Boolean).join(' '))}</strong><br>${esc(vehicle.plate||report?.plate||'')}<br>${esc(operation.operation||report?.summary||'Intervention')}</p><p class="wb-flow-muted">Les valeurs concernent l’ensemble de l’intervention. Les dates prévues dans le Planning sont conservées. Un champ vide conserve une valeur déjà enregistrée.</p><label for="wbCloseDate">Date réelle de réalisation</label><input id="wbCloseDate" type="date" value="${esc(initialDate)}" required><div class="wb-flow-grid"><div><label for="wbCloseHours">Temps passé (heures)</label><input id="wbCloseHours" type="text" inputmode="decimal" placeholder="Ex. 2,5 = 2 h 30" value="${esc(operation.temps??'')}"></div><div><label for="wbClosePay">Argent perçu (€)</label><input id="wbClosePay" type="text" inputmode="decimal" placeholder="0 pour une intervention non rémunérée" value="${esc(operation.remuneration??'')}"></div></div>${shareReportId?`<label class="wb-flow-share-option" style="display:flex;align-items:flex-start;gap:9px;margin-top:14px"><input type="checkbox" id="wbCloseShareReport" checked style="width:auto;margin-top:3px"><span>Partager également le rapport lié avec le client (si le véhicule est partagé et le rapport validable)</span></label>`:''}`, [{label:'Annuler',value:null},{label:done(operation)?'Enregistrer la clôture':'Confirmer la fin de l’intervention',primary:true,read:d=>{
    const date=d.querySelector('#wbCloseDate').value;if(!date)throw new Error('Indique la date réelle de réalisation.');
    const read=id=>{const value=d.querySelector(id).value.trim().replace(',','.');if(value!==''&&(!/^\d+(\.\d+)?$/.test(value)||!Number.isFinite(Number(value))))throw new Error('Indique des valeurs positives ou zéro.');return value;};
-   return {date,temps:read('#wbCloseHours'),remuneration:read('#wbClosePay')};
+   return {date,temps:read('#wbCloseHours'),remuneration:read('#wbClosePay'),shareReport:!!(shareReportId&&d.querySelector('#wbCloseShareReport')?.checked)};
   }}]);
  }
  async function closeOperation(ref,extra={}){
-  const info=await call('operationInfo',ref);const closure=await closureForm({...info,report:extra.report});if(!closure)return null;
+  const info=await call('operationInfo',ref);const shareReportId=extra.reportId||info.operation?.reportId||null;
+  const closure=await closureForm({...info,report:extra.report,shareReportId});if(!closure)return null;
+  const {shareReport,...closureData}=closure;
   const op=info.operation;const expectedClosure=info.ref.vehicleId?{date:op.date||'',temps:op.temps??null,remuneration:op.remuneration??null,status:status(op)}:null;
-  const result=await call('complete',{...ref,...extra,closure,expectedClosure});global.dispatchEvent(new CustomEvent('wb-workflow-updated',{detail:result}));return result;
+  const result=await call('complete',{...ref,...extra,closure:closureData,expectedClosure});
+  global.dispatchEvent(new CustomEvent('wb-workflow-updated',{detail:result}));
+  if(shareReport&&shareReportId){
+   try{await call('publishReport',{reportId:shareReportId});result.reportShareStatus='published';}
+   catch(e){result.reportShareStatus='failed';result.reportShareError=e.message||String(e);
+    alert('Intervention bien terminée, mais le rapport n’a PAS été partagé : '+result.reportShareError+'\n\nOuvre le rapport et utilise « Valider et partager le rapport » après correction.');}
+  }else if(shareReportId)result.reportShareStatus='private';
+  return result;
  }
  async function reopen(ref){const ok=await dialog('Réouvrir l’intervention',`<p>L’intervention ne sera plus visible dans WB Carnet. Le rapport restera enregistré mais ne sera plus partagé. Les PDF déjà téléchargés ne peuvent pas être retirés.</p>`,[{label:'Annuler',value:false},{label:'Réouvrir',primary:true,value:true}]);if(!ok)return null;const r=await call('reopen',ref);global.dispatchEvent(new CustomEvent('wb-workflow-updated',{detail:r}));return r;}
  function reportUrl(ref,mode='manual'){const q=new URLSearchParams({mode});for(const k of ['planningId','vehicleId','operationId','reportId'])if(ref[k])q.set(k,ref[k]);return 'rapport.html?'+q.toString();}
