@@ -53,7 +53,7 @@
 .wb-ai-body .wb-ai-other{font-size:11px;margin:5px 0}.wb-ai-other input{width:13px;height:13px}
 @media(max-width:600px){.wb-ai-grid{grid-template-columns:1fr}}
 
-/* v56.4 — iOS : fenêtre IA fixe à la largeur du téléphone, sans glissement
+/* v56.5 — iOS : fenêtre IA fixe à la largeur du téléphone, sans glissement
    horizontal au zoom normal. Ne jamais neutraliser le zoom utilisateur. */
 @media (max-width: 600px) {
   html:has(#wbAiDialog[open]),
@@ -102,3 +102,41 @@
     overflow-wrap: anywhere;
   }
 }
+
+/* v56.5 — relecture pilotable au doigt et au clavier, sans bloquer le zoom. */
+.wb-ai-photo-tools{display:flex;align-items:center;justify-content:space-between;gap:5px}
+.wb-ai-tile .wb-ai-photo-move{flex:0 0 38px;width:38px;min-height:44px;font-size:24px;padding:0}
+.wb-ai-body .wb-ai-position-label{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:3px;font-size:11px;font-weight:500;margin:0;min-width:0}
+.wb-ai-body .wb-ai-position{width:56px;max-width:100%;min-height:44px;text-align:center;padding:6px 2px;font-size:16px}
+.wb-ai-position-label>span{font-size:11px}
+.wb-ai-section-head,.wb-ai-group-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.wb-ai-section-tools{display:flex;align-items:center;gap:6px}
+.wb-ai-body .wb-ai-section-tools label{display:flex;align-items:center;gap:6px;margin:0;font-size:12px}
+.wb-ai-body .ai-section-position{width:65px;min-height:44px;font-size:16px}
+.wb-ai-dialog .wb-ai-section-tools button{min-width:44px;min-height:44px}
+.wb-ai-section-merge{display:flex;flex-wrap:wrap;align-items:end;gap:8px}
+.wb-ai-section-merge label{flex:1 1 190px;min-width:0}
+.wb-ai-section-merge .btn{min-height:44px;margin-bottom:5px}
+.wb-ai-group-head h4{margin:14px 0 4px;overflow-wrap:anywhere}
+.wb-ai-group-head .btn{font-size:12px;min-height:44px}
+.wb-ai-body .wb-ai-remove-photo{min-height:44px}
+.wb-ai-bay-panel{border:1px solid #bfd0e3;background:#f2f6fb;border-radius:10px;padding:12px;margin:18px 0}
+.wb-ai-bay-panel h4{margin:0}
+.wb-ai-dialog .wb-ai-issue{display:block;width:100%;text-align:left;white-space:normal;overflow-wrap:anywhere;background:#fff8e7;color:#764800;border:1px solid #e6c991;border-radius:6px;padding:10px;margin-top:7px;min-height:44px;font:inherit}
+.wb-ai-highlight{outline:3px solid #c48019;outline-offset:2px}
+.wb-ai-removed{padding:12px;border:1px solid #dce2e8;border-radius:10px;margin:12px 0;background:#f5f6f8}
+.wb-ai-removed summary{cursor:pointer;font-weight:600;min-height:34px}
+.wb-ai-section,.wb-ai-photo-group{scroll-margin-top:12px}
+.wb-ai-sr-only{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+@media(max-width:600px){
+  .wb-ai-tile .wb-ai-cap,.wb-ai-tile select{font-size:16px}
+  .wb-ai-section-head{align-items:flex-start}
+  .wb-ai-section-tools{width:100%;justify-content:space-between}
+  .wb-ai-photo-tools{gap:2px}
+  .wb-ai-body .wb-ai-position{width:52px}
+  .wb-ai-tile .wb-ai-photo-move{flex-basis:34px;width:34px}
+  .wb-ai-section .wb-ai-actions .btn{font-size:13px}
+}
+/* Only the body scrolls. Hidden overflow can itself be scrolled by focus/scrollIntoView,
+   pulling the header upwards; clip prevents this secondary scroll container. */
+@supports (overflow:clip){.wb-ai-dialog{overflow:clip}}

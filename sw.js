@@ -1,32 +1,33 @@
-const CACHE_NAME = 'outils-atelier-v56.4-r1';
+const CACHE_NAME = 'outils-atelier-v56.5-r1';
 const ASSETS = [
   './',
-  './wb-workflow.js?v=56.4',
-  './wb-workflow.css?v=56.4',
-  './report-workflow.js?v=56.4',
+  './wb-workflow.js?v=56.5',
+  './wb-workflow.css?v=56.5',
+  './report-workflow.js?v=56.5',
   './index.html',
-  './atelier.html?v=56.4',
-  './rapport.html?v=56.4',
-  './inventaire.html?v=56.4',
-  './planning.html?v=56.4',
-  './planning.js?v=56.4',
-  './manifest.json?v=56.4',
-  './firebase-config.js?v=56.4',
-  './apple-touch-icon.png?v=56.4',
+  './atelier.html?v=56.5',
+  './rapport.html?v=56.5',
+  './inventaire.html?v=56.5',
+  './planning.html?v=56.5',
+  './planning.js?v=56.5',
+  './manifest.json?v=56.5',
+  './firebase-config.js?v=56.5',
+  './apple-touch-icon.png?v=56.5',
   './icon-192.png',
   './icon-512.png',
   './report-cover-logo.png',
-  './report-ai.css?v=56.4',
-  './report-ai-config.js?v=56.4',
-  './report-ai-core.js?v=56.4',
-  './report-ai.js?v=56.4',
-  './report-images.js?v=56.4',
-  './vehicle-info.js?v=56.4',
-  './vehicle-input.js?v=56.4&build=2',
-  './wb-phone.js?v=56.4',
-  './html2pdf.bundle.min.js?v=56.4',
-  './wb-carnet-pro.css?v=56.4',
-  './wb-carnet-pro.js?v=56.4'
+  './report-ai.css?v=56.5',
+  './report-ai-config.js?v=56.5',
+  './report-ai-core.js?v=56.5',
+  './report-ai-review.js?v=56.5',
+  './report-ai.js?v=56.5',
+  './report-images.js?v=56.5',
+  './vehicle-info.js?v=56.5',
+  './vehicle-input.js?v=56.5&build=2',
+  './wb-phone.js?v=56.5',
+  './html2pdf.bundle.min.js?v=56.5',
+  './wb-carnet-pro.css?v=56.5',
+  './wb-carnet-pro.js?v=56.5'
 ];
 
 self.addEventListener('install', event => {
@@ -92,6 +93,6 @@ self.addEventListener('push', event => {
  // Existing v55/v56 server sends data-only messages; also accept a notification payload.
 
  const data={...(payload.notification||{}),...(payload.data||{})};
- event.waitUntil(self.registration.showNotification(data.title||'WheelerBrothers Planning',{body:data.body||'Intervention mise à jour',icon:'./icon-192.png',data:{url:'./planning.html?v=56.4'}}));
+ event.waitUntil(self.registration.showNotification(data.title||'WheelerBrothers Planning',{body:data.body||'Intervention mise à jour',icon:'./icon-192.png',data:{url:'./planning.html?v=56.5'}}));
 });
-self.addEventListener('notificationclick',event=>{event.notification.close();event.waitUntil(self.clients.openWindow('./planning.html?v=56.4'))});
+self.addEventListener('notificationclick',event=>{event.notification.close();event.waitUntil(self.clients.openWindow('./planning.html?v=56.5'))});
