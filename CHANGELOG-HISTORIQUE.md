@@ -1,5 +1,10 @@
 # Historique des notices Atelier
 
+## Livraison 56.7 — suppression suivie et nettoyage des médias
+
+- Intègre le suivi du nettoyage des médias lors de la suppression d’un rapport, en conservant les améliorations de transfert IA de la v56.6.8.
+- Nécessite les fonctions serveur et les règles Firebase adaptées de la livraison v56.7 ; se référer au guide de déploiement.
+
 ## Livraison 56.6.8 — reprise HTTP 400 et transfert sans analyse
 
 - Après une erreur Storage ambiguë HTTP 400, vérifie si le fichier a été reçu avant une nouvelle tentative au maximum, sans écrasement incertain.
