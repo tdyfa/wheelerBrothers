@@ -1,5 +1,11 @@
 # Historique des notices Atelier
 
+## Livraison 56.6.7 — correctif de transfert IA
+
+- Réessais bornés de transferts Storage et vérification de l'intégrité avant réutilisation d'une photo reçue ; distinction entre l'envoi et la récupération du lien.
+- Vérification locale incrémentale et protection contre l'écrasement en cas d'identité ambiguë ; factures et pages associées incluses.
+- Correctif basé sur Atelier 56.6.4 ; la suppression fiable préparée en 56.6.6 reste à adapter séparément à cette version.
+
 ## Livraison 56.6.4
 
 - Ajout de « Mes brouillons » pour les copies locales, préparations IA locales et jobs IA accessibles sur le serveur. Les corrections IA locales restent sur leur appareil.

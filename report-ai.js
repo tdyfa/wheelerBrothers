@@ -34,7 +34,7 @@
       <div class="wb-flow-panel"><label for="aiLinkedOperation">Intervention liée (facultatif)</label><select id="aiLinkedOperation"><option value="">Aucune — rapport indépendant</option></select><p id="aiWorkflowHint" class="wb-flow-muted">Clique sur « Vérifier » pour afficher les interventions du véhicule. Les opérations possédant déjà un rapport sont grisées.</p></div><label for="aiNotes">Travaux effectués, pièces et précisions *</label><textarea id="aiNotes" maxlength="12000" placeholder="Ex. : vidange moteur et remplacement du filtre à huile ; nettoyage du filtre à air réutilisable. Préciser les côtés ou les références si nécessaire."></textarea>
       <h3>Photos de l’intervention</h3><p class="wb-ai-muted">Jusqu’à ${LIMIT} photos originales, sans compression ni redimensionnement. Envoi privé sur Storage, analyse IA en plusieurs lots automatiques. Les formats HEIC/HEIF sont conservés à l’identique et nécessitent une copie PNG sans perte pour l’analyse. Les formats ou photos incompatibles sont signalés avant le lancement.</p>
       <label class="filebtn btn" for="aiFiles">Ajouter des photos</label><input id="aiFiles" type="file" accept="image/*" multiple>
-      <p id="aiCount" class="wb-ai-muted">Aucune photo sélectionnée.</p><p id="aiUploadProgress" class="wb-ai-muted" role="status" aria-live="polite"></p><div id="aiPhotoErrors" class="wb-ai-problems" hidden></div><label class="wb-ai-check" id="aiPartialLabel" hidden><input type="checkbox" id="aiPartialConfirm"><span>Je confirme analyser seulement les photos acceptées malgré les photos refusées ci-dessus.</span></label><div id="aiGallery" class="wb-ai-gallery"></div>
+      <p id="aiCount" class="wb-ai-muted">Aucune photo sélectionnée.</p><p id="aiUploadProgress" class="wb-ai-muted" role="status" aria-live="polite"></p><p id="aiResumeWarning" class="wb-ai-problems" role="status" hidden></p><div id="aiPhotoErrors" class="wb-ai-problems" hidden></div><label class="wb-ai-check" id="aiPartialLabel" hidden><input type="checkbox" id="aiPartialConfirm"><span>Je confirme analyser seulement les photos acceptées malgré les photos refusées ci-dessus.</span></label><div id="aiGallery" class="wb-ai-gallery"></div>
       <h3>Factures PDF</h3><p class="wb-ai-muted">Les PDF sont analysés pour relever les références des pièces et toutes leurs pages sont ajoutées en fin de rapport, dans l’ordre de sélection. Maximum 3 PDF, 8 Mio chacun et 20 pages au total. Vérifie les références avant validation.</p>
       <label class="filebtn btn" for="aiPdfFiles">Ajouter des factures PDF</label><input id="aiPdfFiles" type="file" accept="application/pdf,.pdf" multiple><div id="aiPdfList" class="wb-ai-muted"></div>
       <details><summary>Contrôles confirmés et recommandations (facultatif)</summary><p class="wb-ai-muted">Cocher seulement les contrôles réellement effectués. L’IA ne coche rien automatiquement.</p>
@@ -58,9 +58,15 @@
   function remember({serverJob=false}={}){
     $('aiDiscard').hidden=!jobId;
     try{
-      const old=remembered();
+      const raw=localStorage.getItem(KEY);
+      let old=null;
+      if(raw){
+        try{old=JSON.parse(raw);}catch(_){throw new Error('local-invalid');}
+        if(!old||typeof old!=='object'||Array.isArray(old))throw new Error('local-invalid');
+      }
       const current=assets.map(a=>({id:a.id,name:a.name,size:a.sourceSize||a.original?.size||0,lastModified:a.lastModified||0,
-        ext:a.ext,originalExt:a.originalExt,uploaded:Boolean(a.uploaded||a.url),originalUploaded:Boolean(a.originalUploaded)}));
+        ext:a.ext,originalExt:a.originalExt,uploaded:Boolean(a.uploaded||a.url),originalUploaded:Boolean(a.originalUploaded),
+        mainAttempted:Boolean(a.mainAttempted),originalAttempted:Boolean(a.originalAttempted)}));
       const oldEntries=old?.jobId===jobId&&old.uploadPending&&Array.isArray(old.manifest)?old.manifest:[];
       const currentById=new Map(current.map(a=>[a.id,a]));
       // On a resumed iPhone session, keep metadata for all the 85 original
@@ -68,7 +74,7 @@
       const manifest=oldEntries.length>current.length
         ? oldEntries.map(a=>currentById.get(a.id)||a)
         : current;
-      const docs=documents.map(d=>({id:d.id,name:d.name,size:d.sourceSize||d.blob?.size||0,lastModified:d.lastModified||0,uploaded:Boolean(d.uploaded),pages:(d.pages||[]).map(p=>({id:p.id}))}));
+      const docs=documents.map(d=>({id:d.id,name:d.name,size:d.sourceSize||d.blob?.size||0,lastModified:d.lastModified||0,uploaded:Boolean(d.uploaded),attempted:Boolean(d.attempted),pages:(d.pages||[]).map(p=>({id:p.id,attempted:Boolean(p.attempted),uploaded:Boolean(p.uploaded)}))}));
       const oldDocs=old?.jobId===jobId&&old.uploadPending&&Array.isArray(old.docManifest)?old.docManifest:[];
       const docsById=new Map(docs.map(d=>[d.id,d]));
       const docManifest=oldDocs.length>docs.length?oldDocs.map(d=>docsById.get(d.id)||d):docs;
@@ -76,7 +82,11 @@
         uploadPending:!serverJob&&!requestInput,manifest,docManifest};
       if(!requestInput&&!serverJob){data.meta=metaFromForm();data.notes=$('aiNotes').value;}
       localStorage.setItem(KEY,JSON.stringify(data));
-    }catch(e){console.warn('Reprise locale indisponible, garde cette page ouverte.',e);}
+      const warning=$('aiResumeWarning');if(warning){warning.hidden=true;warning.textContent='';}
+    }catch(_){
+      const warning=$('aiResumeWarning');if(warning){warning.hidden=false;warning.textContent='La reprise après fermeture ne peut pas être garantie : les données locales sont indisponibles ou illisibles. Garde cette page ouverte ; les données existantes ne sont pas écrasées.';}
+      console.warn('Reprise locale indisponible ; garde cette page ouverte.');
+    }
   }
   function remembered(){try{return JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){return null;}}
   function forget(){try{localStorage.removeItem(KEY);}catch(e){}$('aiResume').hidden=true;}
@@ -178,9 +188,9 @@
         const pages=[];
         for(let i=0;i<images.length;i++){
           const blob=await (await fetch(images[i])).blob();if(blob.size>2*1024*1024)throw new Error('Page PDF trop volumineuse');
-          pages.push({id:previous?.pages[i]?.id||id('a',12),blob});
+          pages.push({id:previous?.pages[i]?.id||id('a',12),blob,recovered:Boolean(previous),attempted:Boolean(previous?.pages[i]?.attempted),uploaded:Boolean(previous?.pages[i]?.uploaded)});
         }
-        documents.push({id:previous?.id||id('d',12),name:f.name.slice(0,160),sourceSize:f.size,lastModified:f.lastModified,uploaded:Boolean(previous?.uploaded),blob:f,pages});
+        documents.push({id:previous?.id||id('d',12),name:f.name.slice(0,160),sourceSize:f.size,lastModified:f.lastModified,uploaded:Boolean(previous?.uploaded),attempted:Boolean(previous?.attempted),recovered:Boolean(previous),blob:f,pages});
         if(jobId)remember();
       }catch(err){errors.push(f.name+' : '+err.message);}
     }}finally{
@@ -264,7 +274,7 @@
           const prepared=await preparePhoto(f),blob=prepared.blob;
           if(existing && existing.ext!==prepared.ext)throw new Error('Format différent de la préparation initiale.');
           assets.push({id:existing?.id||id('a',12),name:f.name.slice(0,200),sourceSize:f.size,lastModified:f.lastModified,
-            ...prepared,uploaded:Boolean(existing?.uploaded),originalUploaded:Boolean(existing?.originalUploaded),preview:URL.createObjectURL(blob)});
+            ...prepared,uploaded:Boolean(existing?.uploaded),originalUploaded:Boolean(existing?.originalUploaded),mainAttempted:Boolean(existing?.mainAttempted),originalAttempted:Boolean(existing?.originalAttempted),recovered:Boolean(existing),preview:URL.createObjectURL(blob)});
           rejectedFiles.delete(f.name+'-'+f.size);
         }catch(err){const message=f.name+' : '+err.message;errors.push(message);rejectedFiles.set(f.name+'-'+f.size,message);}
       }
@@ -300,6 +310,8 @@
     const bytesOf=a=>a.blob.size+(a.original!==a.blob?a.original.size:0);
     const totalBytes=assets.reduce((n,a)=>n+bytesOf(a),0);
     const progress=new Map(),failures=[];
+    const transferApi=window.WBAITransfer;
+    if(!transferApi||!window.md5?.create)throw new Error('Les composants de vérification photo sont indisponibles. Recharge la page avant de réessayer.');
     const bar=window.WBProgress?.start('Transfert sécurisé des photos IA');
     let completed=0,nextIndex=0;
     function paint(){
@@ -309,11 +321,11 @@
       bar?.update('Données transférées',sent,totalBytes,`${completed} / ${totalFiles} photos terminées`);
       status(text+'\nAucun appel OpenAI à cette étape.');
     }
-    async function transfer(ref,blob,contentType,key){
-      const task=ref.put(blob,{contentType,cacheControl:'private,max-age=3600'});
+    const retryNotice=()=>status('Vérification du transfert et nouvelle tentative limitée. Aucun appel OpenAI.');
+    async function transfer(ref,blob,mime,key){
       progress.set(key,0);
-      task.on('state_changed',snap=>{progress.set(key,snap.bytesTransferred||0);paint();});
-      await task;
+      await transferApi.put(ref,blob,{contentType:mime,cacheControl:'private,max-age=3600'},
+        {onProgress:snap=>{progress.set(key,snap.bytesTransferred||0);paint();},onRetry:retryNotice});
       progress.set(key,blob.size);paint();
     }
     async function sendPhoto(a){
@@ -323,19 +335,20 @@
       const path=`spaces/${space}/reports/${jobId}/ai-${a.id}.${a.ext}`;
       const ref=H.storage().ref().child(path);
       if(raw){
-        if(a.originalUploaded){
-          try{await H.storage().ref().child(originalPath).getMetadata();progress.set(originalKey,a.original.size);}
-          catch{a.originalUploaded=false;}
+        const originalRef=H.storage().ref().child(originalPath);
+        if(!a.originalVerified&&(a.originalUploaded||a.recovered||a.originalAttempted)){
+          a.originalUploaded=await transferApi.existsAndMatches(originalRef,a.original,retryNotice);
+          a.originalVerified=true;remember();
         }
-        if(!a.originalUploaded){await transfer(H.storage().ref().child(originalPath),a.original,a.original.type||'application/octet-stream',originalKey);a.originalUploaded=true;remember();}
+        if(!a.originalUploaded){a.originalAttempted=true;a.originalVerified=false;remember();await transfer(originalRef,a.original,a.original.type||'application/octet-stream',originalKey);a.originalUploaded=true;a.originalVerified=true;remember();}
+        progress.set(originalKey,a.original.size);
       }
-      if(a.uploaded&&!a.url){
-        try{a.url=await ref.getDownloadURL();progress.set(key,a.blob.size);}catch{a.uploaded=false;}
+      if(!a.mainVerified&&(a.uploaded||a.recovered||a.mainAttempted)){
+        a.uploaded=await transferApi.existsAndMatches(ref,a.blob,retryNotice);
+        a.mainVerified=true;remember();
       }
-      if(!a.url){
-        await transfer(ref,a.blob,contentType[a.ext],key);
-        a.url=await ref.getDownloadURL();a.uploaded=true;
-      }
+      if(!a.uploaded){a.mainAttempted=true;a.mainVerified=false;remember();await transfer(ref,a.blob,contentType[a.ext],key);a.uploaded=true;a.mainVerified=true;remember();}
+      if(!a.url)a.url=await transferApi.url(ref,retryNotice);
       progress.set(key,a.blob.size);completed++;remember();paint();
     }
     async function worker(){
@@ -349,9 +362,18 @@
     $('aiUploadProgress').textContent=`${totalFiles} / ${totalFiles} photos envoyées — ${(totalBytes/1048576).toFixed(1)} Mio. Prêt pour l'analyse.`;
     for(const d of documents){
       const docRef=H.storage().ref().child(`spaces/${space}/reports/${jobId}/ai-doc-${d.id}.pdf`);
-      if(d.uploaded){try{await docRef.getMetadata();}catch{d.uploaded=false;}}
-      if(!d.uploaded){status('Envoi sécurisé de la facture '+d.name+'…');await docRef.put(d.blob,{contentType:'application/pdf'});d.uploaded=true;remember();}
-      for(const page of d.pages){if(page.url)continue;const ref=H.storage().ref().child(`spaces/${space}/reports/${jobId}/ai-inv-${page.id}.jpg`);try{page.url=await ref.getDownloadURL();}catch{await ref.put(page.blob,{contentType:'image/jpeg'});page.url=await ref.getDownloadURL();}}
+      if(!d.originalVerified&&(d.uploaded||d.recovered||d.attempted)){
+        d.uploaded=await transferApi.existsAndMatches(docRef,d.blob,retryNotice);d.originalVerified=true;remember();
+      }
+      if(!d.uploaded){status('Envoi sécurisé de la facture '+d.name+'…');d.attempted=true;d.originalVerified=false;remember();await transferApi.put(docRef,d.blob,{contentType:'application/pdf'},{onRetry:retryNotice});d.uploaded=true;d.originalVerified=true;remember();}
+      for(const page of d.pages){
+        if(page.url)continue;
+        const ref=H.storage().ref().child(`spaces/${space}/reports/${jobId}/ai-inv-${page.id}.jpg`);
+        const reconcileFirst=Boolean(page.recovered||page.uploaded||page.attempted);
+        page.attempted=true;remember();
+        await transferApi.put(ref,page.blob,{contentType:'image/jpeg'},{reconcileFirst,onRetry:retryNotice});
+        page.uploaded=true;remember();page.url=await transferApi.url(ref,retryNotice);
+      }
     }
   }
   function entryValue(p){
@@ -679,13 +701,14 @@
       const result=await runBatches(retry);await consume(result);
     }catch(e){
       status(e.message+(requestInput?'\nVérifie d’abord le résultat côté serveur avant tout nouvel appel IA.':'\nAucun appel OpenAI n’a été fait. Réessaie l’envoi des fichiers manquants.'), 'error');
-      if(jobId){$('aiRetryArea').hidden=false;$('aiRetry').hidden=true;$('aiResume').hidden=false;}
+      if(jobId){$('aiRetryArea').hidden=false;$('aiRetry').hidden=true;$('aiRefresh').textContent=requestInput?'Vérifier le résultat existant':'Reprendre le transfert';$('aiResume').hidden=false;}
     }finally{setBusy(false);}
   }
   async function resume(continuePaid=false){
     if(busy)return;const stored=remembered();if(stored?.uploadPending){
       if(!jobId)jobId=stored.jobId;
-      status(`Transfert non terminé. Resélectionne les ${stored.manifest?.length||0} mêmes photos et ${stored.docManifest?.length||0} facture(s) PDF éventuelles, puis clique sur « Préparer le rapport ». Les fichiers déjà reçus seront vérifiés et réutilisés.`);
+      const remainingPhotos=Math.max(0,(stored.manifest?.length||0)-assets.length),remainingDocs=Math.max(0,(stored.docManifest?.length||0)-documents.length);
+      status(remainingPhotos||remainingDocs?`Transfert non terminé. Resélectionne les ${remainingPhotos} photos et ${remainingDocs} facture(s) PDF manquantes, puis clique sur « Préparer le rapport ». Les fichiers déjà reçus seront vérifiés et réutilisés.`:'Transfert non terminé. Clique sur « Préparer le rapport » pour vérifier et réessayer les fichiers manquants. Aucun appel IA n’est effectué pendant le transfert.');
       $('aiInput').hidden=false;$('aiReview').hidden=true;$('aiGenerate').disabled=false;return;
     }
     if(!jobId && stored?.jobId)jobId=stored.jobId;if(!jobId)return;
