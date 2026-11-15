@@ -400,8 +400,23 @@
     if(!vehicleId) return;
     if(currentPanelVehicleId===vehicleId && currentPanelElement===panel && document.body.contains(panel)) return;
     closeAccessListeners();currentPanelVehicleId=vehicleId;currentPanelElement=panel;
-    const snapshots={members:[],invites:[]};
-    const redraw=()=>drawLinkedPanel(vehicle,panel,snapshots.members,snapshots.invites);
+    // The flag belongs to the WB Carnet vehicle, never to the locally cached
+    // Atelier object. An absent field means disabled for existing vehicles.
+    const snapshots={members:[],invites:[],vehicleLoaded:false,documentsEnabled:false,documentsLoaded:false,documentsError:"",documents:[]};
+    const redraw=()=>drawLinkedPanel(vehicle,panel,snapshots.members,snapshots.invites,snapshots);
+    accessUnsubs.push(vehicleRef(vehicleId).onSnapshot(snap=>{snapshots.vehicleLoaded=snap.exists;snapshots.documentsEnabled=snap.exists && snap.data().documentsEnabled===true;redraw();},error=>drawPanelError(panel,error)));
+    // Load 100 metadata entries initially. If there are more, expose an
+    // explicit action to load the full list instead of silently hiding files.
+    let documentsUnsub=null,allDocuments=false;
+    const startDocuments=()=>{
+      if(documentsUnsub)documentsUnsub();
+      snapshots.documentsLoaded=false;snapshots.documentsError='';snapshots.allDocuments=allDocuments;
+      let query=vehicleRef(vehicleId).collection('documents').where('state','in',['ready','uploading','deleting']);
+      if(!allDocuments)query=query.limit(101);
+      documentsUnsub=query.onSnapshot(snap=>{snapshots.documentsLoaded=true;snapshots.documentsError='';snapshots.documents=snap.docs.map(doc=>({...doc.data(),id:doc.id}));redraw();},error=>{snapshots.documentsLoaded=true;snapshots.documentsError=firebaseMessage(error);redraw();});
+    };
+    snapshots.loadAllDocuments=()=>{if(allDocuments)return;allDocuments=true;startDocuments();redraw();};
+    startDocuments();accessUnsubs.push(()=>{if(documentsUnsub)documentsUnsub();documentsUnsub=null;});
     accessUnsubs.push(vehicleRef(vehicleId).collection('members').onSnapshot(snap=>{snapshots.members=snap.docs.map(doc=>({id:doc.id,...doc.data()}));redraw();},error=>drawPanelError(panel,error)));
     accessUnsubs.push(db.collection(COLLECTIONS.invitations).where('vehicleId','==',vehicleId).onSnapshot(snap=>{snapshots.invites=snap.docs.map(doc=>({id:doc.id,...doc.data()}));redraw();},error=>drawPanelError(panel,error)));
   }
@@ -410,17 +425,117 @@
     const status=panel?.querySelector('.wbc-pro-status');if(status){status.className='wbc-pro-status err';status.textContent=firebaseMessage(error);}
   }
 
-  function drawLinkedPanel(vehicle,panel,members,invites){
+  async function boundedDocumentBlob(response,max){
+    const header=response.headers.get('content-length');
+    if(header && (!/^[0-9]+$/.test(header) || Number(header)>max))throw new Error('Document trop volumineux.');
+    if(response.body?.getReader){
+      const reader=response.body.getReader(),parts=[];let size=0;
+      for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>max){await reader.cancel();throw new Error('Document trop volumineux.');}parts.push(value);}
+      return new Blob(parts,{type:response.headers.get('content-type')||'application/octet-stream'});
+    }
+    if(!header || !/^[0-9]+$/.test(header) || Number(header)>max)throw new Error('Ce navigateur ne permet pas de limiter la taille du document.');
+    const blob=await response.blob();if(blob.size>max)throw new Error('Document trop volumineux.');return blob;
+  }
+
+  // Le serveur autorise chaque lecture et renvoie les octets : aucune URL
+  // Firebase permanente n'est exposée au navigateur.
+  async function downloadVehicleDocument(vehicleId,doc){
+    const documentId=String(doc?.id||'');
+    if(!/^[A-Za-z0-9_-]{1,120}$/.test(vehicleId)||!/^[A-Za-z0-9_-]{1,120}$/.test(documentId))throw new Error('Document invalide.');
+    if(doc.state!=='ready' || !Number.isSafeInteger(doc.size) || doc.size<=0 || Number(doc.size)>20*1024*1024)throw new Error('Document invalide ou trop volumineux.');
+    const user=auth.currentUser;
+    if(!user || user.uid!==ATELIER_ADMIN_UID)throw new Error('Reconnecte-toi à l’Atelier.');
+    const app=firebase.app(),projectId=String(app.options.projectId||'');
+    if(!/^[a-z][a-z0-9-]{4,61}[a-z0-9]$/.test(projectId))throw new Error('Configuration Firebase invalide.');
+    const token=await user.getIdToken();if(!token || auth.currentUser?.uid!==user.uid || currentPanelVehicleId!==vehicleId)throw new Error('Session ou fiche modifiée.');
+    const headers={'Authorization':'Bearer '+token};
+    const query=new URLSearchParams({action:'download',vehicleId,documentId});
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),60000);
+    let blob;
+    try{
+      const response=await fetch(`https://europe-west1-${projectId}.cloudfunctions.net/wbVehicleDocuments?${query}`,{method:'GET',headers,credentials:'omit',cache:'no-store',redirect:'error',signal:controller.signal});
+      if(!response.ok)throw new Error('Document inaccessible. Vérifie la connexion et les autorisations.');
+      blob=await boundedDocumentBlob(response,20*1024*1024);
+      if(!blob.size || blob.size!==Number(doc.size))throw new Error('Document vide ou incomplet.');
+    }finally{clearTimeout(timer);}
+    if(auth.currentUser?.uid!==user.uid || currentPanelVehicleId!==vehicleId)throw new Error('Session ou fiche modifiée.');
+    const url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=String(doc.name||'document').replace(/[\\/\r\n<>:"|?*]/g,'_').slice(0,200);a.rel='noopener';
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }
+
+  async function changeVehicleDocument(vehicleId,doc,action){
+    const documentId=String(doc?.id||'');
+    if(!/^[A-Za-z0-9_-]{1,120}$/.test(vehicleId)||!/^[A-Za-z0-9_-]{1,120}$/.test(documentId)||!['finalize','remove'].includes(action))throw new Error('Document invalide.');
+    if((action==='finalize'&&doc.state!=='uploading')||(action==='remove'&&!['uploading','ready','deleting'].includes(doc.state)))throw new Error('État du document invalide.');
+    const user=auth.currentUser;if(!user||user.uid!==ATELIER_ADMIN_UID)throw new Error('Reconnecte-toi à l’Atelier.');
+    const projectId=String(firebase.app().options.projectId||'');
+    if(!/^[a-z][a-z0-9-]{4,61}[a-z0-9]$/.test(projectId))throw new Error('Configuration Firebase invalide.');
+    const token=await user.getIdToken();if(!token||auth.currentUser?.uid!==user.uid||currentPanelVehicleId!==vehicleId)throw new Error('Session ou fiche modifiée.');
+    const query=new URLSearchParams({action,vehicleId,documentId}),controller=new AbortController(),timer=setTimeout(()=>controller.abort(),60000);
+    try{
+      const response=await fetch(`https://europe-west1-${projectId}.cloudfunctions.net/wbVehicleDocuments?${query}`,{method:'POST',headers:{Authorization:'Bearer '+token},credentials:'omit',cache:'no-store',redirect:'error',signal:controller.signal});
+      if(!response.ok)throw new Error('Action non confirmée. Actualise la liste et vérifie la connexion.');
+      const result=await response.json();
+      if(result?.state!==(action==='finalize'?'ready':'deleted'))throw new Error('Réponse incomplète. Actualise la liste avant de réessayer.');
+      return result;
+    }finally{clearTimeout(timer);}
+  }
+
+  function drawLinkedPanel(vehicle,panel,members,invites,documentSettings={vehicleLoaded:false,documentsEnabled:false}){
     if(!panel || !document.body.contains(panel)) return;
     const user=auth.currentUser;
     const admin=Boolean(user && user.uid===ATELIER_ADMIN_UID);
+    const docsKnown=documentSettings.vehicleLoaded===true;
+    const docsEnabled=docsKnown && documentSettings.documentsEnabled===true;
+    const docs=Array.isArray(documentSettings.documents)?documentSettings.documents:[];
+    const hasMore=!documentSettings.allDocuments&&docs.length>100;
+    const visibleDocs=hasMore?docs.slice(0,100):docs;
+    const docsList=documentSettings.documentsError?`<p class="wbc-pro-note" role="alert">Documents indisponibles : ${escapeHtml(documentSettings.documentsError)}</p>`:documentSettings.documentsLoaded?(docs.length?visibleDocs.map(doc=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0"><span style="overflow-wrap:anywhere">${escapeHtml(doc.name||'Document')}${doc.state==='uploading'?'<br><small>Envoi en cours ou interrompu</small>':doc.state==='deleting'?'<br><small>Suppression en cours ou interrompue</small>':''}</span><span>${doc.state==='ready'?`<button class="btn ghost wbc-pro-small" type="button" data-wbc-document="${escapeHtml(doc.id)}">Ouvrir</button>`:doc.state==='uploading'?`<button class="btn ghost wbc-pro-small" type="button" data-wbc-document-finalize="${escapeHtml(doc.id)}">Vérifier l’envoi</button>`:''}<button class="btn danger-outline wbc-pro-small" type="button" data-wbc-document-remove="${escapeHtml(doc.id)}">${doc.state==='deleting'?'Terminer la suppression':'Supprimer'}</button></span></div>`).join('')+(hasMore?'<p class="wbc-pro-note">Les 100 premiers documents sont affichés.</p><button class="btn ghost wbc-pro-small" id="wbcAllDocuments" type="button">Afficher tous les documents</button>':''):'<p class="wbc-pro-note">Aucun document ajouté.</p>'):'<p class="wbc-pro-note">Chargement des documents…</p>';
+    const documentOption=`<div class="wbc-pro-documents" style="margin:12px 0;padding:12px;border:1px solid #e3e7ee;border-radius:10px"><strong>Documents du véhicule</strong><p class="wbc-pro-note">${docsKnown?(docsEnabled?'Activés pour les membres de ce véhicule.':'Désactivés pour ce véhicule.'):'Chargement du réglage…'}</p><button class="btn ghost wbc-pro-small" id="wbcDocumentsToggle" type="button" ${docsKnown?'':'disabled'}>${docsEnabled?'Désactiver les documents':'Activer les documents'}</button><p class="wbc-pro-note">Chaque véhicule est réglé séparément. Si tu désactives l’option, les membres ne voient plus les documents et les fichiers sont conservés.</p>${docsList}</div>`;
     const people=members.filter(member=>member.status==='active' && member.role!=='atelier_admin');
     const pending=invites.filter(invite=>inviteStatus(invite)==='pending').sort((a,b)=>toMillis(b.createdAt)-toMillis(a.createdAt));
     const recentOther=invites.filter(invite=>inviteStatus(invite)!=='pending' && inviteStatus(invite)!=='used').sort((a,b)=>toMillis(b.createdAt)-toMillis(a.createdAt)).slice(0,4);
     const activeHtml=people.map(member=>`<div class="wbc-pro-access"><div class="wbc-pro-access-main"><div class="wbc-pro-phone">${escapeHtml(formatPhone(member.phone))}</div><div class="wbc-pro-meta">Accès actif${member.activatedAt?` depuis le ${escapeHtml(formatDateTime(member.activatedAt))}`:''}</div></div><div class="wbc-pro-access-actions"><span class="wbc-pro-badge ok">Actif</span><button class="btn danger-outline wbc-pro-small" data-wbc-revoke="${escapeHtml(member.id)}" type="button">Retirer cette fiche</button><button class="btn danger wbc-pro-small" data-wbc-disable-account="${escapeHtml(member.id)}" type="button">Désactiver le compte</button></div></div>`).join('');
     const pendingHtml=pending.map(invite=>`<div class="wbc-pro-access"><div class="wbc-pro-access-main"><div class="wbc-pro-phone">${escapeHtml(formatPhone(invite.phone))}</div><div class="wbc-pro-meta">Expire le ${escapeHtml(formatDateTime(invite.expiresAt))}</div></div><div class="wbc-pro-access-actions"><span class="wbc-pro-badge wait">En attente</span><button class="btn ghost wbc-pro-small" data-wbc-copy="${escapeHtml(invite.id)}" type="button">Copier</button><button class="btn danger-outline wbc-pro-small" data-wbc-cancel="${escapeHtml(invite.id)}" type="button">Annuler</button></div></div>`).join('');
     const otherHtml=recentOther.map(invite=>{const status=inviteStatus(invite);return `<div class="wbc-pro-access"><div class="wbc-pro-access-main"><div class="wbc-pro-phone">${escapeHtml(formatPhone(invite.phone))}</div><div class="wbc-pro-meta">${escapeHtml(statusLabel(status))}</div></div><div class="wbc-pro-access-actions"><span class="wbc-pro-badge ${status==='revoked'?'err':''}">${escapeHtml(statusLabel(status))}</span><button class="btn ghost wbc-pro-small" data-wbc-resend="${escapeHtml(invite.phone)}" type="button">Renvoyer</button></div></div>`}).join('');
-    panel.innerHTML=`<div class="wbc-pro-head"><div><h3>Accès WB Carnet</h3><p>Partage du carnet commun de ce véhicule</p></div><span class="wbc-pro-badge ok">Fiche liée</span></div><div class="wbc-pro-body"><div class="wbc-pro-grid"><div><span>Propriétaire transmis</span><strong>${escapeHtml(vehicle.owner || 'Non renseigné')}</strong></div><div><span>Immatriculation</span><strong>${escapeHtml(vehicle.plate || 'Non renseignée')}</strong></div></div>${admin?`<div class="wbc-pro-actions"><button class="btn wbc-pro-small" id="wbcInviteButton" type="button">Inviter un proche</button><button class="btn ghost wbc-pro-small" id="wbcSyncButton" type="button">Synchroniser les opérations</button></div><div class="wbc-pro-list">${activeHtml}${pendingHtml}${otherHtml}${!activeHtml&&!pendingHtml&&!otherHtml?'<p class="wbc-pro-note">Aucun proche n’a encore accès à cette fiche.</p>':''}</div><div class="wbc-pro-status">${people.length?`${people.length} accès actif${people.length>1?'s':''}.`:''} Les opérations WheelerBrothers sont partagées sans temps passé ni rémunération.</div>`:`<p class="wbc-pro-note">Reconnecte-toi avec le code atelier depuis l’accueil WheelerBrothers.</p><button class="btn wbc-pro-small" id="wbcReconnect" type="button">Retour à l’accueil</button><div class="wbc-pro-status"></div>`}</div>`;
+    panel.innerHTML=`<div class="wbc-pro-head"><div><h3>Accès WB Carnet</h3><p>Partage du carnet commun de ce véhicule</p></div><span class="wbc-pro-badge ok">Fiche liée</span></div><div class="wbc-pro-body"><div class="wbc-pro-grid"><div><span>Propriétaire transmis</span><strong>${escapeHtml(vehicle.owner || 'Non renseigné')}</strong></div><div><span>Immatriculation</span><strong>${escapeHtml(vehicle.plate || 'Non renseignée')}</strong></div></div>${admin?`${documentOption}<div class="wbc-pro-actions"><button class="btn wbc-pro-small" id="wbcInviteButton" type="button">Inviter un proche</button><button class="btn ghost wbc-pro-small" id="wbcSyncButton" type="button">Synchroniser les opérations</button></div><div class="wbc-pro-list">${activeHtml}${pendingHtml}${otherHtml}${!activeHtml&&!pendingHtml&&!otherHtml?'<p class="wbc-pro-note">Aucun proche n’a encore accès à cette fiche.</p>':''}</div><div class="wbc-pro-status">${people.length?`${people.length} accès actif${people.length>1?'s':''}.`:''} Les opérations WheelerBrothers sont partagées sans temps passé ni rémunération.</div>`:`<p class="wbc-pro-note">Reconnecte-toi avec le code atelier depuis l’accueil WheelerBrothers.</p><button class="btn wbc-pro-small" id="wbcReconnect" type="button">Retour à l’accueil</button><div class="wbc-pro-status"></div>`}</div>`;
+    panel.querySelector('#wbcDocumentsToggle')?.addEventListener('click',async event=>{
+      if(!docsKnown)return;
+      const enabled=!docsEnabled;
+      if(!enabled && !confirm('Désactiver les documents pour ce véhicule ? Les membres n’y auront plus accès, mais les fichiers existants seront conservés.'))return;
+      const button=event.currentTarget;button.disabled=true;
+      const status=panel.querySelector('.wbc-pro-status');
+      if(status){status.className='wbc-pro-status';status.textContent='Enregistrement du réglage…';}
+      try{
+        await WBWorkflow.raw('setVehicleDocumentsEnabled',{vehicleId:vehicle.id,enabled});
+        if(status?.isConnected){status.className='wbc-pro-status ok';status.textContent='Réglage enregistré.';}
+      }catch(error){
+        if(status?.isConnected){status.className='wbc-pro-status err';status.textContent=firebaseMessage(error);}
+        else alert(firebaseMessage(error));
+        if(button.isConnected)button.disabled=false;
+      }
+    });
+    panel.querySelector('#wbcAllDocuments')?.addEventListener('click',()=>documentSettings.loadAllDocuments?.());
+    panel.querySelectorAll('[data-wbc-document]').forEach(button=>button.addEventListener('click',async()=>{
+      const doc=docs.find(item=>item.id===button.dataset.wbcDocument);if(!doc)return;
+      button.disabled=true;const status=panel.querySelector('.wbc-pro-status');
+      if(status){status.className='wbc-pro-status';status.textContent='Ouverture du document…';}
+      try{await downloadVehicleDocument(vehicle.wbCarnet.vehicleId,doc);if(status?.isConnected){status.className='wbc-pro-status ok';status.textContent='Document téléchargé.';}}
+      catch(error){if(status?.isConnected){status.className='wbc-pro-status err';status.textContent=firebaseMessage(error);}else alert(firebaseMessage(error));}
+      finally{if(button.isConnected)button.disabled=false;}
+    }));
+    for(const action of ['finalize','remove']){
+      panel.querySelectorAll(`[data-wbc-document-${action}]`).forEach(button=>button.addEventListener('click',async()=>{
+        const doc=docs.find(item=>item.id===button.dataset[action==='finalize'?'wbcDocumentFinalize':'wbcDocumentRemove']);if(!doc)return;
+        if(action==='remove'&&!confirm(`Supprimer définitivement « ${doc.name||'ce document'} » pour ce véhicule ?`))return;
+        button.disabled=true;const status=panel.querySelector('.wbc-pro-status');
+        if(status){status.className='wbc-pro-status';status.textContent=action==='remove'?'Suppression du document…':'Vérification de l’envoi…';}
+        try{await changeVehicleDocument(vehicle.wbCarnet.vehicleId,doc,action);if(status?.isConnected){status.className='wbc-pro-status ok';status.textContent=action==='remove'?'Document supprimé.':'Envoi vérifié.';}}
+        catch(error){if(status?.isConnected){status.className='wbc-pro-status err';status.textContent=firebaseMessage(error);}else alert(firebaseMessage(error));}
+        finally{if(button.isConnected)button.disabled=false;}
+      }));
+    }
     panel.querySelector('#wbcInviteButton')?.addEventListener('click',()=>openInviteModal(vehicle));
     panel.querySelector('#wbcSyncButton')?.addEventListener('click',async event=>{const status=panel.querySelector('.wbc-pro-status');event.currentTarget.disabled=true;status.textContent='Synchronisation…';try{await syncVehicle(vehicle);status.className='wbc-pro-status ok';status.textContent='Fiche et opérations synchronisées.';}catch(error){status.className='wbc-pro-status err';status.textContent=firebaseMessage(error);}finally{event.currentTarget.disabled=false;}});
     panel.querySelector('#wbcReconnect')?.addEventListener('click',()=>{ location.href='index.html'; });

@@ -1,5 +1,11 @@
 # Historique des notices Atelier
 
+## Livraison 56.9 — documents de véhicule dans WB Carnet
+
+- Ajoute une option activable par véhicule dans la fiche liée à WB Carnet ; les documents sont gérés par un serveur authentifié.
+- Conserve la simplification des brouillons de la v56.8, le nettoyage suivi et les rapports existants. Serveur et règles adaptés nécessaires.
+
+
 ## Livraison 56.8 — simplification des rapports et de la création IA
 
 - Retire l’onglet des brouillons, l’import/export et la reprise des préparations IA ; une interruption peut imposer de recommencer et une analyse lancée peut être facturée.
