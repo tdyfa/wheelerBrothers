@@ -1,5 +1,11 @@
 # Historique des notices Atelier
 
+## Livraison 56.6.8 — reprise HTTP 400 et transfert sans analyse
+
+- Après une erreur Storage ambiguë HTTP 400, vérifie si le fichier a été reçu avant une nouvelle tentative au maximum, sans écrasement incertain.
+- Ajoute une action explicite pour transférer les fichiers sans lancer d’analyse OpenAI, notamment pour tester la connexion.
+- Correctif basé sur Atelier 56.6.7 ; la suppression suivie préparée en 56.6.6 reste en attente d'une livraison cumulée ultérieure.
+
 ## Livraison 56.6.7 — correctif de transfert IA
 
 - Réessais bornés de transferts Storage et vérification de l'intégrité avant réutilisation d'une photo reçue ; distinction entre l'envoi et la récupération du lien.

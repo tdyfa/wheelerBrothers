@@ -15,6 +15,16 @@
     return null;
   }
   function safeCode(error){const c=String(error?.code||'');return /^storage\/[a-z0-9-]+$/.test(c)?c:'storage/unknown';}
+  // Les SDK Web n'exposent pas toujours le corps HTTP. Si une réponse JSON est
+  // disponible, ne retenir qu'un code symbolique connu, jamais son message.
+  function safeServerReason(error){
+    const raw=error?.serverResponse;
+    if(typeof raw!=='string'||raw.length>65536)return null;
+    try{
+      const parsed=JSON.parse(raw),value=parsed?.error?.status;
+      return ['INVALID_ARGUMENT','FAILED_PRECONDITION','OUT_OF_RANGE','PERMISSION_DENIED','UNAUTHENTICATED','RESOURCE_EXHAUSTED'].includes(value)?value:null;
+    }catch(_){return null;}
+  }
   function retryable(error){
     const code=safeCode(error);
     if(['storage/unauthorized','storage/unauthenticated','storage/canceled','storage/object-not-found','storage/invalid-checksum','storage/quota-exceeded'].includes(code))return false;
@@ -22,8 +32,8 @@
     return ['storage/unknown','storage/retry-limit-exceeded','storage/network-request-failed','storage/network-error'].includes(code);
   }
   function safeError(error,context){
-    const code=safeCode(error),http=httpStatus(error);
-    const e=new Error(context+' ('+code+(http?' · HTTP '+http:'')+'). Aucun contenu de réponse serveur n’est affiché.');
+    const code=safeCode(error),http=httpStatus(error),reason=safeServerReason(error);
+    const e=new Error(context+' ('+code+(http?' · HTTP '+http:'')+(reason?' · '+reason:'')+'). Aucun contenu de réponse serveur n’est affiché.');
     e.code=code;if(http)e.httpStatus=http;return e;
   }
   function wait(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
@@ -60,14 +70,19 @@
         const task=ref.put(blob,metadata);task.on('state_changed',onProgress||(()=>{}));await task;
         return {reused:false};
       }catch(e){
-        if(!retryable(e))throw safeError(e,'Transfert Storage interrompu');
+        // storage/unknown + HTTP 400 est ambigu. Le client a constaté que les
+        // mêmes photos peuvent réussir à un autre essai : au plus UNE nouvelle
+        // session, sans écraser un objet existant. Un motif serveur explicite
+        // de validation est permanent tant qu'il n'est pas compris.
+        const ambiguous400=safeCode(e)==='storage/unknown'&&httpStatus(e)===400&&!safeServerReason(e);
+        if(!retryable(e)&&!ambiguous400)throw safeError(e,'Transfert Storage interrompu');
         // Après un résultat incertain, ne renvoyer que si Storage confirme 404.
         if(await existsAndMatches(ref,blob,onRetry))return {reused:true};
-        if(i===LIMIT-1)throw safeError(e,'Transfert Storage interrompu après vérification');
+        if(i===LIMIT-1||(ambiguous400&&i>=1))throw safeError(e,'Transfert Storage interrompu après vérification');
         onRetry?.(i+1,LIMIT-1);await wait(700*2**i+Math.floor(Math.random()*300));
       }
     }
   }
   async function url(ref,onRetry){try{return await retryRead(()=>ref.getDownloadURL(),'Impossible de récupérer le lien de la photo',onRetry);}catch(e){throw safeError(e,'Impossible de récupérer le lien de la photo');}}
-  global.WBAITransfer={put,url,existsAndMatches,httpStatus,retryable,safeError,hash};
+  global.WBAITransfer={put,url,existsAndMatches,httpStatus,retryable,safeError,safeServerReason,hash};
 })(typeof window!=='undefined'?window:globalThis);

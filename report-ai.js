@@ -41,7 +41,7 @@
       ${checks.map((cp,i)=>`<label class="wb-ai-check"><input type="checkbox" id="aiCp${i}"><span>${esc(cp.label)}</span></label>`).join('')}
       <label for="aiClosing">Recommandations / prochaine révision</label><textarea id="aiClosing" maxlength="2000" placeholder="Reprendre uniquement les recommandations et échéances que tu confirmes."></textarea></details>
       <label class="wb-ai-check"><input type="checkbox" id="aiConsent"><span>J’autorise l’envoi de ces photos, factures PDF et notes à OpenAI pour préparer ce rapport. Plusieurs appels API facturables sont nécessaires (un par lot, puis une synthèse globale textuelle, sans renvoyer les photos) lorsque je cliquerai sur « Préparer le rapport ».</span></label>
-      <div class="wb-ai-actions"><button type="button" class="btn primary" id="aiGenerate">Préparer le rapport</button></div>
+      <div class="wb-ai-actions"><button type="button" class="btn primary" id="aiGenerate">Préparer le rapport</button><button type="button" class="btn ghost" id="aiUploadOnly">Transférer les fichiers sans analyse IA</button></div>
     </section>
     <div id="aiStatus" class="wb-ai-status" role="status" aria-live="polite"></div>
     <div class="wb-ai-actions" id="aiRetryArea" hidden><button class="btn" type="button" id="aiRetry">Réessayer (nouvel appel API)</button><button class="btn ghost" type="button" id="aiRefresh">Vérifier le résultat existant</button></div>
@@ -92,7 +92,7 @@
   function forget(){try{localStorage.removeItem(KEY);}catch(e){}$('aiResume').hidden=true;}
   function setBusy(value){
     busy=value;
-    ['aiClose','aiGenerate','aiFiles','aiPdfFiles','aiVerify','aiRetry','aiRefresh','aiResumeBtn','aiForget','aiDiscard','aiApply','aiVehicleSelect','aiReloadVehicles'].forEach(k=>{$(k).disabled=value;});
+    ['aiClose','aiGenerate','aiUploadOnly','aiFiles','aiPdfFiles','aiVerify','aiRetry','aiRefresh','aiResumeBtn','aiForget','aiDiscard','aiApply','aiVehicleSelect','aiReloadVehicles'].forEach(k=>{$(k).disabled=value;});
     $('aiInput').querySelectorAll('input,textarea').forEach(el=>el.disabled=value);
     $('aiReview').querySelectorAll('input,textarea,select').forEach(el=>el.disabled=value);
     $('aiReview').querySelectorAll('.wb-ai-photo-move').forEach(el=>el.disabled=value||el.dataset.boundary==='true');
@@ -659,7 +659,7 @@
     return result;
     }finally{progress?.close();}
   }
-  async function generate(retry=false){
+  async function generate(retry=false, uploadOnly=false){
     if(busy)return;
     if(!retry && !$('aiPlate').reportValidity())return;
     if(!retry && ((jobId&&requestInput)||(remembered()?.jobId&&!jobId&&!remembered()?.uploadPending))){status('Une préparation IA existe déjà. Reprends-la ou abandonne-la avant un nouvel envoi.','error');return;}
@@ -669,8 +669,11 @@
     if(!retry && remembered()?.uploadPending && remembered()?.docManifest?.length && documents.length!==remembered().docManifest.length){
       status(`Transfert interrompu : ${documents.length} / ${remembered().docManifest.length} factures PDF retrouvées. Resélectionne les factures manquantes avant de continuer.`,'error');return;
     }
-    if(!retry && (!assets.length || $('aiNotes').value.trim().length<10 || !$('aiConsent').checked)){
-      status('Ajoute au moins une photo, décris les travaux et confirme l’envoi à OpenAI.','error');return;
+    if(!retry && (!assets.length || (!uploadOnly && ($('aiNotes').value.trim().length<10 || !$('aiConsent').checked)))){
+      status(uploadOnly?'Ajoute au moins une photo avant l’envoi.':'Ajoute au moins une photo, décris les travaux et confirme l’envoi à OpenAI.','error');return;
+    }
+    if(!retry && uploadOnly && rejectedFiles.size){
+      status(rejectedFiles.size+' photo(s) ont été refusées. Corrige leur sélection ou réessaie avant de transférer les fichiers sans analyse IA.','error');return;
     }
     if(!retry && rejectedFiles.size && !$('aiPartialConfirm').checked){
       status(rejectedFiles.size+' photo(s) ont été refusées. Ajoute-les de nouveau ou confirme explicitement une analyse partielle.','error');return;
@@ -679,6 +682,7 @@
     setBusy(true);
     try{
       if(!retry){
+        if(!uploadOnly){
         status('Vérification des capacités du serveur IA… Aucun appel OpenAI.');
         let caps;
         try { caps=await call('capabilities'); }
@@ -693,7 +697,9 @@
           const details='Version reçue : '+printable(actual.version)+' (attendue : 56.5) ; mode : '+printable(actual.mode)+' (attendu : batches) ; globalSynthesis : '+printable(actual.globalSynthesis)+' (attendu : true).';
           throw new Error('Diagnostic IA — réponse capabilities incompatible. '+details+' Fonction appelée : '+String(CFG.functionName)+' ; région : '+String(CFG.region)+'. Aucun appel OpenAI effectué. Transmets ce message pour identifier la différence, sans redéployer à l’aveugle.');
         }
+        }
         if(!jobId)jobId=id('rai',16);remember();await upload();
+        if(uploadOnly){status('Les fichiers sélectionnés et acceptés ont été transférés. Aucune analyse OpenAI n’a été lancée. Tu peux préparer le rapport plus tard.');return;}
         requestInput={jobId,assets:assets.map(a=>({id:a.id,name:a.name,ext:a.ext})),documents:documents.map(d=>({id:d.id,name:d.name,pages:d.pages.map(p=>({id:p.id}))})),notes:$('aiNotes').value.trim(),meta:metaFromForm(),consent:true,mode:'batches'};
         remember();
       }
@@ -708,7 +714,7 @@
     if(busy)return;const stored=remembered();if(stored?.uploadPending){
       if(!jobId)jobId=stored.jobId;
       const remainingPhotos=Math.max(0,(stored.manifest?.length||0)-assets.length),remainingDocs=Math.max(0,(stored.docManifest?.length||0)-documents.length);
-      status(remainingPhotos||remainingDocs?`Transfert non terminé. Resélectionne les ${remainingPhotos} photos et ${remainingDocs} facture(s) PDF manquantes, puis clique sur « Préparer le rapport ». Les fichiers déjà reçus seront vérifiés et réutilisés.`:'Transfert non terminé. Clique sur « Préparer le rapport » pour vérifier et réessayer les fichiers manquants. Aucun appel IA n’est effectué pendant le transfert.');
+      status(remainingPhotos||remainingDocs?`Pour reprendre ce brouillon, resélectionne les ${remainingPhotos} photos et ${remainingDocs} facture(s) PDF manquantes. Les fichiers déjà reçus seront vérifiés et réutilisés. Pour tester sans analyse IA, clique sur « Transférer les fichiers sans analyse IA ».`:'Pour reprendre ce brouillon et vérifier les fichiers sans analyse IA, clique sur « Transférer les fichiers sans analyse IA ».');
       $('aiInput').hidden=false;$('aiReview').hidden=true;$('aiGenerate').disabled=false;return;
     }
     if(!jobId && stored?.jobId)jobId=stored.jobId;if(!jobId)return;
@@ -806,7 +812,7 @@
     try{await open();if(!jobId)jobId=target;await resume(false);}catch(error){jobId=previous;throw error;}
   }
   window.WBReportAI={open,listDrafts,openDraft};window.dispatchEvent(new Event('wb-ai-ready'));
-  $('aiGenerate').onclick=()=>generate(false);$('aiRetry').onclick=()=>generate(true);$('aiRefresh').onclick=()=>{const paid=$('aiRefresh').textContent.includes('Continuer les lots');if(paid&&!confirm('Continuer les lots restants ? Cela peut déclencher de nouveaux appels OpenAI facturables.'))return;void resume(paid);};
+  $('aiGenerate').onclick=()=>generate(false);$('aiUploadOnly').onclick=()=>generate(false,true);$('aiRetry').onclick=()=>generate(true);$('aiRefresh').onclick=()=>{const paid=$('aiRefresh').textContent.includes('Continuer les lots');if(paid&&!confirm('Continuer les lots restants ? Cela peut déclencher de nouveaux appels OpenAI facturables.'))return;void resume(paid);};
   $('aiResumeBtn').onclick=()=>{void resume(false);};$('aiForget').onclick=abandon;$('aiDiscard').onclick=abandon;
   $('aiClose').onclick=()=>{if(!busy)dialog.close();};dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault();});
   $('aiApprove').onchange=updateProblems;$('aiSummary').oninput=e=>{if(plan){plan.summary=e.target.value;resetApproval();}};
