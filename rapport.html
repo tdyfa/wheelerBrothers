@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=56.6.2">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.6.2">
+<link rel="manifest" href="manifest.json?v=56.6.3">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.6.3">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -16,17 +16,18 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
-<script src="firebase-config.js?v=56.6.2"></script>
-<script src="html2pdf.bundle.min.js?v=56.6.2"></script>
-<script src="report-images.js?v=56.6.2"></script>
-<script src="wb-progress.js?v=56.6.2"></script>
-<script src="vehicle-info.js?v=56.6.2"></script>
-<script src="wb-workflow.js?v=56.6.2"></script>
-<link rel="stylesheet" href="wb-workflow.css?v=56.6.2">
-<script src="vehicle-input.js?v=56.6.2&build=2"></script>
-<link rel="stylesheet" href="report-ai.css?v=56.6.2">
-<script src="report-ai-config.js?v=56.6.2"></script>
-<script src="report-ai-core.js?v=56.6.2"></script>
+<script src="firebase-config.js?v=56.6.3"></script>
+<script src="html2pdf.bundle.min.js?v=56.6.3"></script>
+<script src="report-images.js?v=56.6.3"></script>
+<script src="wb-pdf-writer.js?v=56.6.3"></script>
+<script src="wb-progress.js?v=56.6.3"></script>
+<script src="vehicle-info.js?v=56.6.3"></script>
+<script src="wb-workflow.js?v=56.6.3"></script>
+<link rel="stylesheet" href="wb-workflow.css?v=56.6.3">
+<script src="vehicle-input.js?v=56.6.3&build=2"></script>
+<link rel="stylesheet" href="report-ai.css?v=56.6.3">
+<script src="report-ai-config.js?v=56.6.3"></script>
+<script src="report-ai-core.js?v=56.6.3"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -506,12 +507,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=56.6.2" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=56.6.3" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 56.6.2</span>
+          <span class="sub">Version 56.6.3</span>
         </div>
       </div>
       <div class="app-bar-notices">
@@ -781,7 +782,7 @@ function normChecklist(){
 const state = {
   title: "RAPPORT D'INTERVENTION",
   date: "", plate:"", brand:"", model:"", engine:"", reg:"", km:"",
-  summary:"", overview:null, products:null, productsPhotos:[], logo:DEFAULT_LOGO,
+  summary:"", overview:null, products:null, productsPhotos:[], photoOriginals:{}, logo:DEFAULT_LOGO,
   genDate:"",
   labelR:null, labelV:null,
   baieOn:false, baieTitle:"", baieAvant:null, baieApres:null,
@@ -1108,7 +1109,7 @@ function newReportId(){
 }
 
 function blankState(){
-  return {title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,productsPhotos:[],logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,checkpoints:makeDefaultCheckpoints(),invoicesOn:false,invoices:[],closing:"",sections:[]};
+  return {title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,productsPhotos:[],photoOriginals:{},logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,checkpoints:makeDefaultCheckpoints(),invoicesOn:false,invoices:[],closing:"",sections:[]};
 }
 
 /* ---------- migration : bascule vers Storage toute image encore en base64
@@ -1569,12 +1570,13 @@ function buildSections(){
           btn.textContent='⏳ Traitement…';
           for(const f of files){
             try{
-              const data=await processImage(f);
-              const item = {id:nid(), src:data, cap:''};
-              sec[arrKey].push(item);
-              uploadAndSwapArrayItem(item, data, arrKey);
+              const reportId=currentReportId, itemId=nid();
+              if(!reportId) throw new Error('Ouvre d’abord un rapport.');
+              const entry=await uploadProductFile(f,reportId,itemId);
+              if(currentReportId!==reportId || !state.sections.includes(sec)) throw new Error('Le rapport ou la prestation a changé pendant le transfert.');
+              sec[arrKey].push({id:itemId, ...entry, cap:''});
             }
-            catch(e){ console.error(e); }
+            catch(e){ console.error(e); alert('Photo non ajoutée : '+(e.message||e)); }
           }
           btn.textContent=old; fileInput.value='';
           buildSections(); renderReport(); save();
@@ -1594,12 +1596,13 @@ function buildSections(){
         addBtn.textContent='⏳ Traitement…';
         for(const f of files){
           try{
-            const data=await processImage(f);
-            const item = {id:nid(), src:data, cap:''};
-            sec.photos.push(item);
-            uploadAndSwapArrayItem(item, data, 'photos');
+            const reportId=currentReportId, itemId=nid();
+            if(!reportId) throw new Error('Ouvre d’abord un rapport.');
+            const entry=await uploadProductFile(f,reportId,itemId);
+            if(currentReportId!==reportId || !state.sections.includes(sec)) throw new Error('Le rapport ou la prestation a changé pendant le transfert.');
+            sec.photos.push({id:itemId, ...entry, cap:''});
           }
-          catch(e){ console.error(e); }
+          catch(e){ console.error(e); alert('Photo non ajoutée : '+(e.message||e)); }
         }
         addBtn.textContent=old; fileInput.value='';
         buildSections(); renderReport(); save();
@@ -1800,14 +1803,24 @@ function renderReport(){
 }
 
 /* ---------- file inputs: overview + logo ---------- */
-document.getElementById('f_overview').addEventListener('change', async (e)=>{
-  if(!e.target.files[0]) return;
-  const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
-  state.overview = dataUrl;
-  renderReport(); save(); e.target.value='';
-  uploadAndSwapField('overview', dataUrl);
-});
-document.getElementById('clearOverview').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.overview); state.overview=null; renderReport(); save();});
+async function uploadSingleReportPhoto(e,key,onCommit){
+  const file=e.target.files[0]; e.target.value=''; if(!file)return;
+  const reportId=currentReportId, previous=state[key];
+  if(!reportId){alert('Ouvre d’abord un rapport pour ajouter une photo.');return;}
+  e.target.disabled=true;
+  try{
+    const entry=await uploadProductFile(file,reportId,key);
+    if(currentReportId!==reportId||state[key]!==previous)throw new Error('Le rapport ou la photo a changé pendant le transfert.');
+    state[key]=entry.src;
+    state.photoOriginals=state.photoOriginals||{};
+    if(entry.originalPath)state.photoOriginals[key]=entry.originalPath;else delete state.photoOriginals[key];
+    if(onCommit)onCommit();
+    renderReport();save();
+  }catch(error){console.error(error);alert('Photo non ajoutée : '+(error.message||error));}
+  finally{e.target.disabled=false;}
+}
+document.getElementById('f_overview').addEventListener('change',e=>uploadSingleReportPhoto(e,'overview'));
+document.getElementById('clearOverview').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.overview); if(state.photoOriginals)delete state.photoOriginals.overview; state.overview=null; renderReport(); save();});
 // Legacy v56.3 reports stored a single photo in `products`. Keep it readable
 // and convert it to the multi-photo gallery only when the user edits that gallery.
 function productPhotosOf(report=state){
@@ -1849,29 +1862,32 @@ async function uploadProductFile(file,reportId,itemId){
   if(!direct&&!heic)throw new Error('Format non pris en charge : JPEG, PNG, WebP ou HEIC/HEIF uniquement.');
   if(!file.size)throw new Error('Le fichier est vide.');
   const root=`spaces/${ensureSharedCode()}/reports/${reportId}/`;
+  itemId = `${itemId}-${Date.now()}-${Math.random().toString(36).slice(2,11)}`;
   if(heic){
     // Les originaux HEIC restent conservés. Une copie PNG sans perte visuelle
     // est utilisée pour l'affichage dans les PDF, sans encodage JPEG.
     const originalRef=storage.ref().child(root+`products-original-${itemId}.${ext==='heif'?'heif':'heic'}`);
     await originalRef.put(file,{contentType:mime||'application/octet-stream'});
-    let bitmap,url;
+    let bitmap,url,canvas;
     try{
+      if(file.size>20*1024*1024)throw new Error('Original HEIC conservé dans Storage, mais non ajouté : fichier supérieur à 20 Mio pour la conversion sur cet appareil.');
       try{bitmap=await createImageBitmap(file,{imageOrientation:'from-image'});}
       catch{
         url=URL.createObjectURL(file);
         bitmap=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('Ce navigateur ne décode pas HEIC. Exporte un PNG sans perte.'));img.src=url;});
       }
       const w=bitmap.width||bitmap.naturalWidth,h=bitmap.height||bitmap.naturalHeight;
-      if(!w||!h||w*h>60000000)throw new Error('Dimensions trop importantes pour la conversion PNG sans perte.');
-      const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+      if(!w||!h||w*h>12500000)throw new Error('Original HEIC conservé dans Storage, mais non ajouté : conversion limitée à 12,5 mégapixels.');
+      canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
       const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Conversion PNG impossible sur cet appareil.');
       ctx.drawImage(bitmap,0,0);
+      if(bitmap.close)bitmap.close(); else bitmap.src=''; bitmap=null;
       const png=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error('Conversion PNG impossible.')),'image/png'));
       canvas.width=canvas.height=1;
       const ref=storage.ref().child(root+`products-${itemId}.png`);
       await ref.put(png,{contentType:'image/png'});
-      return {src:await ref.getDownloadURL(),originalSrc:await originalRef.getDownloadURL()};
-    }finally{if(bitmap?.close)bitmap.close();if(url)URL.revokeObjectURL(url);}
+      return {src:await ref.getDownloadURL(),originalPath:originalRef.fullPath};
+    }finally{if(bitmap?.close)bitmap.close();else if(bitmap)bitmap.src='';if(canvas)canvas.width=canvas.height=1;if(url)URL.revokeObjectURL(url);}
   }
   const fileExt=(mime==='image/png'||ext==='png')?'png':(mime==='image/webp'||ext==='webp')?'webp':'jpg';
   const ref=storage.ref().child(root+`products-${itemId}.${fileExt}`);
@@ -1892,7 +1908,6 @@ document.getElementById('f_products').addEventListener('change',async e=>{
         if(reportId!==currentReportId){
           // L'utilisateur a changé de rapport durant le transfert : ne jamais
           // rattacher la photo au mauvais document.
-          try{await storage.refFromURL(entry.src).delete();}catch{}
           errors.push(file.name+' : le rapport a changé pendant le transfert.');continue;
         }
         ensureProductsArray().push({id:itemId,...entry,cap:''});
@@ -1910,14 +1925,8 @@ document.getElementById('clearProducts').addEventListener('click',e=>{
   productPhotosOf().forEach(p=>retainReportAsset(p.src));state.products=null;state.productsPhotos=[];
   buildProductsPhotos();renderReport();save();
 });
-document.getElementById('f_logo').addEventListener('change', async (e)=>{
-  if(!e.target.files[0]) return;
-  const dataUrl = await processImage(e.target.files[0], 700, 0.92);
-  state.logo = dataUrl;
-  renderReport(); save(); e.target.value='';
-  uploadAndSwapField('logo', dataUrl);
-});
-document.getElementById('resetLogo').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.logo); state.logo=DEFAULT_LOGO; renderReport(); save();});
+document.getElementById('f_logo').addEventListener('change',e=>uploadSingleReportPhoto(e,'logo'));
+document.getElementById('resetLogo').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.logo); if(state.photoOriginals)delete state.photoOriginals.logo; state.logo=DEFAULT_LOGO; renderReport(); save();});
 
 /* ---------- baie moteur ---------- */
 function buildBaie(){
@@ -1943,42 +1952,16 @@ function buildChecklist(){
     });
   });
 }
-document.getElementById('f_baieAvant').addEventListener('change', async (e)=>{
-  if(!e.target.files[0]) return;
-  const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
-  state.baieAvant = dataUrl;
-  if(!state.baieOn){ state.baieOn=true; buildBaie(); }
-  renderReport(); save(); e.target.value='';
-  uploadAndSwapField('baieAvant', dataUrl);
-});
-document.getElementById('clearBaieAvant').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.baieAvant); state.baieAvant=null; renderReport(); save();});
-document.getElementById('f_baieApres').addEventListener('change', async (e)=>{
-  if(!e.target.files[0]) return;
-  const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
-  state.baieApres = dataUrl;
-  if(!state.baieOn){ state.baieOn=true; buildBaie(); }
-  renderReport(); save(); e.target.value='';
-  uploadAndSwapField('baieApres', dataUrl);
-});
-document.getElementById('clearBaieApres').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.baieApres); state.baieApres=null; renderReport(); save();});
+document.getElementById('f_baieAvant').addEventListener('change',e=>uploadSingleReportPhoto(e,'baieAvant',()=>{if(!state.baieOn){state.baieOn=true;buildBaie();}}));
+document.getElementById('clearBaieAvant').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.baieAvant); if(state.photoOriginals)delete state.photoOriginals.baieAvant; state.baieAvant=null; renderReport(); save();});
+document.getElementById('f_baieApres').addEventListener('change',e=>uploadSingleReportPhoto(e,'baieApres',()=>{if(!state.baieOn){state.baieOn=true;buildBaie();}}));
+document.getElementById('clearBaieApres').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.baieApres); if(state.photoOriginals)delete state.photoOriginals.baieApres; state.baieApres=null; renderReport(); save();});
 
 /* ---------- étiquette ---------- */
-document.getElementById('f_labelR').addEventListener('change', async (e)=>{
-  if(!e.target.files[0]) return;
-  const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
-  state.labelR = dataUrl;
-  renderReport(); save(); e.target.value='';
-  uploadAndSwapField('labelR', dataUrl);
-});
-document.getElementById('clearLabelR').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.labelR); state.labelR=null; renderReport(); save();});
-document.getElementById('f_labelV').addEventListener('change', async (e)=>{
-  if(!e.target.files[0]) return;
-  const dataUrl = await processImage(e.target.files[0], 1900, 0.85);
-  state.labelV = dataUrl;
-  renderReport(); save(); e.target.value='';
-  uploadAndSwapField('labelV', dataUrl);
-});
-document.getElementById('clearLabelV').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.labelV); state.labelV=null; renderReport(); save();});
+document.getElementById('f_labelR').addEventListener('change',e=>uploadSingleReportPhoto(e,'labelR'));
+document.getElementById('clearLabelR').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.labelR); if(state.photoOriginals)delete state.photoOriginals.labelR; state.labelR=null; renderReport(); save();});
+document.getElementById('f_labelV').addEventListener('change',e=>uploadSingleReportPhoto(e,'labelV'));
+document.getElementById('clearLabelV').addEventListener('click',(e)=>{e.preventDefault(); retainReportAsset(state.labelV); if(state.photoOriginals)delete state.photoOriginals.labelV; state.labelV=null; renderReport(); save();});
 
 /* ---------- invoices ---------- */
 function buildInvoices(){
@@ -2022,10 +2005,11 @@ document.getElementById('f_invoice').addEventListener('change', async (e)=>{
         });
         ok++;
       } else {
-        const data = await processImage(f,2200,0.9);
-        const item = {id:nid(), kind:'img', src:data};
-        state.invoices.push(item);
-        uploadAndSwapArrayItem(item, data, 'invoices');
+        const reportId=currentReportId, itemId=nid();
+        if(!reportId) throw new Error('Ouvre d’abord un rapport.');
+        const entry=await uploadProductFile(f,reportId,itemId);
+        if(currentReportId!==reportId) throw new Error('Le rapport a changé pendant le transfert.');
+        state.invoices.push({id:itemId, kind:'img', ...entry});
         ok++;
       }
     }
@@ -2325,51 +2309,6 @@ function reportPdfFilename(){
   return `rapport_${plate}_${date}.pdf`;
 }
 
-function pdfBase64Bytes(dataUrl){
-  const binary=atob(String(dataUrl).split(',')[1]||'');
-  const bytes=new Uint8Array(binary.length);
-  for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
-  return bytes;
-}
-
-/* Même principe que l'export historique : chaque page est d'abord dessinée
-   dans un canvas, puis les JPEG sont assemblés dans un vrai fichier PDF.
-   Aucun aperçu d'impression ni capture html2canvas n'est utilisé. */
-function buildReportImagePdf(jpegPages,pageWidthPt=595.28,pageHeightPt=841.89){
-  const encoder=new TextEncoder();
-  const chunks=[];
-  const offsets=[0];
-  let length=0;
-  const pushBytes=bytes=>{chunks.push(bytes);length+=bytes.length;};
-  const pushText=text=>pushBytes(encoder.encode(text));
-  const pageCount=jpegPages.length;
-  const objectCount=2+pageCount*3;
-  pushText('%PDF-1.4\n%âãÏÓ\n');
-  const writeObject=(id,parts)=>{
-    offsets[id]=length;
-    pushText(`${id} 0 obj\n`);parts();pushText('\nendobj\n');
-  };
-  writeObject(1,()=>pushText('<< /Type /Catalog /Pages 2 0 R >>'));
-  const pageIds=jpegPages.map((_,i)=>3+i*3);
-  writeObject(2,()=>pushText(`<< /Type /Pages /Count ${pageCount} /Kids [${pageIds.map(id=>`${id} 0 R`).join(' ')}] >>`));
-  jpegPages.forEach((page,i)=>{
-    const pageId=3+i*3,imageId=pageId+1,contentId=pageId+2;
-    writeObject(pageId,()=>pushText(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidthPt} ${pageHeightPt}] /Resources << /XObject << /Im${i} ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`));
-    const imageBytes=pdfBase64Bytes(page.dataUrl);
-    writeObject(imageId,()=>{
-      pushText(`<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>\nstream\n`);
-      pushBytes(imageBytes);pushText('\nendstream');
-    });
-    const stream=`q\n${pageWidthPt} 0 0 ${pageHeightPt} 0 0 cm\n/Im${i} Do\nQ`;
-    writeObject(contentId,()=>pushText(`<< /Length ${encoder.encode(stream).length} >>\nstream\n${stream}\nendstream`));
-  });
-  const xrefOffset=length;
-  pushText(`xref\n0 ${objectCount+1}\n0000000000 65535 f \n`);
-  for(let i=1;i<=objectCount;i++) pushText(`${String(offsets[i]).padStart(10,'0')} 00000 n \n`);
-  pushText(`trailer\n<< /Size ${objectCount+1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
-  return new Blob(chunks,{type:'application/pdf'});
-}
-
 const REPORT_PDF_W=1240;
 const REPORT_PDF_H=1754;
 const REPORT_PDF_MARGIN=88;
@@ -2412,6 +2351,12 @@ function pdfDrawContain(ctx,img,x,y,w,h,{border=false,background='#fff'}={}){
   if(!img||!img.width||!img.height)return;
   const ratio=Math.min(w/img.width,h/img.height);
   const dw=img.width*ratio,dh=img.height*ratio;
+  if(ctx.wbPdfOverlays){
+    const src=ctx.wbPdfSources.get(img);
+    if(!src)throw new Error('Source de photo introuvable pour le PDF');
+    ctx.wbPdfOverlays.push({src,x:x+(w-dw)/2,y:y+(h-dh)/2,w:dw,h:dh});
+    return;
+  }
   ctx.drawImage(img,x+(w-dw)/2,y+(h-dh)/2,dw,dh);
 }
 
@@ -2429,6 +2374,8 @@ async function renderReportPdfPages(options={}){
   const s=state;
   const pages=[];
   const previewMode=!!options.previewMode;
+  const hybridPdf=!!options.hybridPdf;
+  const sourcesByImage=new WeakMap();
   const pixelScale=previewMode ? .48 : 1;
   const imageCache=options.imageCache||new Map();
   // Count unique image sources used by the report, including logo.
@@ -2447,8 +2394,11 @@ async function renderReportPdfPages(options={}){
   const previewLimit=7;
   const logoSrc=s.logo||DEFAULT_LOGO;
   const loadReportPdfImage=async(src,cache)=>{
-    if(!previewMode){const image=await WBReportImages.load(src,cache);markLoaded(src);return image;}
-    const result=await WBReportImages.loadPreview(src,cache);
+    // Marquer l'image comme récemment utilisée : une paire gauche/droite
+    // doit rester disponible jusqu'à son dessin, même si le cache est plein.
+    if(cache.has(src)){const cached=cache.get(src);cache.delete(src);cache.set(src,cached);}
+    const result=await ((previewMode||hybridPdf) ? WBReportImages.loadPreview(src,cache) : WBReportImages.load(src,cache));
+    if(result && src)sourcesByImage.set(result,src);
     if(cache.size>previewLimit){
       for(const [key,promise] of cache){
         if(cache.size<=previewLimit)break;
@@ -2471,7 +2421,9 @@ async function renderReportPdfPages(options={}){
     ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
     if(pixelScale!==1)ctx.setTransform(pixelScale,0,0,pixelScale,0,0);
     ctx.textBaseline='top';ctx.fillStyle='#101216';
-    return {canvas,ctx,y:REPORT_PDF_MARGIN};
+    const overlays=[];
+    if(hybridPdf){ctx.wbPdfOverlays=overlays;ctx.wbPdfSources=sourcesByImage;}
+    return {canvas,ctx,y:REPORT_PDF_MARGIN,overlays};
   };
   const drawWatermark=page=>{
     if(!logo)return;
@@ -2485,6 +2437,7 @@ async function renderReportPdfPages(options={}){
   const finish=page=>{
     if(options.shouldAbort?.())throw Object.assign(new Error('Aperçu remplacé'),{code:'preview-cancelled'});
     const item={dataUrl:page.canvas.toDataURL('image/jpeg',previewMode?.78:.94),width:page.canvas.width,height:page.canvas.height};
+    if(hybridPdf)item.overlays=page.overlays;
     // En aperçu : ne pas accumuler les JPEG de toutes les pages dans deux tableaux.
     if(options.onPage)options.onPage(item,pageIndex);
     if(options.collectPages!==false)pages.push(item);
@@ -2753,19 +2706,25 @@ async function renderReportPdfPages(options={}){
   return pages;
 }
 
+let reportPdfGenerating=false;
 async function generatePdf(){
+  if(reportPdfGenerating)return;
   if(!currentReportId || document.body.dataset.reportView!=='editor')return;
   if(!requireReportSummary()) return;
+  reportPdfGenerating=true;
   const btn=document.getElementById('btnPdf');
   const original=btn.textContent;
   btn.disabled=true;btn.textContent='⏳ Génération…';
   const progress=window.WBProgress?.start('Génération du PDF Atelier');
+  const imageCache=new Map();
   try{
+    clearTimeout(reportPreviewTimer);reportPreviewRevision++;
+    await previewRenderQueue.catch(()=>{});
     save();flushPendingSave();
-    const pages=await renderReportPdfPages({imageCache:new Map(),onProgress:(...args)=>progress?.update(...args),onPageProgress:n=>progress?.update('Composition des pages A4',null,null,`${n} pages préparées`)});
+    const pages=await renderReportPdfPages({hybridPdf:true,imageCache,onProgress:(...args)=>progress?.update(...args),onPageProgress:n=>progress?.update('Composition des pages A4',null,null,`${n} pages préparées`)});
     if(!pages.length)throw new Error('Aucune page générée');
     progress?.update('Assemblage du fichier PDF',0,1,`${pages.length} pages`);
-    const blob=buildReportImagePdf(pages);
+    const blob=await WBPDFWriter.build(pages,{sourceAsBlob:pdfSourceAsBlob});
     progress?.update('Assemblage du fichier PDF',1,1,`${pages.length} pages`);
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
@@ -2776,6 +2735,8 @@ async function generatePdf(){
     console.error('Génération du PDF impossible',e);
     alert('Impossible de générer le PDF.\n\n'+WBReportImages.message(e));
   }finally{
+    for(const promise of imageCache.values())Promise.resolve(promise).then(img=>img?.close?.()).catch(()=>{});
+    imageCache.clear();reportPdfGenerating=false;
     progress?.close();btn.disabled=false;btn.textContent=original;
   }
 }
@@ -2814,7 +2775,7 @@ document.getElementById('importFile').addEventListener('change',(e)=>{
 document.getElementById('btnReset').addEventListener('click', ()=>{
   if(!confirm('Tout effacer et repartir de zéro ?')) return;
   // v56: keep uploaded files; a validated snapshot may still reference them.
-  Object.assign(state,{title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,productsPhotos:[],logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,checkpoints:makeDefaultCheckpoints(),invoicesOn:false,invoices:[],closing:"",sections:[]});
+  Object.assign(state,{title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,productsPhotos:[],photoOriginals:{},logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,checkpoints:makeDefaultCheckpoints(),invoicesOn:false,invoices:[],closing:"",sections:[]});
   try{ localStorage.removeItem('rapport_state'); }catch(e){}
   initFields(); buildSections(); buildBaie(); buildChecklist(); buildInvoices(); renderReport();
   save();
@@ -2989,6 +2950,7 @@ renderReport = function(force=false){
   const diagnostics=document.getElementById('imageDiagnostics');if(diagnostics)diagnostics.hidden=true;
   const revision=reportPreviewRevision;
   clearTimeout(reportPreviewTimer);
+  if(reportPdfGenerating)return;
   if(!currentReportId || document.body.dataset.reportView!=='editor')return;
   if(!force&&!shouldRenderA4Preview())return;
   reportPreviewTimer=setTimeout(()=>{
@@ -3091,12 +3053,12 @@ window.WBReportWorkflowHost={
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=56.6.2&build=1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=56.6.3&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
-<script src="report-workflow.js?v=56.6.2"></script>
-<script src="report-ai.js?v=56.6.2"></script>
+<script src="report-workflow.js?v=56.6.3"></script>
+<script src="report-ai.js?v=56.6.3"></script>
 <script>
 /* v56.6.2 : récupération du module IA après un chargement incomplet/cache PWA ancien.
    Aucun brouillon ni donnée Firebase n'est supprimé. */
@@ -3121,7 +3083,7 @@ if('serviceWorker' in navigator){
   function clearNotes(){document.querySelectorAll('.wb-ai-boot-note').forEach(el=>el.remove());}
   function load(name){return new Promise((resolve,reject)=>{
     const script=document.createElement('script');
-    script.src=name+'?v=56.6.2&retry=1';script.async=false;
+    script.src=name+'?v=56.6.3&retry=1';script.async=false;
     script.onload=resolve;script.onerror=()=>reject(new Error('Impossible de charger '+name));
     document.body.appendChild(script);
   });}

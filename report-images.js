@@ -220,23 +220,27 @@ const WBReportImages = (() => {
   }
   async function replace(entry,reportId,file) {
     if(!reportId||!stillCurrent(entry,reportId))throw new Error('Le rapport ou la photo a changé. Relancer le diagnostic.');
-    let data;
+    let replacement;
     if(file.type==='application/pdf'||/\.pdf$/i.test(file.name)) {
-      if(entry.arrayKey!=='invoices')throw new Error('Choisir une image JPG ou PNG pour cette photo.');
+      if(entry.arrayKey!=='invoices')throw new Error('Choisir une image pour cette photo.');
       const pages=await pdfToImages(file);
       if(pages.length!==1)throw new Error('Ce PDF contient plusieurs pages. Utiliser « Ajouter une ou plusieurs factures » pour l’importer, puis retirer l’ancienne référence en erreur.');
-      data=pages[0];
+      const image=await decode(await sourceAsBlob(pages[0]));image.close?.();
+      if(!stillCurrent(entry,reportId))throw new Error('Le rapport ou la photo a changé. Relancer le diagnostic.');
+      const key=entry.field||entry.arrayKey;
+      replacement={src:await uploadImageDataUrl(pages[0],`reports/${reportId}/${key}-${entry.id||'image'}-${Date.now()}.jpg`)};
     } else {
-      if(!['image/jpeg','image/png'].includes(file.type)&&!/\.(jpe?g|png)$/i.test(file.name))throw new Error('Choisir un fichier JPG ou PNG.');
-      data=await processImage(file,entry.arrayKey==='invoices'?2200:1900,0.9);
+      replacement=await uploadProductFile(file,reportId,entry.id||entry.field||'image');
     }
-    // Valider avant l'envoi et ne remplacer la référence qu'après un upload réussi.
-    const image=await decode(await sourceAsBlob(data));image.close?.();
-    if(!stillCurrent(entry,reportId))throw new Error('Le rapport ou la photo a changé. Relancer le diagnostic.');
-    const key=entry.field||entry.arrayKey;
-    const url=await uploadImageDataUrl(data,`reports/${reportId}/${key}-${entry.id||'image'}-${Date.now()}.jpg`);
     if(!stillCurrent(entry,reportId))throw new Error('Le fichier a été envoyé, mais le rapport a changé : aucune référence du rapport n’a été remplacée.');
-    commit(entry,url);
+    if(entry.field){
+      state.photoOriginals=state.photoOriginals||{};
+      if(replacement.originalPath)state.photoOriginals[entry.field]=replacement.originalPath;else delete state.photoOriginals[entry.field];
+    }else {
+      delete entry.item.originalSrc;
+      if(replacement.originalPath)entry.item.originalPath=replacement.originalPath;else delete entry.item.originalPath;
+    }
+    commit(entry,replacement.src);
   }
   function showDiagnostic(results,summary,reportId) {
     const panel=document.getElementById('imageDiagnostics');panel.replaceChildren();panel.hidden=false;

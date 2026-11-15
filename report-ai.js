@@ -727,7 +727,8 @@
     setBusy(true);status('Création du nouveau rapport dans Atelier… Aucun nouvel appel IA.');
     try{
       const urls=Object.fromEntries(assets.map(a=>[a.id,a.url]));
-      const report=C.makeReport(plan,assets,requestInput.meta,H.blank(),urls);
+      const aiBlank=H.blank(); delete aiBlank.photoOriginals; // The AI apply endpoint accepts a strict report schema.
+      const report=C.makeReport(plan,assets,requestInput.meta,aiBlank,urls);
       report.km=WBVehicleInput.digits(report.km);
       if(WBVehicleInput.isFrench(report.plate))report.plate=WBVehicleInput.plate(report.plate);
       for(const d of documents)for(let i=0;i<d.pages.length;i++)report.invoices.push({id:'ai_pdf_'+d.id+'_'+i,kind:'img',src:d.pages[i].url,name:d.name+' p.'+(i+1)});
