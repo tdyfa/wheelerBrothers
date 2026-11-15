@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=56.5.4.1">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.5.4.1">
+<link rel="manifest" href="manifest.json?v=56.6">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.6">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -16,16 +16,17 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
-<script src="firebase-config.js?v=56.5.4.1"></script>
-<script src="html2pdf.bundle.min.js?v=56.5.4.1"></script>
-<script src="report-images.js?v=56.5.4.1"></script>
-<script src="vehicle-info.js?v=56.5.4.1"></script>
-<script src="wb-workflow.js?v=56.5.4.1"></script>
-<link rel="stylesheet" href="wb-workflow.css?v=56.5.4.1">
-<script src="vehicle-input.js?v=56.5.4.1&build=2"></script>
-<link rel="stylesheet" href="report-ai.css?v=56.5.4.1">
-<script src="report-ai-config.js?v=56.5.4.1"></script>
-<script src="report-ai-core.js?v=56.5.4.1"></script>
+<script src="firebase-config.js?v=56.6"></script>
+<script src="html2pdf.bundle.min.js?v=56.6"></script>
+<script src="report-images.js?v=56.6"></script>
+<script src="wb-progress.js?v=56.6"></script>
+<script src="vehicle-info.js?v=56.6"></script>
+<script src="wb-workflow.js?v=56.6"></script>
+<link rel="stylesheet" href="wb-workflow.css?v=56.6">
+<script src="vehicle-input.js?v=56.6&build=2"></script>
+<link rel="stylesheet" href="report-ai.css?v=56.6">
+<script src="report-ai-config.js?v=56.6"></script>
+<script src="report-ai-core.js?v=56.6"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -505,12 +506,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=56.5.4.1" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=56.6" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 56.5.4.1</span>
+          <span class="sub">Version 56.6</span>
         </div>
       </div>
       <div class="app-bar-notices">
@@ -1837,7 +1838,7 @@ function buildProductsPhotos(){
     host.appendChild(item);
   });
 }
-// v56.5.4.1 : ne jamais sérialiser plusieurs photos de pièces en base64 dans
+// v56.6 : ne jamais sérialiser plusieurs photos de pièces en base64 dans
 // Firestore. Le fichier original compatible est transféré tel quel dans
 // Storage, puis seul son URL est ajoutée au rapport (aucun réencodage).
 async function uploadProductFile(file,reportId,itemId){
@@ -2187,7 +2188,7 @@ async function lookupAtelierVehicle(){
     if(isCurrent()){button.disabled=false;button.textContent='Vérifier';}
   }
 }
-// v56.5.4.1 — même carnet source pour l'éditeur classique et la relecture IA.
+// v56.6 — même carnet source pour l'éditeur classique et la relecture IA.
 async function listAtelierVehicles(){
   const snap=await sharedDocRef('atelier').get({source:'server'});
   const data=snap.exists?JSON.parse(snap.data().payload||'{"vehicles":[]}'):{vehicles:[]};
@@ -2430,11 +2431,23 @@ async function renderReportPdfPages(options={}){
   const previewMode=!!options.previewMode;
   const pixelScale=previewMode ? .48 : 1;
   const imageCache=options.imageCache||new Map();
+  // Count unique image sources used by the report, including logo.
+  const progressSources=new Set();
+  const scanSources=(v,k='')=>{
+    if(!v)return;
+    if(typeof v==='string' && (['src','overview','products','logo','labelR','labelV','baieAvant','baieApres'].includes(k)) && /^(https?:|data:image|blob:)/.test(v))progressSources.add(v);
+    else if(Array.isArray(v))v.forEach(x=>scanSources(x));
+    else if(typeof v==='object')Object.entries(v).forEach(([key,x])=>scanSources(x,key));
+  };
+  scanSources(s);
+  progressSources.add(s.logo||DEFAULT_LOGO);
+  const loadedSources=new Set();
+  const markLoaded=src=>{if(src&&!loadedSources.has(src)){loadedSources.add(src);options.onProgress?.('Photos préparées',loadedSources.size,progressSources.size,`${loadedSources.size} / ${progressSources.size} images`);}};
   // Cache borné : les 82 originaux décodés ne doivent pas coexister en RAM.
   const previewLimit=7;
   const logoSrc=s.logo||DEFAULT_LOGO;
   const loadReportPdfImage=async(src,cache)=>{
-    if(!previewMode)return WBReportImages.load(src,cache);
+    if(!previewMode){const image=await WBReportImages.load(src,cache);markLoaded(src);return image;}
     const result=await WBReportImages.loadPreview(src,cache);
     if(cache.size>previewLimit){
       for(const [key,promise] of cache){
@@ -2444,7 +2457,7 @@ async function renderReportPdfPages(options={}){
         Promise.resolve(promise).then(img=>img?.close?.()).catch(()=>{});
       }
     }
-    return result;
+    markLoaded(src);return result;
   };
   const logo=await loadReportPdfImage(logoSrc,imageCache);
   const contentW=REPORT_PDF_W-REPORT_PDF_MARGIN*2;
@@ -2452,7 +2465,7 @@ async function renderReportPdfPages(options={}){
     const canvas=document.createElement('canvas');
     canvas.width=Math.round(REPORT_PDF_W*pixelScale);canvas.height=Math.round(REPORT_PDF_H*pixelScale);
     const ctx=canvas.getContext('2d');
-    // v56.5.4.1 : peindre le fond opaque en pixels réels AVANT la mise à l'échelle.
+    // v56.6 : peindre le fond opaque en pixels réels AVANT la mise à l'échelle.
     // Après setTransform, canvas.width/height seraient réduits une seconde fois :
     // le fond resterait transparent en partie et deviendrait noir à l'export JPEG.
     ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -2476,6 +2489,7 @@ async function renderReportPdfPages(options={}){
     if(options.onPage)options.onPage(item,pageIndex);
     if(options.collectPages!==false)pages.push(item);
     pageIndex++;
+    options.onPageProgress?.(pageIndex);
     page.canvas.width=0;page.canvas.height=0;
   };
   const contentPage=(title)=>{
@@ -2745,11 +2759,14 @@ async function generatePdf(){
   const btn=document.getElementById('btnPdf');
   const original=btn.textContent;
   btn.disabled=true;btn.textContent='⏳ Génération…';
+  const progress=window.WBProgress?.start('Génération du PDF Atelier');
   try{
     save();flushPendingSave();
-    const pages=await renderReportPdfPages({imageCache:new Map()});
+    const pages=await renderReportPdfPages({imageCache:new Map(),onProgress:(...args)=>progress?.update(...args),onPageProgress:n=>progress?.update('Composition des pages A4',null,null,`${n} pages préparées`)});
     if(!pages.length)throw new Error('Aucune page générée');
+    progress?.update('Assemblage du fichier PDF',0,1,`${pages.length} pages`);
     const blob=buildReportImagePdf(pages);
+    progress?.update('Assemblage du fichier PDF',1,1,`${pages.length} pages`);
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
     a.href=url;a.download=reportPdfFilename();a.rel='noopener';
@@ -2759,7 +2776,7 @@ async function generatePdf(){
     console.error('Génération du PDF impossible',e);
     alert('Impossible de générer le PDF.\n\n'+WBReportImages.message(e));
   }finally{
-    btn.disabled=false;btn.textContent=original;
+    progress?.close();btn.disabled=false;btn.textContent=original;
   }
 }
 
@@ -2903,6 +2920,7 @@ async function refreshA4Preview(revision){
   if(!report || !currentReportId || document.body.dataset.reportView!=='editor')return;
   report.replaceChildren();
   if(status)status.textContent='Aperçu A4 — préparation…';
+  const previewProgress=window.WBProgress?.start('Aperçu A4');
   const mobile=isMobile();
   let count=0;
   const previews=[];
@@ -2934,6 +2952,8 @@ async function refreshA4Preview(revision){
     await renderReportPdfPages({
       imageCache:previewCache,
       previewMode:mobile, collectPages:false,
+      onProgress:(...args)=>previewProgress?.update(...args),
+      onPageProgress:n=>previewProgress?.update('Préparation des pages A4',null,null,`${n} pages préparées`),
       shouldAbort:()=>revision!==reportPreviewRevision,
       onPage:(page,index)=>{
         if(revision!==reportPreviewRevision)return;
@@ -2960,7 +2980,7 @@ async function refreshA4Preview(revision){
     requestAnimationFrame(()=>updatePreviewScale());
   }finally{
     for(const promise of previewCache.values())Promise.resolve(promise).then(img=>img?.close?.()).catch(()=>{});
-    previewCache.clear();
+    previewCache.clear();previewProgress?.close();
   }
 }
 
@@ -3071,14 +3091,14 @@ window.WBReportWorkflowHost={
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=56.5.4.1&build=1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=56.6&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
-<script src="report-workflow.js?v=56.5.4.1"></script>
-<script src="report-ai.js?v=56.5.4.1"></script>
+<script src="report-workflow.js?v=56.6"></script>
+<script src="report-ai.js?v=56.6"></script>
 <script>
-/* v56.5.4.1 : récupération du module IA après un chargement incomplet/cache PWA ancien.
+/* v56.6 : récupération du module IA après un chargement incomplet/cache PWA ancien.
    Aucun brouillon ni donnée Firebase n'est supprimé. */
 (function(){
   'use strict';
@@ -3101,7 +3121,7 @@ if('serviceWorker' in navigator){
   function clearNotes(){document.querySelectorAll('.wb-ai-boot-note').forEach(el=>el.remove());}
   function load(name){return new Promise((resolve,reject)=>{
     const script=document.createElement('script');
-    script.src=name+'?v=56.5.4.1&retry=1';script.async=false;
+    script.src=name+'?v=56.6&retry=1';script.async=false;
     script.onload=resolve;script.onerror=()=>reject(new Error('Impossible de charger '+name));
     document.body.appendChild(script);
   });}

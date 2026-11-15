@@ -295,11 +295,13 @@
     const bytesOf=a=>a.blob.size+(a.original!==a.blob?a.original.size:0);
     const totalBytes=assets.reduce((n,a)=>n+bytesOf(a),0);
     const progress=new Map(),failures=[];
+    const bar=window.WBProgress?.start('Transfert sécurisé des photos IA');
     let completed=0,nextIndex=0;
     function paint(){
       const sent=Math.min(totalBytes,[...progress.values()].reduce((n,x)=>n+x,0));
       const text=`Envoi sécurisé : ${(sent/1048576).toFixed(1)} / ${(totalBytes/1048576).toFixed(1)} Mio — ${completed} / ${totalFiles} photos terminées`;
       $('aiUploadProgress').textContent=text;
+      bar?.update('Données transférées',sent,totalBytes,`${completed} / ${totalFiles} photos terminées`);
       status(text+'\nAucun appel OpenAI à cette étape.');
     }
     async function transfer(ref,blob,contentType,key){
@@ -337,7 +339,7 @@
         try{await sendPhoto(a);}catch(error){failures.push(a.name+' : '+(error?.message||'échec réseau'));remember();}
       }
     }
-    paint();await Promise.all(Array.from({length:Math.min(parallel,assets.length)},()=>worker()));
+    try{paint();await Promise.all(Array.from({length:Math.min(parallel,assets.length)},()=>worker()));}finally{bar?.close();}
     if(failures.length)throw new Error(failures.length+' photo(s) non transmises :\n'+failures.join('\n')+'\nLes photos déjà envoyées seront conservées. Relance « Préparer le rapport » après vérification de ta connexion, ou resélectionne les mêmes fichiers si la page a été fermée.');
     $('aiUploadProgress').textContent=`${totalFiles} / ${totalFiles} photos envoyées — ${(totalBytes/1048576).toFixed(1)} Mio. Prêt pour l'analyse.`;
     for(const d of documents){
@@ -551,13 +553,20 @@
     status('Un lot est encore en cours côté serveur. Vérifie son résultat avant toute relance.');
   }
   async function runBatches(retry=false){
-    let result=await call('prepare',{...requestInput,retry});
+    const progress=window.WBProgress?.start('Analyse des lots IA');
+    let result;
+    try{
+    progress?.update('Analyse du premier lot',0,requestInput.assets.length,'En attente du serveur');
+    result=await call('prepare',{...requestInput,retry});
     while(result.status==='partial'){
       const done=result.processedImages||0,total=result.totalImages||requestInput.assets.length;
+      progress?.update('Photos analysées',done,total,`${result.doneBatches||0} / ${result.totalBatches||'?'} lots terminés`);
       status(result.stage==='synthesis'?`Les ${total} photos ont été analysées. Synthèse globale des opérations et références… Un appel textuel, sans renvoyer les images.`:`Analyse IA par lots : ${done} / ${total} photos — ${result.doneBatches} / ${result.totalBatches} lot(s) terminés. Les lots précédents sont conservés.`);
       result=await call('prepare',{...requestInput,retry:false});
     }
+    if(result.status==='completed'||result.status==='applied')progress?.update('Analyse et synthèse terminées',1,1,'Rapport prêt pour la relecture');
     return result;
+    }finally{progress?.close();}
   }
   async function generate(retry=false){
     if(busy)return;
