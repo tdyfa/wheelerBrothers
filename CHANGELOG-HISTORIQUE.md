@@ -1,5 +1,12 @@
 # Historique des notices Atelier
 
+## Livraison 56.8 — simplification des rapports et de la création IA
+
+- Retire l’onglet des brouillons, l’import/export et la reprise des préparations IA ; une interruption peut imposer de recommencer et une analyse lancée peut être facturée.
+- Arrête la création de nouvelles copies locales de secours ; les anciennes copies divergentes restent disponibles à l’export ou à la suppression explicite.
+- Conserve les contrôles de conflit, la sauvegarde Firebase, les rapports existants et le nettoyage de la v56.7.
+
+
 ## Livraison 56.7 — suppression suivie et nettoyage des médias
 
 - Intègre le suivi du nettoyage des médias lors de la suppression d’un rapport, en conservant les améliorations de transfert IA de la v56.6.8.

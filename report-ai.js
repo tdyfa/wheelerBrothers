@@ -9,17 +9,15 @@
     const normalized=String(title||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
     return /\b(baie moteur|compartiment moteur)\b/.test(normalized) && !/\b(admission|boite a air|filtre|joint|radiateur|distribution)\b/.test(normalized);
   };
-  const KEY='wb_ai_pending_v1';
   const LIMIT=Math.min(C.MAX_IMAGES,CFG.maxImages||100);
   const id=(prefix,n)=>prefix+Array.from(crypto.getRandomValues(new Uint8Array(n))).map(v=>v.toString(16).padStart(2,'0')).join('');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  let assets=[],documents=[],plan=null,jobId='',busy=false,requestInput=null,usage=null,vehicleKm=null,vehiclePlate='',workflowRef=null,workflowOptions=[],vehicleRecords=[],rejectedFiles=new Map(),reviewUndo=[],synthesisRetry=false,recoveryIssues=[],recoveryOriginal=null;
+  let assets=[],documents=[],plan=null,jobId='',busy=false,requestInput=null,usage=null,vehicleKm=null,vehiclePlate='',workflowRef=null,workflowOptions=[],vehicleRecords=[],rejectedFiles=new Map(),reviewUndo=[],synthesisRetry=false,recoveryIssues=[],recoveryOriginal=null,interrupted=false;
   const dialog=document.createElement('dialog');dialog.className='wb-ai-dialog no-print';dialog.id='wbAiDialog';
   dialog.setAttribute('aria-labelledby','aiTitle');
   const checks=H.blank().checkpoints;
   dialog.innerHTML=`<header class="wb-ai-head"><h2 id="aiTitle">Créer un rapport avec l’IA</h2><button type="button" class="btn ghost" id="aiClose" aria-label="Fermer">✕</button></header>
-    <div class="wb-ai-body"><p class="wb-ai-notice">Ajoute tes photos et décris les travaux. L’IA propose un classement ; tu le relis avant de créer un <strong>nouveau</strong> rapport. Aucun ancien rapport n’est remplacé. Le rattachement reste facultatif ; la création ne termine pas l’intervention et ne partage pas le rapport.</p>
-    <div id="aiResume" class="wb-ai-resume" hidden>Une préparation précédente est disponible. Si le transfert a été interrompu avant l'analyse, sélectionne de nouveau les mêmes fichiers : ceux déjà envoyés ne seront pas renvoyés.<div class="wb-ai-actions"><button class="btn" id="aiResumeBtn" type="button">Reprendre (lots restants potentiellement facturables)</button><button class="btn ghost" id="aiExportPending" type="button">Sauvegarder le brouillon local (.json)</button><button class="btn ghost" id="aiForget" type="button">Abandonner ce brouillon</button></div></div>
+    <div class="wb-ai-body"><p class="wb-ai-notice">Garde cette page ouverte jusqu’à la création du rapport : en cas d’interruption, la préparation et ses corrections ne seront pas récupérables, et une analyse déjà lancée peut être facturée. Ajoute tes photos et décris les travaux. L’IA propose un classement ; tu le relis avant de créer un <strong>nouveau</strong> rapport. Aucun ancien rapport n’est remplacé. Le rattachement reste facultatif ; la création ne termine pas l’intervention et ne partage pas le rapport.</p>
     <section id="aiInput">
       <div class="wb-ai-grid">
         <div><label for="aiVehicleSelect">Véhicule du Carnet d’atelier (facultatif)</label><select id="aiVehicleSelect"><option value="">Saisie manuelle d’une immatriculation</option></select><button type="button" class="btn ghost" id="aiReloadVehicles">Actualiser la liste</button><p class="wb-ai-muted" id="aiVehicleListStatus">Sélectionne une fiche ou saisis une plaque ci-dessous.</p></div>
@@ -34,7 +32,7 @@
       <div class="wb-flow-panel"><label for="aiLinkedOperation">Intervention liée (facultatif)</label><select id="aiLinkedOperation"><option value="">Aucune — rapport indépendant</option></select><p id="aiWorkflowHint" class="wb-flow-muted">Clique sur « Vérifier » pour afficher les interventions du véhicule. Les opérations possédant déjà un rapport sont grisées.</p></div><label for="aiNotes">Travaux effectués, pièces et précisions *</label><textarea id="aiNotes" maxlength="12000" placeholder="Ex. : vidange moteur et remplacement du filtre à huile ; nettoyage du filtre à air réutilisable. Préciser les côtés ou les références si nécessaire."></textarea>
       <h3>Photos de l’intervention</h3><p class="wb-ai-muted">Jusqu’à ${LIMIT} photos originales, sans compression ni redimensionnement. Envoi privé sur Storage, analyse IA en plusieurs lots automatiques. Les formats HEIC/HEIF sont conservés à l’identique et nécessitent une copie PNG sans perte pour l’analyse. Les formats ou photos incompatibles sont signalés avant le lancement.</p>
       <label class="filebtn btn" for="aiFiles">Ajouter des photos</label><input id="aiFiles" type="file" accept="image/*" multiple>
-      <p id="aiCount" class="wb-ai-muted">Aucune photo sélectionnée.</p><p id="aiUploadProgress" class="wb-ai-muted" role="status" aria-live="polite"></p><p id="aiResumeWarning" class="wb-ai-problems" role="status" hidden></p><div id="aiPhotoErrors" class="wb-ai-problems" hidden></div><label class="wb-ai-check" id="aiPartialLabel" hidden><input type="checkbox" id="aiPartialConfirm"><span>Je confirme analyser seulement les photos acceptées malgré les photos refusées ci-dessus.</span></label><div id="aiGallery" class="wb-ai-gallery"></div>
+      <p id="aiCount" class="wb-ai-muted">Aucune photo sélectionnée.</p><p id="aiUploadProgress" class="wb-ai-muted" role="status" aria-live="polite"></p><div id="aiPhotoErrors" class="wb-ai-problems" hidden></div><label class="wb-ai-check" id="aiPartialLabel" hidden><input type="checkbox" id="aiPartialConfirm"><span>Je confirme analyser seulement les photos acceptées malgré les photos refusées ci-dessus.</span></label><div id="aiGallery" class="wb-ai-gallery"></div>
       <h3>Factures PDF</h3><p class="wb-ai-muted">Les PDF sont analysés pour relever les références des pièces et toutes leurs pages sont ajoutées en fin de rapport, dans l’ordre de sélection. Maximum 3 PDF, 8 Mio chacun et 20 pages au total. Vérifie les références avant validation.</p>
       <label class="filebtn btn" for="aiPdfFiles">Ajouter des factures PDF</label><input id="aiPdfFiles" type="file" accept="application/pdf,.pdf" multiple><div id="aiPdfList" class="wb-ai-muted"></div>
       <details><summary>Contrôles confirmés et recommandations (facultatif)</summary><p class="wb-ai-muted">Cocher seulement les contrôles réellement effectués. L’IA ne coche rien automatiquement.</p>
@@ -44,8 +42,7 @@
       <div class="wb-ai-actions"><button type="button" class="btn primary" id="aiGenerate">Préparer le rapport</button><button type="button" class="btn ghost" id="aiUploadOnly">Transférer les fichiers sans analyse IA</button></div>
     </section>
     <div id="aiStatus" class="wb-ai-status" role="status" aria-live="polite"></div>
-    <div class="wb-ai-actions" id="aiRetryArea" hidden><button class="btn" type="button" id="aiRetry">Réessayer (nouvel appel API)</button><button class="btn ghost" type="button" id="aiRefresh">Vérifier le résultat existant</button></div>
-    <div class="wb-ai-actions"><button type="button" class="btn ghost" id="aiDiscard" hidden>Abandonner ce brouillon</button></div><section id="aiReview" hidden><h3>Relire le classement</h3><p id="aiReviewCounts" class="wb-ai-muted" role="status"></p><div class="wb-ai-actions wb-ai-review-toolbar"><button type="button" class="btn ghost" id="aiUndo" disabled>Annuler le dernier déplacement / retrait</button><button type="button" class="btn ghost" id="aiTextSynthesis">Refaire la synthèse globale (textes)</button><button type="button" class="btn ghost" id="aiExportReview">Sauvegarder le brouillon (.json)</button><label class="filebtn btn ghost" for="aiImportReview">Importer un brouillon</label><input id="aiImportReview" type="file" accept="application/json,.json"></div><p class="wb-ai-muted">Les retraits sont réversibles : aucune photo originale n’est effacée de Storage. Le brouillon garde tes corrections sur cet appareil ; le fichier JSON permet aussi une sauvegarde de secours, sans inclure les photos elles-mêmes.</p><p class="wb-ai-muted">Corrige les titres et affectations. Pour déplacer une photo du chapitre A vers D, utilise la liste « Affectation » sous la miniature (avec choix gauche/droite), puis les flèches ‹ et › ou le champ Position pour régler son ordre directement dans le chapitre cible. Les opérations peuvent aussi être déplacées, fusionnées ou retirées. « Ne pas inclure » est un choix explicite, jamais automatique.</p>
+    <section id="aiReview" hidden><h3>Relire le classement</h3><p id="aiReviewCounts" class="wb-ai-muted" role="status"></p><div class="wb-ai-actions wb-ai-review-toolbar"><button type="button" class="btn ghost" id="aiUndo" disabled>Annuler le dernier déplacement / retrait</button><button type="button" class="btn ghost" id="aiTextSynthesis">Refaire la synthèse globale (textes)</button></div><p class="wb-ai-muted">Les retraits sont réversibles pendant cette session : aucune photo originale n’est effacée de Storage. Les corrections ne sont pas conservées si tu fermes la page avant de créer le rapport.</p><p class="wb-ai-muted">Corrige les titres et affectations. Pour déplacer une photo du chapitre A vers D, utilise la liste « Affectation » sous la miniature (avec choix gauche/droite), puis les flèches ‹ et › ou le champ Position pour régler son ordre directement dans le chapitre cible. Les opérations peuvent aussi être déplacées, fusionnées ou retirées. « Ne pas inclure » est un choix explicite, jamais automatique.</p>
       <label for="aiSummary">Résumé</label><textarea id="aiSummary" maxlength="1600"></textarea><button type="button" class="btn ghost" id="aiSummaryFromSections">Reconstruire le résumé depuis les opérations</button><p class="wb-ai-muted">Une synthèse globale, jamais une liste des lots. Ce bouton reconstruit localement le résumé à partir des intitulés retenus ; il ne relance pas l’IA.</p>
       <div id="aiSynthesisPreview" class="wb-ai-section-action" hidden></div><div id="aiSections"></div><div id="aiSectionAction" class="wb-ai-section-action" hidden></div><p class="wb-ai-notice">La baie moteur est un bloc avant / après séparé, après les recommandations. Affecte ses photos à « Baie moteur : avant » ou « après », pas à une prestation ordinaire. Si le stade est inconnu, il reste à préciser.</p><label class="filebtn btn ghost" for="aiExtraFiles">Ajouter des photos manquantes (sans nouvel appel IA)</label><input id="aiExtraFiles" type="file" accept="image/*" multiple><div id="aiReviewGallery" class="wb-ai-review-groups"></div><p id="aiPhotoOrderStatus" class="wb-ai-sr-only" role="status" aria-live="polite"></p>
       <div id="aiRecoveryIssues" class="wb-ai-problems" role="status" hidden></div><div id="aiInvoiceReview" class="wb-ai-muted"></div><details id="aiWarningsBox"><summary>Points à vérifier (non imprimés)</summary><div id="aiWarnings" class="wb-ai-warnings"></div></details><div id="aiProblems" class="wb-ai-problems" role="status"></div><p id="aiUsage" class="wb-ai-usage"></p>
@@ -55,50 +52,20 @@
   document.body.appendChild(dialog);
   const $=name=>dialog.querySelector('#'+name);
   function status(message,kind=''){ $('aiStatus').textContent=message;$('aiStatus').dataset.kind=kind; }
-  function remember({serverJob=false}={}){
-    $('aiDiscard').hidden=!jobId;
-    try{
-      const raw=localStorage.getItem(KEY);
-      let old=null;
-      if(raw){
-        try{old=JSON.parse(raw);}catch(_){throw new Error('local-invalid');}
-        if(!old||typeof old!=='object'||Array.isArray(old))throw new Error('local-invalid');
-      }
-      const current=assets.map(a=>({id:a.id,name:a.name,size:a.sourceSize||a.original?.size||0,lastModified:a.lastModified||0,
-        ext:a.ext,originalExt:a.originalExt,uploaded:Boolean(a.uploaded||a.url),originalUploaded:Boolean(a.originalUploaded),
-        mainAttempted:Boolean(a.mainAttempted),originalAttempted:Boolean(a.originalAttempted)}));
-      const oldEntries=old?.jobId===jobId&&old.uploadPending&&Array.isArray(old.manifest)?old.manifest:[];
-      const currentById=new Map(current.map(a=>[a.id,a]));
-      // On a resumed iPhone session, keep metadata for all the 85 original
-      // selections even when the user has only reselected the first 10.
-      const manifest=oldEntries.length>current.length
-        ? oldEntries.map(a=>currentById.get(a.id)||a)
-        : current;
-      const docs=documents.map(d=>({id:d.id,name:d.name,size:d.sourceSize||d.blob?.size||0,lastModified:d.lastModified||0,uploaded:Boolean(d.uploaded),attempted:Boolean(d.attempted),pages:(d.pages||[]).map(p=>({id:p.id,attempted:Boolean(p.attempted),uploaded:Boolean(p.uploaded)}))}));
-      const oldDocs=old?.jobId===jobId&&old.uploadPending&&Array.isArray(old.docManifest)?old.docManifest:[];
-      const docsById=new Map(docs.map(d=>[d.id,d]));
-      const docManifest=oldDocs.length>docs.length?oldDocs.map(d=>docsById.get(d.id)||d):docs;
-      const data={...(old?.jobId===jobId?old:{}),jobId,workflowRef,
-        uploadPending:!serverJob&&!requestInput,manifest,docManifest};
-      if(!requestInput&&!serverJob){data.meta=metaFromForm();data.notes=$('aiNotes').value;}
-      localStorage.setItem(KEY,JSON.stringify(data));
-      const warning=$('aiResumeWarning');if(warning){warning.hidden=true;warning.textContent='';}
-    }catch(_){
-      const warning=$('aiResumeWarning');if(warning){warning.hidden=false;warning.textContent='La reprise après fermeture ne peut pas être garantie : les données locales sont indisponibles ou illisibles. Garde cette page ouverte ; les données existantes ne sont pas écrasées.';}
-      console.warn('Reprise locale indisponible ; garde cette page ouverte.');
-    }
-  }
-  function remembered(){try{return JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){return null;}}
-  function forget(){try{localStorage.removeItem(KEY);}catch(e){}$('aiResume').hidden=true;}
+  // Aucune sauvegarde locale ni lecture ou suppression des anciennes données.
+  function remember(){}
+  function remembered(){return null;}
+  function forget(){}
   function setBusy(value){
     busy=value;
-    ['aiClose','aiGenerate','aiUploadOnly','aiFiles','aiPdfFiles','aiVerify','aiRetry','aiRefresh','aiResumeBtn','aiForget','aiDiscard','aiApply','aiVehicleSelect','aiReloadVehicles'].forEach(k=>{$(k).disabled=value;});
+    ['aiClose','aiGenerate','aiUploadOnly','aiFiles','aiPdfFiles','aiVerify','aiApply','aiVehicleSelect','aiReloadVehicles'].forEach(k=>{$(k).disabled=value;});
     $('aiInput').querySelectorAll('input,textarea').forEach(el=>el.disabled=value);
     $('aiReview').querySelectorAll('input,textarea,select').forEach(el=>el.disabled=value);
     $('aiReview').querySelectorAll('.wb-ai-photo-move').forEach(el=>el.disabled=value||el.dataset.boundary==='true');
     $('aiReview').querySelectorAll('button').forEach(el=>{el.disabled=value;});
+    if(interrupted){$('aiGenerate').disabled=true;$('aiUploadOnly').disabled=true;$('aiFiles').disabled=true;$('aiPdfFiles').disabled=true;}
     if(!value)updateProblems();
-    if(!value && plan){renderReviewPhotos();renderSectionControls();$('aiUndo').disabled=!reviewUndo.length;$('aiExportReview').disabled=false;$('aiSummaryFromSections').disabled=false;$('aiFixProblems').disabled=false;}
+    if(!value && plan){renderReviewPhotos();renderSectionControls();$('aiUndo').disabled=!reviewUndo.length;$('aiSummaryFromSections').disabled=false;$('aiFixProblems').disabled=false;}
   }
   async function call(action,extra={},timeoutMs=510000){
     await H.ready;
@@ -254,7 +221,7 @@
   }
   $('aiFiles').addEventListener('change',async e=>{
     if(busy||(jobId&&requestInput)||(!jobId&&remembered()?.jobId&&!remembered()?.uploadPending)){
-      status('Une analyse existe déjà. Utilise « Reprendre » ou « Abandonner » avant de changer les photos.','error');return;
+      status('Une analyse est déjà en cours : les photos ne peuvent plus être modifiées ici.','error');return;
     }
     const files=[...e.target.files];e.target.value='';setBusy(true);const errors=[];
     const pending=remembered();
@@ -302,8 +269,7 @@
   }
   // Three simultaneous uploads: avoids 85 serialized round-trips while keeping
   // iPhone memory/network usage bounded. Progress uses real byte counters.
-  // A Storage file is only marked uploaded after its URL is resolved; interrupted
-  // transfers can be reselected with their original IDs, with verification.
+  // Le transfert vérifie l’identité d’un objet avant toute réutilisation dans cette session.
   async function upload(){
     const space=H.space(), parallel=3;
     const totalFiles=assets.length;
@@ -358,7 +324,7 @@
       }
     }
     try{paint();await Promise.all(Array.from({length:Math.min(parallel,assets.length)},()=>worker()));}finally{bar?.close();}
-    if(failures.length)throw new Error(failures.length+' photo(s) non transmises :\n'+failures.join('\n')+'\nLes photos déjà envoyées seront conservées. Relance « Préparer le rapport » après vérification de ta connexion, ou resélectionne les mêmes fichiers si la page a été fermée.');
+    if(failures.length)throw new Error(failures.length+' photo(s) non transmises :\n'+failures.join('\n')+'\nLes photos originales et les fichiers déjà envoyés sont conservés.');
     $('aiUploadProgress').textContent=`${totalFiles} / ${totalFiles} photos envoyées — ${(totalBytes/1048576).toFixed(1)} Mio. Prêt pour l'analyse.`;
     for(const d of documents){
       const docRef=H.storage().ref().child(`spaces/${space}/reports/${jobId}/ai-doc-${d.id}.pdf`);
@@ -390,10 +356,8 @@
     });
     return html;
   }
-  function persistReview(){
-    if(!plan || !jobId)return;
-    try{localStorage.setItem(KEY,JSON.stringify({...remembered(),jobId,workflowRef,uploadPending:false,review:{plan,assets:assets.map(a=>({id:a.id,name:a.name,ext:a.ext})),usage,recoveryIssues,recoveryOriginal}}));}catch(e){status('Le classement reste ouvert, mais les corrections ne peuvent pas être conservées localement.','error');}
-  }
+  // Les corrections de relecture restent uniquement en mémoire durant la session.
+  function persistReview(){}
   function resetApproval(){$('aiApprove').checked=false;updateProblems();persistReview();}
   function namedMessage(message){
     let out=String(message||'');
@@ -416,11 +380,11 @@
     $('aiProblems').querySelectorAll('[data-empty-section]').forEach(b=>b.onclick=()=>requestSectionRemoval(b.dataset.emptySection));
     $('aiApply').disabled=busy||issues.length>0||pendingRecovery.length>0||!$('aiApprove').checked;
     $('aiFixProblems').hidden=!(issues.length||pendingRecovery.length);
-    $('aiApplyHint').textContent=busy?'Une opération est en cours…':pendingRecovery.length?`${pendingRecovery.length} référence(s) problématique(s) à examiner dans « Récupération des photos ». Exporte ton brouillon avant de confirmer.`:issues.length?`${issues.length} correction(s) requise(s). Réaffecte les photos ou retire les opérations indésirables. Une prestation conservée doit être illustrée.`:!$('aiApprove').checked?'Le contenu est prêt. Coche « J’ai relu… » pour activer la création.':'Tout est prêt : tu peux créer le rapport dans l’éditeur.';
+    $('aiApplyHint').textContent=busy?'Une opération est en cours…':pendingRecovery.length?`${pendingRecovery.length} référence(s) problématique(s) à examiner dans « Récupération des photos ». Examine les références avant de confirmer.`:issues.length?`${issues.length} correction(s) requise(s). Réaffecte les photos ou retire les opérations indésirables. Une prestation conservée doit être illustrée.`:!$('aiApprove').checked?'Le contenu est prêt. Coche « J’ai relu… » pour activer la création.':'Tout est prêt : tu peux créer le rapport dans l’éditeur.';
     $('aiApply').title=$('aiApplyHint').textContent;
   }
   // Les anomalies portent sur des propositions d'affectation, pas sur des
-  // fichiers à supprimer. La sauvegarde conserve les entrées brutes d'origine.
+  // fichiers à supprimer. Les choix restent en mémoire durant la session.
   function renderRecoveryIssues(){
     const area=$('aiRecoveryIssues');if(!area)return;
     const unresolved=recoveryIssues.map((entry,index)=>({...entry,issueIndex:index})).filter(x=>!x.resolved);
@@ -433,11 +397,11 @@
       const place=p.kind==='section'?(section?.title||'Prestation '+String(p.sectionId||'')):String(p.kind||'Non classée');
       return [place,p.side&&('côté '+p.side),p.caption].filter(Boolean).join(' — ').slice(0,400);
     };
-    area.innerHTML=`<h4>Récupération des références photo · ${unresolved.length} à vérifier</h4><p>Le serveur a renvoyé plusieurs affectations pour une même photo, ou une référence absente du manifeste. Les fichiers originaux ne sont pas supprimés. Exporte d’abord le brouillon JSON, puis confirme ton choix pour chaque anomalie. Aucun appel IA n’est nécessaire.</p>`+unresolved.map(issue=>{
+    area.innerHTML=`<h4>Récupération des références photo · ${unresolved.length} à vérifier</h4><p>Le serveur a renvoyé plusieurs affectations pour une même photo, ou une référence absente du manifeste. Les fichiers originaux ne sont pas supprimés. Confirme ton choix pour chaque anomalie avant de créer le rapport. Aucun appel IA n’est nécessaire.</p>`+unresolved.map(issue=>{
       const title=esc(nameById.get(issue.id)||issue.id||'Identifiant absent');
       const details=issue.type==='duplicate'
         ?`<p>Deux placements pour <strong>${title}</strong>. Photo conservée une seule fois.</p><p>1. ${esc(describe(issue.original))}</p><p>2. ${esc(describe(issue.entry))}</p><div class="wb-ai-actions"><button class="btn ghost" type="button" data-recovery="${issue.issueIndex}" data-choice="original">Garder le placement 1</button><button class="btn ghost" type="button" data-recovery="${issue.issueIndex}" data-choice="alternate">Garder le placement 2</button></div>`
-        :`<p>Référence inconnue : <strong>${title}</strong></p><p>${esc(describe(issue.entry))}</p><p>Cette référence n’est pas dans les fichiers enregistrés du brouillon. Toutes les photos connues sont conservées, mais cette entrée doit être vérifiée avant d’être ignorée.</p><button class="btn ghost" type="button" data-recovery="${issue.issueIndex}" data-choice="ignore">J’ai vérifié : ignorer cette référence uniquement</button>`;
+        :`<p>Référence inconnue : <strong>${title}</strong></p><p>${esc(describe(issue.entry))}</p><p>Cette référence n’est pas dans les fichiers sélectionnés. Toutes les photos connues sont conservées, mais cette entrée doit être vérifiée avant d’être ignorée.</p><button class="btn ghost" type="button" data-recovery="${issue.issueIndex}" data-choice="ignore">J’ai vérifié : ignorer cette référence uniquement</button>`;
       return `<div class="wb-ai-issue" style="display:block;padding:12px 0">${details}</div>`;
     }).join('');
     area.querySelectorAll('[data-recovery]').forEach(button=>button.onclick=()=>{
@@ -445,8 +409,8 @@
       const issue=recoveryIssues[Number(button.dataset.recovery)];if(!issue||issue.resolved)return;
       const choice=button.dataset.choice;
       const prompt=choice==='ignore'
-        ?'Confirmer que cette référence inconnue ne correspond à aucun fichier du brouillon ? Son entrée restera dans la sauvegarde JSON et aucun fichier ne sera supprimé.'
-        :'Conserver le placement '+(choice==='alternate'?'2':'1')+' pour cette photo ? L’autre proposition restera dans la sauvegarde JSON.';
+        ?'Confirmer que cette référence inconnue ne correspond à aucun fichier sélectionné ? Aucun fichier ne sera supprimé.'
+        :'Conserver le placement '+(choice==='alternate'?'2':'1')+' pour cette photo ? Le dernier changement pourra être annulé durant cette session.';
       if(!confirm(prompt))return;
       let nextPhoto=null;
       if(issue.type==='duplicate'){
@@ -459,7 +423,7 @@
       checkpointReview();
       if(nextPhoto){const current=plan.photos.find(p=>p.id===issue.id);if(current)Object.assign(current,nextPhoto);}
       issue.resolved=true;refreshReview();persistReview();
-      status('Référence examinée. Les fichiers originaux et les deux propositions sont conservés dans le brouillon de sauvegarde.');
+      status('Référence examinée. Les fichiers originaux sont conservés ; les choix restent disponibles pendant cette session.');
     });
   }
   function checkpointReview(){
@@ -576,7 +540,7 @@
     };
   }
   function renderReview(){
-    $('aiInput').hidden=true;$('aiReview').hidden=false;$('aiResume').hidden=true;$('aiRetryArea').hidden=true;
+    $('aiInput').hidden=true;$('aiReview').hidden=false;
     $('aiSummary').value=plan.summary;
     renderSections();
     renderReviewPhotos();
@@ -587,8 +551,8 @@
   }
   async function consume(result, savedReview=null){
     jobId=result.jobId||jobId;
-    if(result.status==='not-found'){status('Ce transfert n’a pas de résultat serveur. Abandonne le brouillon incomplet pour recommencer.','error');return;}
-    if(result.status==='discarded'){forget();reset();status('Ce brouillon a été abandonné.');return;}
+    if(result.status==='not-found'){interrupted=true;status('Le résultat est introuvable. Ferme cette fenêtre pour recommencer. Une analyse déjà lancée peut être facturée.','error');return;}
+    if(result.status==='discarded'){interrupted=true;status('La préparation est indisponible. Ferme cette fenêtre pour recommencer.','error');return;}
     // Le job existe déjà côté serveur, même si le chargement des URL échoue.
     // Après rechargement, récupérer son statut au lieu de demander un transfert vide.
     remember({serverJob:true});
@@ -633,15 +597,11 @@
       }
       renderReview();persistReview();
       status(recoveryIssues.some(x=>!x.resolved)
-        ?`Brouillon récupéré sans appel IA. ${recoveryIssues.filter(x=>!x.resolved).length} référence(s) à examiner dans « Récupération des références photo ». Exporte le brouillon JSON avant toute correction.`
+        ?`${recoveryIssues.filter(x=>!x.resolved).length} référence(s) à examiner dans « Récupération des références photo » avant de créer le rapport.`
         :savedReview?.plan?'Brouillon repris : tes textes, affectations et positions manuelles sont conservés. Aucun nouvel appel IA.':'Classement prêt. Vérifie les références, les photos ambiguës et les côtés. Aucun rapport remplacé.');return;
     }
-    $('aiRetryArea').hidden=false;
-    $('aiRetry').hidden=result.status!=='failed';
-    $('aiRefresh').textContent=result.status==='partial'?'Continuer les lots restants (appels facturables)':'Vérifier le résultat existant';
-    if(result.status==='failed'){status((result.error||'Préparation interrompue.')+`\n${result.processedImages||0} / ${result.totalImages||0} photos analysées, ${result.doneBatches||0}/${result.totalBatches||0} lots conservés.`, 'error');return;}
-    if(result.status==='partial'){status(`Lots terminés : ${result.doneBatches} / ${result.totalBatches}. Reprise possible sans réanalyser les précédents.`);return;}
-    status('Un lot est encore en cours côté serveur. Vérifie son résultat avant toute relance.');
+    interrupted=true;
+    status((result.error||'La préparation IA a été interrompue.')+' Ferme cette fenêtre pour recommencer. Une analyse déjà lancée peut être facturée ; aucun appel supplémentaire ne sera effectué automatiquement.', 'error');
   }
   async function runBatches(retry=false){
     const progress=window.WBProgress?.start('Analyse des lots IA');
@@ -661,6 +621,7 @@
   }
   async function generate(retry=false, uploadOnly=false){
     if(busy)return;
+    if(interrupted){status('La préparation est interrompue. Ferme cette fenêtre pour recommencer. Une analyse déjà lancée peut être facturée.', 'error');return;}
     if(!retry && !$('aiPlate').reportValidity())return;
     if(!retry && ((jobId&&requestInput)||(remembered()?.jobId&&!jobId&&!remembered()?.uploadPending))){status('Une préparation IA existe déjà. Reprends-la ou abandonne-la avant un nouvel envoi.','error');return;}
     if(!retry && remembered()?.uploadPending && remembered()?.manifest?.length && assets.length!==remembered().manifest.length){
@@ -699,27 +660,16 @@
         }
         }
         if(!jobId)jobId=id('rai',16);remember();await upload();
-        if(uploadOnly){status('Les fichiers sélectionnés et acceptés ont été transférés. Aucune analyse OpenAI n’a été lancée. Tu peux préparer le rapport plus tard.');return;}
+        if(uploadOnly){status('Les fichiers ont été transférés sans analyse OpenAI. Garde cette fenêtre ouverte pour préparer le rapport.');return;}
         requestInput={jobId,assets:assets.map(a=>({id:a.id,name:a.name,ext:a.ext})),documents:documents.map(d=>({id:d.id,name:d.name,pages:d.pages.map(p=>({id:p.id}))})),notes:$('aiNotes').value.trim(),meta:metaFromForm(),consent:true,mode:'batches'};
         remember();
       }
       $('aiInput').hidden=true;status('Analyse et préparation du classement… L’appel API est en cours.');
       const result=await runBatches(retry);await consume(result);
     }catch(e){
-      status(e.message+(requestInput?'\nVérifie d’abord le résultat côté serveur avant tout nouvel appel IA.':'\nAucun appel OpenAI n’a été fait. Réessaie l’envoi des fichiers manquants.'), 'error');
-      if(jobId){$('aiRetryArea').hidden=false;$('aiRetry').hidden=true;$('aiRefresh').textContent=requestInput?'Vérifier le résultat existant':'Reprendre le transfert';$('aiResume').hidden=false;}
+      interrupted=true;
+      status(e.message+(requestInput?'\nUne analyse a pu être facturée. Aucun nouvel appel IA ne sera lancé automatiquement.':'\nAucun appel OpenAI n’a été fait.')+' Ferme cette fenêtre pour recommencer ; tes photos originales ne sont pas supprimées.', 'error');
     }finally{setBusy(false);}
-  }
-  async function resume(continuePaid=false){
-    if(busy)return;const stored=remembered();if(stored?.uploadPending){
-      if(!jobId)jobId=stored.jobId;
-      const remainingPhotos=Math.max(0,(stored.manifest?.length||0)-assets.length),remainingDocs=Math.max(0,(stored.docManifest?.length||0)-documents.length);
-      status(remainingPhotos||remainingDocs?`Pour reprendre ce brouillon, resélectionne les ${remainingPhotos} photos et ${remainingDocs} facture(s) PDF manquantes. Les fichiers déjà reçus seront vérifiés et réutilisés. Pour tester sans analyse IA, clique sur « Transférer les fichiers sans analyse IA ».`:'Pour reprendre ce brouillon et vérifier les fichiers sans analyse IA, clique sur « Transférer les fichiers sans analyse IA ».');
-      $('aiInput').hidden=false;$('aiReview').hidden=true;$('aiGenerate').disabled=false;return;
-    }
-    if(!jobId && stored?.jobId)jobId=stored.jobId;if(!jobId)return;
-    setBusy(true);status('Récupération du brouillon existant… Aucun nouvel appel IA.');
-    try{const result=await call('status',{jobId});await consume(result,stored?.review||null);if(continuePaid && result.status==='partial' && requestInput){await consume(await runBatches(false));}}catch(e){status(e.message,'error');}finally{setBusy(false);}
   }
   $('aiExtraFiles').addEventListener('change',async e=>{
     if(busy || !plan || !jobId)return;
@@ -745,15 +695,7 @@
   function reset(){
     $('aiVehicleSelect').value='';
     assets.forEach(a=>{if(a.preview)URL.revokeObjectURL(a.preview);});assets=[];documents=[];reviewUndo=[];recoveryIssues=[];recoveryOriginal=null;vehicleKm=null;vehiclePlate='';rejectedFiles.clear();renderDocuments();plan=null;jobId='';requestInput=null;usage=null;workflowRef=null;workflowOptions=[];renderWorkflowOptions();
-    synthesisRetry=false;$('aiSynthesisPreview').hidden=true;$('aiSectionAction').hidden=true;$('aiUploadProgress').textContent='';$('aiDiscard').hidden=true;$('aiInput').hidden=false;$('aiReview').hidden=true;$('aiRetryArea').hidden=true;setMeta({});$('aiNotes').value='';$('aiConsent').checked=false;renderInputPhotos();setBusy(false);
-  }
-  async function abandon(){
-    if(busy)return;const pending=remembered();const target=jobId||pending?.jobId;if(!target)return;
-    if(!confirm('Abandonner ce brouillon et supprimer ses photos de préparation ? Aucun rapport déjà créé ne sera supprimé.'))return;
-    setBusy(true);
-    try{const result=await call('status',{jobId:target});if(result.status!=='not-found')await call('discard',{jobId:target});forget();reset();status('Brouillon abandonné.');}
-    catch(e){status(e.message,'error');}
-    finally{setBusy(false);}
+    synthesisRetry=false;interrupted=false;$('aiSynthesisPreview').hidden=true;$('aiSectionAction').hidden=true;$('aiUploadProgress').textContent='';$('aiInput').hidden=false;$('aiReview').hidden=true;setMeta({});$('aiNotes').value='';$('aiConsent').checked=false;renderInputPhotos();setBusy(false);
   }
   async function apply(){
     if(busy || !plan || recoveryIssues.some(x=>!x.resolved) || C.reviewProblems(plan).length || !$('aiApprove').checked)return;
@@ -768,7 +710,7 @@
       report.invoicesOn=report.invoices.length>0;
       await H.apply(report,jobId,workflowRef);
       forget();dialog.close();reset();
-    }catch(e){status('Le rapport n’a pas pu être ouvert : '+e.message+'. Le brouillon est conservé.','error');}
+    }catch(e){status('Le rapport n’a pas pu être ouvert : '+e.message+'. Garde cette fenêtre ouverte pour vérifier la situation. Aucun nouvel appel IA n’a été lancé.','error');}
     finally{setBusy(false);}
   }
   function renderWorkflowOptions(){
@@ -781,40 +723,23 @@
   async function open(context){
     await H.ready;
     if(context){
-      if(jobId||assets.length||remembered()?.jobId){alert('Une préparation IA est déjà en cours. Reprends-la ou abandonne-la avant de commencer un autre rapport lié.');return;}
+      if(jobId||assets.length){alert('Une préparation IA est déjà ouverte. Ferme-la avant de commencer un autre rapport lié.');return;}
       const v=context.vehicle,op=context.operation,meta=window.WBVehicleInfo.fromVehicle(v);
       setMeta({plate:v.plate||'',brand:meta.brand,model:meta.model,engine:meta.engine,reg:meta.reg,km:op.km||'',date:(op.status||'done')==='done'?op.date||'':''});
       workflowRef=context.ref;workflowOptions=[{...op,vehicleId:v.id}];renderWorkflowOptions();
       $('aiWorkflowHint').textContent+=' Travaux initialement prévus : '+(op.operation||'');
     }
-    if(!plan && !jobId){const previous=remembered();if(previous?.workflowRef){workflowRef=previous.workflowRef;const info=await WBWorkflow.call('operationInfo',workflowRef);workflowOptions=[{...info.operation,vehicleId:info.vehicle.id}];renderWorkflowOptions();}$('aiResume').hidden=!previous?.jobId;$('aiGenerate').disabled=Boolean(previous?.jobId&&!previous?.uploadPending);}
     dialog.showModal();void loadVehicles();
   }
-  async function listDrafts(cursor){
-    return call('listDrafts',cursor?{cursor}:{},12000);
+  window.WBReportAI={open};window.dispatchEvent(new Event('wb-ai-ready'));
+  $('aiGenerate').onclick=()=>generate(false);$('aiUploadOnly').onclick=()=>generate(false,true);
+  function closeSession(){
+    if(busy)return;
+    if((jobId||assets.length||documents.length||$('aiNotes').value.trim()) && !confirm('Fermer cette préparation ? La sélection et les modifications non enregistrées seront perdues. Une analyse déjà lancée peut être facturée. Les photos originales ne seront pas supprimées.'))return;
+    dialog.close();reset();status('');
   }
-  function checkedRemembered(){
-    let raw;try{raw=localStorage.getItem(KEY);}catch(_){throw new Error('Brouillon IA local inaccessible : aucune modification possible.');}
-    if(!raw)return null;
-    let saved;try{saved=JSON.parse(raw);}catch(_){throw new Error('Brouillon IA local illisible : aucune modification possible.');}
-    if(!saved||typeof saved!=='object'||!/^rai[a-f0-9]{32}$/.test(String(saved.jobId||'')))throw new Error('Brouillon IA local illisible : aucune modification possible.');
-    return saved;
-  }
-  async function openDraft(target){
-    if(!/^rai[a-f0-9]{32}$/.test(String(target||'')))throw new Error('Identifiant de brouillon IA invalide.');
-    if(busy)throw new Error('Une opération IA est déjà en cours.');
-    const saved=checkedRemembered();
-    if((saved?.jobId&&saved.jobId!==target)||(jobId&&jobId!==target))
-      throw new Error('Une autre préparation IA est présente sur cet appareil. Ouvre-la et sauvegarde-la ou abandonne-la avant de changer de brouillon.');
-    if(dialog.open)throw new Error('Ferme d’abord la fenêtre IA déjà ouverte.');
-    if(jobId===target && (plan||assets.length)){await open();return;}
-    const previous=jobId;
-    try{await open();if(!jobId)jobId=target;await resume(false);}catch(error){jobId=previous;throw error;}
-  }
-  window.WBReportAI={open,listDrafts,openDraft};window.dispatchEvent(new Event('wb-ai-ready'));
-  $('aiGenerate').onclick=()=>generate(false);$('aiUploadOnly').onclick=()=>generate(false,true);$('aiRetry').onclick=()=>generate(true);$('aiRefresh').onclick=()=>{const paid=$('aiRefresh').textContent.includes('Continuer les lots');if(paid&&!confirm('Continuer les lots restants ? Cela peut déclencher de nouveaux appels OpenAI facturables.'))return;void resume(paid);};
-  $('aiResumeBtn').onclick=()=>{void resume(false);};$('aiForget').onclick=abandon;$('aiDiscard').onclick=abandon;
-  $('aiClose').onclick=()=>{if(!busy)dialog.close();};dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault();});
+  $('aiClose').onclick=closeSession;
+  dialog.addEventListener('cancel',e=>{e.preventDefault();closeSession();});
   $('aiApprove').onchange=updateProblems;$('aiSummary').oninput=e=>{if(plan){plan.summary=e.target.value;resetApproval();}};
   $('aiTextSynthesis').onclick=async()=>{
     if(busy||!plan||recoveryIssues.some(x=>!x.resolved))return;
@@ -829,13 +754,13 @@
       synthesisRetry=false;
       const proposed=C.normalizeReviewPlan(result.plan,assets),panel=$('aiSynthesisPreview');panel.hidden=false;
       panel.innerHTML=`<h3>Proposition de synthèse globale</h3><p><strong>Résumé :</strong> ${esc(proposed.summary)}</p>${proposed.sections.map(s=>`<div class="wb-ai-synthesis-section"><strong>${esc(s.title)}</strong><p>${esc(s.description).replace(/\n/g,'<br>')}</p></div>`).join('')}<p>Les ${proposed.photos.length} photos restent comptabilisées, y compris celles retirées. Si des opérations sont fusionnées, les galeries sont réunies en conservant l’ordre relatif choisi dans chaque galerie. Les vues de baie moteur sans stade avant/après certain restent à classer.</p><div class="wb-ai-actions"><button type="button" class="btn" id="aiAcceptSynthesis">Appliquer cette proposition</button><button type="button" class="btn ghost" id="aiRejectSynthesis">Garder mes textes et mon classement</button></div>`;
-      $('aiRejectSynthesis').onclick=()=>{panel.hidden=true;status('Proposition non appliquée. Ton brouillon est inchangé.');};
+      $('aiRejectSynthesis').onclick=()=>{panel.hidden=true;status('Proposition non appliquée. Ton classement est inchangé.');};
       $('aiAcceptSynthesis').onclick=()=>{
-        if(JSON.stringify(plan)!==original){status('Tu as modifié le brouillon depuis cette proposition. Elle n’est pas appliquée pour préserver tes corrections.','error');return;}
+        if(JSON.stringify(plan)!==original){status('Tu as modifié le classement depuis cette proposition. Elle n’est pas appliquée pour préserver tes corrections.','error');return;}
         checkpointReview();plan=proposed;panel.hidden=true;renderReview();persistReview();status('Synthèse appliquée. Vérifie les éventuelles photos de baie moteur à préciser. Le dernier changement peut être annulé.');
       };
       panel.scrollIntoView({block:'start'});status('Synthèse prête, non appliquée : relis la proposition puis choisis de la conserver ou non.');
-    }catch(e){synthesisRetry=true;status('Synthèse non appliquée : '+e.message+'. Ton brouillon actuel reste conservé.','error');}
+    }catch(e){synthesisRetry=true;status('Synthèse non appliquée : '+e.message+'. Ton classement reste ouvert pendant cette session.','error');}
     finally{setBusy(false);}
   };
   $('aiFixProblems').onclick=()=>{(recoveryIssues.some(x=>!x.resolved)?$('aiRecoveryIssues'):$('aiProblems')).scrollIntoView({block:'center'});};
@@ -844,25 +769,8 @@
     if(busy||!plan||!confirm('Remplacer le résumé par les intitulés des opérations conservées et le bloc baie moteur présent ? Aucune analyse IA ne sera relancée.'))return;
     checkpointReview();plan.summary=C.summaryFromSections(plan);$('aiSummary').value=plan.summary;resetApproval();
   };
-  function exportReview(){
-    if(plan)persistReview();const value=remembered();if(!value?.jobId){status('Aucun brouillon à sauvegarder.','error');return;}
-    const blob=new Blob([JSON.stringify({type:'wheelerbrothers-ai-review',version:'56.5',spaceId:H.space(),...value},null,2)],{type:'application/json'});
-    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='WB-brouillon-IA-'+value.jobId+'.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
-  }
-  $('aiExportReview').onclick=exportReview;$('aiExportPending').onclick=exportReview;
-  $('aiImportReview').onchange=async e=>{
-    const f=e.target.files?.[0];e.target.value='';if(!f||busy)return;
-    try{
-      if(f.size>2000000)throw new Error('Brouillon JSON trop volumineux.');
-      const v=JSON.parse(await f.text());
-      if(v.type!=='wheelerbrothers-ai-review'||!/^rai[a-f0-9]{32}$/.test(v.jobId||'')||v.spaceId!==H.space()||!v.review?.plan)throw new Error('Ce fichier n’est pas un brouillon de relecture de cet atelier.');
-      if(jobId&&jobId!==v.jobId)throw new Error('Un autre dossier est ouvert. Ferme-le avant d’importer ce brouillon.');
-      if(!confirm('Reprendre le classement de ce fichier ? Les photos seront récupérées depuis le brouillon privé existant, sans analyse IA.'))return;
-      localStorage.setItem(KEY,JSON.stringify(v));jobId=v.jobId;workflowRef=v.workflowRef||null;await resume();
-    }catch(e){status('Import impossible : '+e.message,'error');}
-  };
   $('aiApply').onclick=apply;
-  window.addEventListener('beforeunload',e=>{if(busy){e.preventDefault();e.returnValue='';}});
+  window.addEventListener('beforeunload',e=>{if(dialog.open&&(busy||jobId||assets.length||documents.length||$('aiNotes').value.trim())){e.preventDefault();e.returnValue='';}});
   ['btnHomeAI','btnArchiveAI'].forEach(name=>{const b=document.getElementById(name);if(b){b.addEventListener('click',()=>{H.closeArchive();open();});H.ready.then(()=>b.disabled=false);}});
   } catch(error) {
     window.WBReportAIBootError=String(error?.message||error);

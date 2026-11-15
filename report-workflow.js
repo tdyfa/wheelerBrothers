@@ -13,7 +13,7 @@
   $('wbCreateOperation').hidden=!!linked;
   $('wbPublishReport').hidden=!linked||state!=='done';$('wbPublishReport').textContent=info?.published?'Mettre à jour le rapport partagé':'Valider et partager le rapport';
   $('wbUnpublishReport').hidden=!info?.published;
-  $('wbReportShareStatus').textContent=info?.published?'Le client consulte la dernière version validée. Les modifications du brouillon restent privées jusqu’à une nouvelle publication.':'Le rapport reste privé, même si l’intervention est terminée.';
+  $('wbReportShareStatus').textContent=info?.published?'Le client consulte la dernière version validée. Les modifications restent privées jusqu’à une nouvelle publication.':'Le rapport reste privé, même si l’intervention est terminée.';
   const select=$('wbLinkedOperation');select.replaceChildren();const empty=document.createElement('option');empty.value='';empty.textContent='Aucune intervention liée — rapport indépendant';select.append(empty);
   const list=[...candidates];if(linked&&!list.some(x=>x.v.id===linked.vehicle.id&&x.o.id===op.id))list.unshift({v:{id:linked.vehicle.id,owner:linked.vehicle.owner},o:op});
   for(const {v,o}of list){const option=document.createElement('option');option.value=o._planningOnly?'planning::'+o.planningId:v.id+'::'+o.id;const period=o.plannedDates?.length?o.plannedDates.join(', '):o.date||'Sans date';option.textContent=`${period} — ${o.operation||'Intervention'} — ${W.status(o)==='done'?'Terminée':W.status(o)==='planned'?'Planifiée':'À prévoir'}${v.owner?' — '+v.owner:''}${o.reportId&&o.reportId!==H.id()?' — Rapport déjà associé':''}`;option.disabled=!!o.reportId&&o.reportId!==H.id();select.append(option);}
@@ -56,7 +56,7 @@
  }
  async function publish(){
   if(!await save())return;
-  const ok=await W.dialog('Partager la version relue du rapport',`<p>Cette version du rapport sera accessible aux personnes autorisées sur la fiche véhicule. Les prochains changements resteront dans le brouillon tant que tu ne publieras pas une nouvelle version.</p>`,[{label:'Annuler',value:false},{label:'Valider et partager',primary:true,value:true}]);if(!ok)return;
+  const ok=await W.dialog('Partager la version relue du rapport',`<p>Cette version du rapport sera accessible aux personnes autorisées sur la fiche véhicule. Les prochains changements ne seront visibles par le client qu’après une nouvelle publication.</p>`,[{label:'Annuler',value:false},{label:'Valider et partager',primary:true,value:true}]);if(!ok)return;
   setBusy(true);try{await W.call('publishReport',{reportId:H.id()});await refresh();message('Version validée partagée dans WB Carnet.');}catch(e){message(e.message,true)}finally{setBusy(false);render()}
  }
  function opened(rid,remote){

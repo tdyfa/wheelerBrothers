@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=56.7">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.7">
+<link rel="manifest" href="manifest.json?v=56.8">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=56.8">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -16,18 +16,18 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
-<script src="firebase-config.js?v=56.7"></script>
-<script src="html2pdf.bundle.min.js?v=56.7"></script>
-<script src="report-images.js?v=56.7"></script>
-<script src="wb-pdf-writer.js?v=56.7"></script>
-<script src="wb-progress.js?v=56.7"></script>
-<script src="vehicle-info.js?v=56.7"></script>
-<script src="wb-workflow.js?v=56.7"></script>
-<link rel="stylesheet" href="wb-workflow.css?v=56.7">
-<script src="vehicle-input.js?v=56.7&build=2"></script>
-<link rel="stylesheet" href="report-ai.css?v=56.7">
-<script src="report-ai-config.js?v=56.7"></script>
-<script src="report-ai-core.js?v=56.7"></script>
+<script src="firebase-config.js?v=56.8"></script>
+<script src="html2pdf.bundle.min.js?v=56.8"></script>
+<script src="report-images.js?v=56.8"></script>
+<script src="wb-pdf-writer.js?v=56.8"></script>
+<script src="wb-progress.js?v=56.8"></script>
+<script src="vehicle-info.js?v=56.8"></script>
+<script src="wb-workflow.js?v=56.8"></script>
+<link rel="stylesheet" href="wb-workflow.css?v=56.8">
+<script src="vehicle-input.js?v=56.8&build=2"></script>
+<link rel="stylesheet" href="report-ai.css?v=56.8">
+<script src="report-ai-config.js?v=56.8"></script>
+<script src="report-ai-core.js?v=56.8"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -507,12 +507,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=56.7" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=56.8" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 56.7</span>
+          <span class="sub">Version 56.8</span>
         </div>
       </div>
       <div class="app-bar-notices">
@@ -523,7 +523,6 @@
     </div>
     <div class="app-bar-actions">
       <button class="btn ghost wide" id="btnArchive">📁 Mes rapports</button>
-      <button class="btn ghost wide" id="btnDrafts" type="button" disabled>📝 Mes brouillons</button>
       <button class="btn primary" id="btnSaveNow">💾 Enregistrer</button><button class="btn primary" id="btnCompleteReport" type="button" hidden>Enregistrer et marquer terminée</button>
       <button class="btn primary" id="btnPdf">📄 Générer le PDF</button>
       <button class="btn ghost" id="btnImport">📥 Importer</button>
@@ -543,7 +542,6 @@
     <p>Sélectionne un rapport, crée un document vierge ou prépare-le à partir de tes photos avec l’IA.</p>
     <div class="report-home-actions">
       <button class="btn secondary" id="btnHomeSelect" type="button" disabled>Sélectionner un rapport</button>
-      <button class="btn secondary" id="btnHomeDrafts" type="button" disabled>Mes brouillons</button>
       <button class="btn" id="btnHomeCreate" type="button" disabled>Créer un nouveau rapport</button>
       <button class="btn secondary wb-ai-entry" id="btnHomeAI" type="button" disabled>Créer avec l’IA</button>
     </div>
@@ -573,16 +571,6 @@
     <div id="archiveList" style="overflow-y:auto; padding:0 12px 16px;">
       <div style="padding:20px; color:#6b7280; font-size:13px; text-align:center;">Chargement…</div>
     </div>
-  </div>
-</div>
-
-<div id="draftsOverlay" class="no-print" role="dialog" aria-modal="true" aria-labelledby="draftsTitle" style="display:none;position:fixed;inset:0;background:rgba(15,18,22,.55);z-index:200;align-items:flex-start;justify-content:center;padding:40px 16px;">
-  <div style="background:#fff;border-radius:14px;width:100%;max-width:640px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #e3e7ee;">
-      <h2 id="draftsTitle" style="margin:0;font-size:16px;">Mes brouillons</h2>
-      <button id="btnCloseDrafts" type="button" aria-label="Fermer" style="border:0;background:none;font-size:20px;cursor:pointer;color:#6b7280;">&times;</button>
-    </div>
-    <div id="draftsList" style="overflow-y:auto;padding:16px 20px;" aria-live="polite"></div>
   </div>
 </div>
 
@@ -968,13 +956,13 @@ const SYNC_CLIENT_ID = (()=>{
 function flagSyncError(customMsg){
   const el = document.getElementById('saveWarn');
   if(el){
-    el.textContent = customMsg || "⚠️ Synchronisation impossible (code d'atelier ou réseau) → tes modifications restent sur ce téléphone uniquement";
+    el.textContent = customMsg || "⚠️ Synchronisation impossible : tes modifications ne sont pas enregistrées. Garde cette page ouverte et vérifie ta connexion.";
     el.style.display = 'inline';
   }
 }
 function clearSyncError(){
   const el = document.getElementById('saveWarn');
-  if(el && (el.textContent.indexOf('Synchronisation impossible') !== -1 || el.textContent.indexOf('trop volumineux') !== -1)){
+  if(el && ['Synchronisation impossible','Enregistrement impossible','Conflit :','trop volumineux'].some(text=>el.textContent.includes(text))){
     el.style.display = 'none';
   }
 }
@@ -989,13 +977,13 @@ let reportUiReady=false;
 function doFirestoreSave(reportId,payloadJson,meta){
   if(new TextEncoder().encode(payloadJson).length>FIRESTORE_DOC_SAFE_LIMIT){flagSyncError('Rapport trop volumineux : exporte le JSON pour préserver ton travail.');return Promise.reject(new Error('Rapport trop volumineux.'));}
   const next=(reportWriteQueues.get(reportId)||Promise.resolve()).catch(()=>{}).then(async()=>{
-    if(conflictedReportIds.has(reportId))throw new Error('Le rapport a changé sur un autre appareil. Ton brouillon est conservé localement : exporte-le avant de rouvrir la version distante.');
+    if(conflictedReportIds.has(reportId))throw new Error('Le rapport a changé sur un autre appareil. Tes modifications non enregistrées restent uniquement dans cette page.');
     const expected=reportRemotePayloads.get(reportId);
     await WBWorkflow.raw('draftReport',{reportId,report:JSON.parse(payloadJson),writerId:SYNC_CLIENT_ID,...(expected===undefined?{}:{expectedPayload:expected})});
     reportRemotePayloads.set(reportId,payloadJson);
     if(currentReportId!==reportId||JSON.stringify(state)===payloadJson)dirtyReportIds.delete(reportId);
-    forgetLocalDraft(reportId,payloadJson);clearSyncError();
-  }).catch(e=>{flagSyncError('Synchronisation impossible : '+e.message);throw e;});
+    clearSyncError();
+  }).catch(e=>{flagSyncError('Synchronisation impossible : '+e.message+' Les modifications restent uniquement dans cette page.');throw e;});
   reportWriteQueues.set(reportId,next);next.catch(()=>{});return next;
 }
 function flushPendingSave(){
@@ -1024,7 +1012,6 @@ function save(){
   if(!currentReportId || document.body.dataset.reportView!=='editor') return;
   const payloadNow = JSON.stringify(state);
   updateSizeIndicator(payloadNow.length);
-  cacheReportLocally(currentReportId,payloadNow);
   if(_applyingRemoteUpdate) return; // ne pas ré-émettre ce qu'on vient de recevoir
   dirtyReportIds.add(currentReportId);
 
@@ -1048,8 +1035,8 @@ async function saveNow(){
   alert('Initialisation du générateur en cours.');
 }
 
-/* Copies locales non confirmées par Firebase : ne pas perdre un brouillon
-   en choisissant un nouveau rapport depuis l'accueil. Aucune écriture réseau ici. */
+/* Données historiques : aucune nouvelle copie locale n'est créée.
+   Les anciennes données ne sont effacées que sur action explicite. */
 const LOCAL_REPORT_DRAFTS_KEY='rapport_pending_drafts_v1';
 let localDraftsStorageUnreadable=false;
 let localReportDrafts=(()=>{
@@ -1064,29 +1051,6 @@ function persistLocalDrafts(){
   try{localStorage.setItem(LOCAL_REPORT_DRAFTS_KEY,JSON.stringify(localReportDrafts));}
   catch(e){flagQuota();}
 }
-function preserveLegacyLocalDraft(){
-  if(localDraftsStorageUnreadable){flagSyncError('⚠️ Copies locales illisibles : conservées sans écrasement. Exporte le rapport en cours.');return;}
-  try{
-    const payload=localStorage.getItem('rapport_state');
-    if(!payload)return;
-    const parsed=JSON.parse(payload);
-    if(!parsed || typeof parsed!=='object' || Array.isArray(parsed))return;
-    const id=localStorage.getItem('current_report_id')||newReportId();
-    if(!localReportDrafts[id]){
-      localReportDrafts[id]={payload,updatedAt:0};
-      persistLocalDrafts();
-    }
-  }catch(e){}
-}
-function cacheReportLocally(id,payload,pending=true){
-  if(!id)return;
-  if(pending){localReportDrafts[id]={payload,updatedAt:Date.now()};persistLocalDrafts();}
-  if(localDraftsStorageUnreadable)return; // préserver aussi l'ancien cache rapport_state
-  try{
-    localStorage.setItem('rapport_state',payload);
-    localStorage.setItem('current_report_id',id);
-  }catch(e){flagQuota();}
-}
 function forgetLocalDraft(id,payload){
   if(!localReportDrafts[id])return;
   if(payload!==undefined && localReportDrafts[id].payload!==payload)return;
@@ -1094,7 +1058,7 @@ function forgetLocalDraft(id,payload){
 }
 function discardLocalReport(id){
   const draft=localReportDrafts[id];if(!draft)return;
-  let label='ce brouillon';try{const r=JSON.parse(draft.payload);label=r.plate||r.title||label;}catch(e){}
+  let label='cette ancienne copie';try{const r=JSON.parse(draft.payload);label=r.plate||r.title||label;}catch(e){}
   if(!confirm('Supprimer uniquement la copie locale de « '+label+' » sur cet appareil ?\n\nLe rapport synchronisé dans Firebase ne sera ni modifié ni supprimé. Cette copie locale ne pourra pas être récupérée ensuite.'))return;
   forgetLocalDraft(id);
   // Empêcher l'ancien cache de recréer la copie au prochain démarrage.
@@ -1103,140 +1067,10 @@ function discardLocalReport(id){
   }}catch(e){}
   renderArchiveList(_archiveDocsCache);
 }
-function restoreLocalReport(id){
-  const draft=localReportDrafts[id];
-  if(!draft)return false;
-  if(draft.sourceReportDeleted){
-    alert('Le rapport d’origine a été supprimé. La copie locale est conservée : ouvre « Mes brouillons » pour l’exporter. Les photos qui étaient liées au rapport supprimé peuvent ne plus être accessibles.');
-    return false;
-  }
-  try{
-    const parsed=JSON.parse(draft.payload);
-    if(!parsed || typeof parsed!=='object' || Array.isArray(parsed))throw new Error('invalid-draft');
-    if(!confirm('Ouvrir cette copie locale ? Si une version synchronisée existe, elle sera remplacée lors de tes prochaines modifications ou de la sauvegarde.'))return false;
-    subscribeToReport(id,{localDraft:parsed});
-    closeArchive();
-    return true;
-  }catch(e){alert('Cette copie locale est illisible. Aucun rapport n’a été modifié.');return false;}
+function exportLegacyLocalText(raw,name){
+  const url=URL.createObjectURL(new Blob([raw],{type:'application/json'}));
+  const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
-
-/* Les copies locales appartiennent uniquement à cet appareil. Leur lecture ici
-   ne déclenche ni synchronisation, ni suppression, ni nouvelle analyse IA. */
-let draftsPreviousFocus=null,draftsRevision=0;
-function draftElement(tag,text,style){
-  const node=document.createElement(tag);if(text!==undefined)node.textContent=text;
-  if(style)node.style.cssText=style;return node;
-}
-function closeDrafts(){
-  draftsRevision++;
-  document.getElementById('draftsOverlay').style.display='none';
-  if(draftsPreviousFocus?.isConnected)draftsPreviousFocus.focus();
-  draftsPreviousFocus=null;
-}
-function renderDrafts(){
-  const host=document.getElementById('draftsList');if(!host)return;
-  const revision=++draftsRevision;
-  host.replaceChildren();
-  host.append(draftElement('p','Les copies locales et les préparations IA de cet appareil sont conservées séparément des rapports enregistrés. Vérifie aussi tes autres appareils.', 'font-size:13px;color:#596272;margin:0 0 18px;'));
-  host.append(draftElement('h3','Copies locales de rapports','font-size:15px;margin:0 0 8px;'));
-  const entries=Object.entries(localReportDrafts);
-  function exportLocalText(raw,name){
-    const url=URL.createObjectURL(new Blob([raw],{type:'application/json'})),a=document.createElement('a');
-    a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
-  }
-  if(localDraftsStorageUnreadable){
-    host.append(draftElement('p','Les copies locales sont illisibles ou inaccessibles. Elles ne seront pas écrasées ; exporte les données disponibles avant toute autre opération.','font-size:13px;color:#875612;'));
-    try{const raw=localStorage.getItem(LOCAL_REPORT_DRAFTS_KEY);if(raw){const exportRaw=draftElement('button','Exporter les données locales brutes');exportRaw.type='button';exportRaw.className='btn ghost';exportRaw.onclick=()=>exportLocalText(raw,'WB-copies-locales-brutes.json');host.append(exportRaw);}}catch(_){}
-  }
-  if(!entries.length&&!localDraftsStorageUnreadable)host.append(draftElement('p','Aucune copie locale à récupérer sur cet appareil.','font-size:13px;color:#596272;'));
-  for(const [id,draft] of entries){
-    let data;try{data=JSON.parse(draft?.payload);if(!data||typeof data!=='object'||Array.isArray(data))throw Error();}catch(_){data=null;}
-    const row=draftElement('div',undefined,'padding:12px 0;border-bottom:1px solid #eef1f5;');
-    row.append(draftElement('strong',data?.plate||data?.model||data?.title||'Copie locale illisible'));
-    const description=draft.sourceReportDeleted?'Rapport d’origine supprimé : copie locale conservée. Exporte-la ; ses liens photo peuvent ne plus être accessibles.':data?'Copie locale à récupérer'+(draft.updatedAt?' · '+fmtArchiveDate(draft.updatedAt):''):'Copie illisible : elle est conservée sur cet appareil.';
-    row.append(draftElement('div',description,'font-size:12px;color:#875612;margin:4px 0;'));
-    const open=draftElement('button','Ouvrir','margin:6px 8px 0 0;');open.type='button';open.className='btn ghost';open.disabled=!data;
-    if(draft.sourceReportDeleted)open.disabled=true;
-    open.addEventListener('click',()=>{if(restoreLocalReport(id))closeDrafts();});row.append(open);
-    if(typeof draft?.payload==='string'){
-      const saveCopy=draftElement('button','Exporter la copie (.json)','margin:6px 8px 0 0;');saveCopy.type='button';saveCopy.className='btn ghost';
-      saveCopy.addEventListener('click',()=>exportLocalText(draft.payload,'WB-copie-locale-rapport.json'));row.append(saveCopy);
-    }
-    const del=draftElement('button','Supprimer la copie locale','margin-top:6px;');del.type='button';del.className='btn ghost';
-    del.addEventListener('click',()=>{discardLocalReport(id);renderDrafts();});row.append(del);host.append(row);
-  }
-  // Ne pas perdre un ancien cache distinct d'une copie portant le même ID.
-  try{
-    const legacy=localStorage.getItem('rapport_state');
-    const legacyId=localStorage.getItem('current_report_id');
-    const matchesRemote=_archiveCacheConfirmed&&_archiveDocsCache.some(doc=>doc.id===legacyId&&doc.data().payload===legacy);
-    if(legacy&&!matchesRemote&&!entries.some(([,draft])=>draft?.payload===legacy)){
-      const row=draftElement('div',undefined,'padding:12px 0;border-bottom:1px solid #eef1f5;');
-      row.append(draftElement('strong','Autre copie locale du rapport'));
-      row.append(draftElement('p','Cette copie peut différer de la version enregistrée. Exporte-la avant de choisir quelle version conserver.','font-size:12px;color:#875612;margin:5px 0;'));
-      const btn=draftElement('button','Exporter cette copie (.json)');btn.type='button';btn.className='btn ghost';btn.onclick=()=>exportLocalText(legacy,'WB-copie-locale-rapport.json');row.append(btn);host.append(row);
-    }
-  }catch(_){}
-  host.append(draftElement('h3','Préparation IA sur cet appareil','font-size:15px;margin:22px 0 8px;'));
-  let pending,unreadable=false;
-  try{const raw=localStorage.getItem('wb_ai_pending_v1');if(raw){pending=JSON.parse(raw);if(!pending||typeof pending!=='object'||!pending.jobId)unreadable=true;}}catch(_){unreadable=true;}
-  if(unreadable)host.append(draftElement('p','Les données locales de préparation IA sont illisibles. Elles ont été conservées.','font-size:13px;color:#875612;'));
-  else if(!pending?.jobId)host.append(draftElement('p','Aucune préparation IA locale sur cet appareil.','font-size:13px;color:#596272;'));
-  else{
-    const title=[pending.meta?.plate,pending.meta?.brand,pending.meta?.model].filter(Boolean).join(' · ')||'Préparation IA';
-    host.append(draftElement('strong',title));
-    host.append(draftElement('p',pending.uploadPending?'Transfert interrompu ou à terminer.':'Préparation ou classement conservé sur cet appareil.','font-size:13px;color:#596272;margin:5px 0;'));
-    const open=draftElement('button','Ouvrir la préparation IA','margin:6px 0;');open.type='button';open.className='btn ghost';
-    open.addEventListener('click',async()=>{
-      if(!window.WBReportAI?.open){alert('Le module IA est indisponible. Le brouillon reste conservé.');return;}
-      closeDrafts();try{await window.WBReportAI.open();}catch(e){alert('Ouverture impossible : '+(e.message||e));openDrafts();}
-    });host.append(open);
-  }
-  host.append(draftElement('h3','Brouillons IA enregistrés','font-size:15px;margin:22px 0 8px;'));
-  host.append(draftElement('p','Ces préparations sont associées à ton atelier. Sur un autre appareil, seul l’état enregistré sur le serveur est retrouvé : les corrections manuelles locales restent sur leur appareil d’origine.','font-size:13px;color:#596272;margin:5px 0;'));
-  const server=draftElement('div'),message=draftElement('p','Chargement des brouillons IA…','font-size:13px;color:#596272;');
-  server.append(message);host.append(server);
-  let cursor='',seenCursors=new Set(),count=0,loading=false;
-  const loadPage=async()=>{
-    if(loading||revision!==draftsRevision)return;loading=true;message.textContent='Chargement des brouillons IA…';
-    try{
-      if(!window.WBReportAI?.listDrafts)throw new Error('Module IA indisponible.');
-      const response=await window.WBReportAI.listDrafts(cursor);
-      if(revision!==draftsRevision)return;
-      if(!response||!Array.isArray(response.drafts))throw new Error('Réponse de liste indisponible.');
-      for(const draft of response.drafts){
-        if(!/^rai[a-f0-9]{32}$/.test(String(draft?.jobId||'')))continue;
-        count++;
-        const row=draftElement('div',undefined,'padding:12px 0;border-bottom:1px solid #eef1f5;');
-        const meta=draft.meta||{},title=[meta.plate,meta.brand,meta.model].filter(x=>typeof x==='string'&&x.trim()).join(' · ')||'Préparation IA';
-        row.append(draftElement('strong',title));
-        const labels={partial:'Lots partiellement terminés',running:'Préparation en cours',failed:'Préparation interrompue',completed:'Classement prêt à relire'};
-        const date=draft.createdAt?fmtArchiveDate(draft.createdAt):'';
-        row.append(draftElement('div',[labels[draft.status]||'État à vérifier',date,draft.jobId===pending?.jobId?'Également sur cet appareil':''].filter(Boolean).join(' · '),'font-size:12px;color:#596272;margin:4px 0;'));
-        const open=draftElement('button','Ouvrir','margin:6px 8px 0 0;');open.type='button';open.className='btn ghost';
-        open.addEventListener('click',async()=>{
-          if(!window.WBReportAI?.openDraft){alert('Le module IA est indisponible.');return;}
-          closeDrafts();try{await window.WBReportAI.openDraft(draft.jobId);}catch(e){alert('Ouverture impossible : '+(e.message||e));openDrafts();}
-        });row.append(open);
-        server.insertBefore(row,message);
-      }
-      const next=response.nextCursor||'';
-      if(next&&(typeof next!=='string'||seenCursors.has(next)))throw new Error('Pagination des brouillons invalide.');
-      cursor=next;if(cursor)seenCursors.add(cursor);
-      message.replaceChildren();
-      if(cursor){const more=draftElement('button','Afficher la suite');more.type='button';more.className='btn ghost';more.addEventListener('click',loadPage);message.append(more);}
-      else message.textContent=count?'':'Aucun brouillon IA enregistré trouvé.';
-    }catch(e){if(revision===draftsRevision)message.textContent='Liste des brouillons IA indisponible : '+(e.message||e)+'. Les copies locales restent accessibles.';}
-    finally{loading=false;}
-  };
-  void loadPage();
-}
-function openDrafts(){
-  draftsPreviousFocus=document.activeElement;subscribeReportsList();renderDrafts();
-  document.getElementById('draftsOverlay').style.display='flex';
-  document.getElementById('btnCloseDrafts').focus();
-}
-
 /* ---------- archive multi-rapports ---------- */
 let currentReportId = null;
 let _unsubReport = null;
@@ -1367,6 +1201,11 @@ function subscribeToReport(id, {isNew=false, localDraft=null}={}){
       if(isNew||localDraft)return;
       // Un cache incomplet n'est pas la preuve que le document a disparu.
       if(snap.metadata?.fromCache)return;
+      if(dirtyReportIds.has(id)){
+        conflictedReportIds.add(id);
+        flagSyncError('Ce rapport a été supprimé ou est devenu inaccessible. Tes modifications non enregistrées restent uniquement sur cette page ; exporte le rapport si tu souhaites les conserver.');
+        return;
+      }
       showReportHome('Ce rapport est introuvable. Sélectionne un autre rapport ou crée-en un nouveau.','error');
       return;
     }
@@ -1374,8 +1213,8 @@ function subscribeToReport(id, {isNew=false, localDraft=null}={}){
     window.WBReportFlow?.opened(id,remote);
     if(!isInitialSnapshot && remote.writerId!==SYNC_CLIENT_ID && dirtyReportIds.has(id)
        && reportRemotePayloads.get(id)!==remote.payload && remote.payload!==JSON.stringify(state)){
-      conflictedReportIds.add(id);cacheReportLocally(id,JSON.stringify(state));
-      flagSyncError('Conflit : une autre session a modifié ce rapport. Ton brouillon est conservé localement ; exporte-le avant de rouvrir le rapport.');
+      conflictedReportIds.add(id);
+      flagSyncError('Conflit : une autre session a modifié ce rapport. Tes modifications non enregistrées restent uniquement dans cette page.');
       return;
     }
     reportRemotePayloads.set(id,remote.payload);
@@ -1404,7 +1243,6 @@ function subscribeToReport(id, {isNew=false, localDraft=null}={}){
       Object.assign(state,blankState(),parsed);
       setReportView('editor');
       refreshEditorFromState();
-      cacheReportLocally(id,JSON.stringify(state),false);
     }finally{_applyingRemoteUpdate=false;}
     migrateEmbeddedImages();
   },(err)=>{
@@ -1416,7 +1254,25 @@ function subscribeToReport(id, {isNew=false, localDraft=null}={}){
   });
 }
 
+// La page garde seule les changements non confirmés. Ne jamais changer de
+// rapport en silence lorsque l'écriture a échoué ou que le contenu a changé.
+async function confirmReportSavedBeforeNavigation(){
+  const id=currentReportId;
+  if(!id || !dirtyReportIds.has(id))return true;
+  try{
+    save();await flushPendingSave();
+    if(dirtyReportIds.has(id))throw new Error('Des modifications ne sont pas encore enregistrées.');
+    return true;
+  }catch(error){
+    flagSyncError('Enregistrement impossible : '+(error.message||error)+'. Les modifications restent uniquement dans cette page.');
+    const discard=confirm('L’enregistrement du rapport n’est pas confirmé. Rester sur cette page permet de réessayer. Quitter maintenant fera perdre les modifications non enregistrées.\n\nQuitter quand même ?');
+    if(!discard)return false;
+    clearTimeout(_saveDebounceTimer);if(_pendingSave?.reportId===id)_pendingSave=null;
+    dirtyReportIds.delete(id);conflictedReportIds.delete(id);return true;
+  }
+}
 async function startNewReport(){
+  if(!(await confirmReportSavedBeforeNavigation()))return;
   if(currentReportId && !confirm('Créer un nouveau rapport ? Le rapport actuel reste enregistré dans « Mes rapports ».'))return;
   const id=newReportId();
   try{await WBWorkflow.call('draftReport',{reportId:id,report:blankState(),writerId:SYNC_CLIENT_ID});subscribeToReport(id);closeArchive();}
@@ -1425,7 +1281,7 @@ async function startNewReport(){
 
 async function openReport(id){
   try{
-    if(conflictedReportIds.has(id)&&!confirm('Rouvrir la version distante ? Exporte d’abord ton brouillon local si tu souhaites le conserver.'))return;
+    if(!(await confirmReportSavedBeforeNavigation()))return;
     await WBWorkflow.call('reportInfo',{reportId:id});
     if(conflictedReportIds.has(id)){clearTimeout(_saveDebounceTimer);if(_pendingSave?.reportId===id)_pendingSave=null;await (reportWriteQueues.get(id)||Promise.resolve()).catch(()=>{});conflictedReportIds.delete(id);dirtyReportIds.delete(id);}
     subscribeToReport(id);closeArchive();}
@@ -1467,10 +1323,6 @@ async function refreshReportCleanups(){
       const result=await readReportCleanupPage(cursor);if(revision!==reportCleanupRevision)return;
       for(const item of result.cleanups){
         if(!item||typeof item.reportId!=='string'||!item.reportId)continue;
-        // Une réponse perdue ne doit pas conduire à restaurer sous un ID supprimé.
-        if(localReportDrafts[item.reportId]&&!localReportDrafts[item.reportId].sourceReportDeleted){
-          localReportDrafts[item.reportId].sourceReportDeleted=true;persistLocalDrafts();
-        }
         if(item.state==='complete'&&!(Number(item.retained)>0))continue;
         shown++;
         if(item.state==='pending'||item.state==='running')active=true;
@@ -1521,8 +1373,8 @@ async function refreshReportCleanups(){
   await page();
 }
 function ensureLocalReportSafeToDelete(id){
-  if(localDraftsStorageUnreadable)throw new Error('Les copies locales sont illisibles : la suppression est bloquée pour éviter une perte. Ouvre « Mes brouillons » et exporte les données locales.');
-  if(localReportDrafts[id])throw new Error('Une copie locale non synchronisée de ce rapport existe sur cet appareil. Ouvre « Mes brouillons » pour la récupérer ou l’abandonner explicitement avant de supprimer le rapport.');
+  if(localDraftsStorageUnreadable)throw new Error('Les copies locales sont illisibles : la suppression est bloquée pour éviter une perte. Une vérification des anciennes données de cet appareil est nécessaire.');
+  if(localReportDrafts[id])throw new Error('Une copie locale non synchronisée de ce rapport existe sur cet appareil. Dans « Mes rapports », exporte ou supprime explicitement cette ancienne copie avant de supprimer le rapport.');
   let legacyId,legacy;
   try{legacyId=localStorage.getItem('current_report_id');legacy=localStorage.getItem('rapport_state');}
   catch(_){throw new Error('Impossible de vérifier les copies locales ; suppression bloquée.');}
@@ -1530,13 +1382,13 @@ function ensureLocalReportSafeToDelete(id){
     const confirmed=_archiveCacheConfirmed&&_archiveDocsCache.find(doc=>doc.id===id&&doc.metadata?.hasPendingWrites===false);
     if(!confirmed)throw new Error('La version serveur du rapport n’est pas encore confirmée. Attends la fin du chargement de « Mes rapports » puis réessaie.');
     if(confirmed.data().payload!==legacy)
-      throw new Error('Une autre copie locale de ce rapport pourrait contenir des modifications. Ouvre « Mes brouillons » avant de supprimer le rapport.');
+      throw new Error('Une autre copie locale de ce rapport pourrait contenir des modifications. Dans « Mes rapports », exporte ou supprime explicitement cette ancienne copie avant de supprimer le rapport.');
   }
 }
 async function deleteReport(id,evt){
   evt?.stopPropagation();
   if(reportDeletionsInFlight.has(id))return;
-  if(!confirm('Supprimer ce rapport et retirer son partage ? L’intervention liée reste dans le Planning et le Carnet. Les fichiers encore référencés ou impossibles à vérifier seront conservés. Les brouillons locaux sur d’autres appareils ne sont pas visibles : vérifie-les avant de supprimer. Les sauvegardes et transferts peuvent être temporairement suspendus ; si le nettoyage s’interrompt, une reprise sera nécessaire.'))return;
+  if(!confirm('Supprimer ce rapport et retirer son partage ? L’intervention liée reste dans le Planning et le Carnet. Les fichiers encore référencés ou impossibles à vérifier seront conservés. D’anciennes copies locales sur d’autres appareils ne sont pas visibles : vérifie-les avant de supprimer. Les sauvegardes et transferts peuvent être temporairement suspendus ; si le nettoyage s’interrompt, une reprise sera nécessaire.'))return;
   reportDeletionsInFlight.add(id);const button=evt?.currentTarget;if(button)button.disabled=true;
   try{
     try{await readReportCleanupPage();} // Échec fermé avec un serveur non mis à jour.
@@ -1550,19 +1402,12 @@ async function deleteReport(id,evt){
     const result=await WBWorkflow.call('deleteReport',{reportId:id,confirmLinked:true,cleanupProtocol:1,expectedPayload});
     if(!result?.cleanup||!['complete','pending','running','failed','error'].includes(result.cleanup.state))
       throw new Error('Réponse de suppression incomplète. Vérifie le suivi avant de réessayer.');
-    // Une copie locale non synchronisée peut être utile : ne jamais l'effacer ici.
-    if(localReportDrafts[id]){localReportDrafts[id].sourceReportDeleted=true;persistLocalDrafts();}
     if(_pendingSave?.reportId===id){clearTimeout(_saveDebounceTimer);_pendingSave=null;}
-    try{
-      if(!localReportDrafts[id]&&localStorage.getItem('current_report_id')===id){
-        localStorage.removeItem('current_report_id');localStorage.removeItem('rapport_state');
-      }
-    }catch(e){}
     const message=cleanupSummary(result.cleanup);
     if(id===currentReportId)showReportHome(message);
     alert(message);void refreshReportCleanups();
   }catch(e){
-    alert('Suppression ou nettoyage non confirmé : '+(e.message||e)+'. Vérifie le suivi avant de réessayer ; les copies locales sont conservées.');
+    alert('Suppression ou nettoyage non confirmé : '+(e.message||e)+'. Vérifie le suivi avant de réessayer.');
     void refreshReportCleanups();
   }finally{reportDeletionsInFlight.delete(id);if(button?.isConnected)button.disabled=false;}
 }
@@ -1578,18 +1423,23 @@ function renderArchiveList(docs){
   const list=document.getElementById('archiveList');
   if(!list)return;
   const escape=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-  const localRows=Object.entries(localReportDrafts).flatMap(([id,draft])=>{
-    try{
-      const data=JSON.parse(draft.payload);
-      return [`<div class="archive-report-row" data-report-action="local" data-id="${escape(id)}" style="padding:12px 8px;border-bottom:1px solid #eef1f5;">
-        <button class="btn-open-report" type="button" style="display:block;width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;color:inherit;">
-          <span style="display:block;font-weight:700;font-size:14px;">${escape(data.plate||data.model||data.title||'Sans titre')}</span>
-          <span style="display:block;font-size:11.5px;color:#875612;">Copie locale à récupérer${draft.updatedAt?' · '+escape(fmtArchiveDate(draft.updatedAt)):''}</span>
-        </button>
-        <button class="btn-del-local" type="button" style="border:0;background:none;color:#b3261e;font-size:12px;text-decoration:underline;cursor:pointer;padding:9px 0;">Supprimer la copie locale</button>
-      </div>`];
-    }catch(e){return [];}
-  }).join('');
+  // Les anciennes copies ne sont ni créées ni effacées automatiquement.
+  // Elles restent exportables ou supprimables uniquement par choix explicite.
+  const legacyEntries=Object.entries(localReportDrafts);
+  let oldCache=null,oldCacheId=null;
+  try{oldCache=localStorage.getItem('rapport_state');oldCacheId=localStorage.getItem('current_report_id');}catch(_){}
+  const localRows=legacyEntries.map(([id,draft])=>{
+    let label='Ancienne copie locale';
+    try{const d=JSON.parse(draft?.payload||'');label=d.plate||d.model||d.title||label;}catch(_){}
+    return `<div class="archive-report-row" data-report-action="legacy" data-id="${escape(id)}" style="padding:12px 8px;border-bottom:1px solid #eef1f5;">
+      <strong>${escape(label)}</strong><div style="font-size:12px;color:#875612;">Ancienne copie locale conservée sur cet appareil.</div>
+      <button class="btn-export-local" type="button">Exporter</button>
+      <button class="btn-del-local" type="button">Supprimer cette ancienne copie</button></div>`;
+  });
+  const legacyMatchesConfirmed=Boolean(_archiveCacheConfirmed && oldCacheId && docs.find(doc=>doc.id===oldCacheId&&doc.metadata?.hasPendingWrites===false&&doc.data().payload===oldCache));
+  if(oldCache && !legacyMatchesConfirmed && !legacyEntries.some(([,draft])=>draft?.payload===oldCache))localRows.push(`<div class="archive-report-row" data-report-action="old-cache" style="padding:12px 8px;border-bottom:1px solid #eef1f5;"><strong>Ancienne copie locale</strong><div style="font-size:12px;color:#875612;">Anciennes données conservées sur cet appareil.</div><button class="btn-export-local" type="button">Exporter</button><button class="btn-del-local" type="button">Supprimer cette ancienne copie</button></div>`);
+  if(localDraftsStorageUnreadable)localRows.push(`<div class="archive-report-row" data-report-action="unreadable" style="padding:12px 8px;border-bottom:1px solid #eef1f5;"><strong>Anciennes données locales illisibles</strong><div style="font-size:12px;color:#875612;">Les données n’ont pas été effacées. Exporte-les avant toute suppression.</div><button class="btn-export-local" type="button">Exporter les données brutes</button><button class="btn-del-local" type="button">Supprimer les données locales illisibles</button></div>`);
+  const legacyHtml=localRows.join('');
   const rows=docs.map(doc=>{
     const data=doc.data(),isCurrent=doc.id===currentReportId;
     return `<div class="archive-report-row" data-report-action="open" data-id="${escape(doc.id)}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 8px;border-bottom:1px solid #eef1f5;${isCurrent?'background:#f6f8fb;':''}">
@@ -1602,15 +1452,27 @@ function renderArchiveList(docs){
   }).join('');
   const notice=_archiveError?'Impossible de charger les rapports. Ferme cette fenêtre puis réessaie.'
     : _archiveLoading?'Chargement des rapports…'
-    : !docs.length&&!localRows?'Aucun rapport enregistré pour l’instant.':'';
-  list.innerHTML=(notice?`<div role="status" style="padding:20px;color:${_archiveError?'#b3261e':'#6b7280'};font-size:13px;text-align:center;">${notice}</div>`:'')+localRows+rows;
+    : !docs.length&&!legacyHtml?'Aucun rapport enregistré pour l’instant.':'';
+  list.innerHTML=(notice?`<div role="status" style="padding:20px;color:${_archiveError?'#b3261e':'#6b7280'};font-size:13px;text-align:center;">${notice}</div>`:'')+legacyHtml+rows;
   list.querySelectorAll('.archive-report-row').forEach(row=>{
-    row.querySelector('.btn-open-report').addEventListener('click',()=>{
-      if(row.dataset.reportAction==='local')restoreLocalReport(row.dataset.id);
-      else openReport(row.dataset.id);
-    });
+    row.querySelector('.btn-open-report')?.addEventListener('click',()=>openReport(row.dataset.id));
     row.querySelector('.btn-del-report')?.addEventListener('click',event=>deleteReport(row.dataset.id,event));
-    row.querySelector('.btn-del-local')?.addEventListener('click',event=>{event.stopPropagation();discardLocalReport(row.dataset.id);});
+    row.querySelector('.btn-export-local')?.addEventListener('click',()=>{
+      let data;try{data=row.dataset.reportAction==='unreadable'?localStorage.getItem(LOCAL_REPORT_DRAFTS_KEY):row.dataset.reportAction==='old-cache'?oldCache:localReportDrafts[row.dataset.id]?.payload;if(typeof data!=='string'&&row.dataset.reportAction==='legacy')data=JSON.stringify(localReportDrafts[row.dataset.id]);}catch(_){}
+      if(typeof data==='string')exportLegacyLocalText(data,'WB-ancienne-copie-locale.json');
+      else alert('Cette ancienne copie est illisible. Les données restent conservées sur cet appareil.');
+    });
+    row.querySelector('.btn-del-local')?.addEventListener('click',()=>{
+      if(row.dataset.reportAction==='unreadable'){
+        if(!confirm('Supprimer définitivement les anciennes données locales illisibles de cet appareil ? Elles ne pourront pas être récupérées.'))return;
+        try{localStorage.removeItem(LOCAL_REPORT_DRAFTS_KEY);localDraftsStorageUnreadable=false;localReportDrafts={};}catch(error){alert('Suppression locale impossible : '+error.message);}
+        renderArchiveList(_archiveDocsCache);return;
+      }
+      if(row.dataset.reportAction!=='old-cache'){discardLocalReport(row.dataset.id);return;}
+      if(!confirm('Supprimer cette ancienne copie de cet appareil ? Le rapport enregistré sur Firebase ne sera pas supprimé.'))return;
+      try{if(localStorage.getItem('rapport_state')===oldCache){localStorage.removeItem('rapport_state');if(localStorage.getItem('current_report_id')===oldCacheId)localStorage.removeItem('current_report_id');}}catch(error){alert('Suppression locale impossible : '+error.message);}
+      renderArchiveList(_archiveDocsCache);
+    });
   });
 }
 
@@ -1626,18 +1488,12 @@ function subscribeReportsList(){
   _unsubReportsList=sharedCollectionRef('reports').orderBy('updatedAt','desc').limit(200).onSnapshot({includeMetadataChanges:true},snap=>{
     _archiveLoading=false;_archiveError=false;
     _archiveDocsCache=snap.docs;
-    // Ne jamais effacer une copie sur la base d'un snapshot local ou en attente.
     _archiveCacheConfirmed=snap.metadata?.fromCache===false&&snap.metadata?.hasPendingWrites===false;
-    if(_archiveCacheConfirmed)for(const doc of snap.docs){
-      if(doc.metadata?.hasPendingWrites===false&&localReportDrafts[doc.id]?.payload===doc.data().payload)forgetLocalDraft(doc.id,doc.data().payload);
-    }
     renderArchiveList(_archiveDocsCache);
-    if(document.getElementById('draftsOverlay').style.display==='flex')renderDrafts();
   },err=>{
     console.error('Liste des rapports indisponible',err);
     _archiveLoading=false;_archiveError=true;_archiveCacheConfirmed=false;_unsubReportsList=null;
     renderArchiveList(_archiveDocsCache);
-    if(document.getElementById('draftsOverlay').style.display==='flex')renderDrafts();
   });
 }
 function openArchive(){
@@ -3046,7 +2902,6 @@ document.getElementById('btnReset').addEventListener('click', ()=>{
   if(!confirm('Tout effacer et repartir de zéro ?')) return;
   // v56: keep uploaded files; a validated snapshot may still reference them.
   Object.assign(state,{title:"RAPPORT D'INTERVENTION",date:"",plate:"",brand:"",model:"",engine:"",reg:"",km:"",summary:"",overview:null,products:null,productsPhotos:[],photoOriginals:{},logo:DEFAULT_LOGO,genDate:"",labelR:null,labelV:null,baieOn:false,baieTitle:"",baieAvant:null,baieApres:null,checkpoints:makeDefaultCheckpoints(),invoicesOn:false,invoices:[],closing:"",sections:[]});
-  try{ localStorage.removeItem('rapport_state'); }catch(e){}
   initFields(); buildSections(); buildBaie(); buildChecklist(); buildInvoices(); renderReport();
   save();
 });
@@ -3235,9 +3090,10 @@ renderReport = function(force=false){
 WBReportImages.install();
 
 window.addEventListener('resize', ()=>{ if(isMobile()) updatePreviewScale(); });
+window.addEventListener('beforeunload',event=>{if(currentReportId&&dirtyReportIds.has(currentReportId)){event.preventDefault();event.returnValue='';}});
 window.addEventListener('pagehide',flushPendingSave);
 window.addEventListener('pageshow',event=>{
-  if(event.persisted){closeArchive();showReportHome();window.scrollTo(0,0);}
+  if(event.persisted){closeArchive();window.scrollTo(0,0);}
 });
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushPendingSave();});
 document.getElementById('mviewEditor').addEventListener('click', ()=>setMobileView('editor'));
@@ -3247,7 +3103,6 @@ setMobileView('editor');
 
 (async function start(){
   await window.atelierReady;
-  preserveLegacyLocalDraft(); // conserver le cache, sans ouvrir ni écrire de rapport Firebase
   bindAll();
   installVehicleLookup();
   void reloadClassicVehicles();
@@ -3261,11 +3116,6 @@ setMobileView('editor');
 
   document.getElementById('btnArchive').addEventListener('click',openArchive);
   document.getElementById('btnHomeSelect').addEventListener('click',openArchive);
-  document.getElementById('btnDrafts').addEventListener('click',openDrafts);
-  document.getElementById('btnHomeDrafts').addEventListener('click',openDrafts);
-  document.getElementById('btnCloseDrafts').addEventListener('click',closeDrafts);
-  document.getElementById('draftsOverlay').addEventListener('click',e=>{if(e.target.id==='draftsOverlay')closeDrafts();});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('draftsOverlay').style.display==='flex')closeDrafts();});
   document.getElementById('btnHomeCreate').addEventListener('click',startNewReport);
   document.getElementById('btnCloseArchive').addEventListener('click',closeArchive);
   document.getElementById('archiveOverlay').addEventListener('click',e=>{
@@ -3274,8 +3124,6 @@ setMobileView('editor');
   document.getElementById('btnNewReport').addEventListener('click',startNewReport);
   document.getElementById('btnSaveNow').addEventListener('click',saveNow);
   document.getElementById('btnHomeSelect').disabled=false;
-  document.getElementById('btnDrafts').disabled=false;
-  document.getElementById('btnHomeDrafts').disabled=false;
   document.getElementById('btnHomeCreate').disabled=false;
   reportUiReady=true;window.dispatchEvent(new Event('wb-report-ready'));
 })();
@@ -3300,7 +3148,7 @@ window.WBReportAIHost = {
     if(!/^rai[a-f0-9]{32}$/.test(id)) throw new Error('Identifiant de brouillon IA invalide');
     const payload=JSON.stringify(report);
     if(new TextEncoder().encode(payload).length>FIRESTORE_DOC_SAFE_LIMIT) throw new Error('Rapport trop volumineux ; aucune écriture effectuée');
-    flushPendingSave();
+    if(!(await confirmReportSavedBeforeNavigation()))throw new Error('Création annulée : le rapport ouvert reste inchangé.');
     const cfg=window.WB_REPORT_AI_CONFIG;
     const apply=firebase.app().functions(cfg.region).httpsCallable(cfg.functionName,{timeout:60000});
     // Écriture atomique côté serveur avec le statut du brouillon. Si déjà créé,
@@ -3330,14 +3178,14 @@ window.WBReportWorkflowHost={
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=56.7&build=1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=56.8&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
-<script src="report-workflow.js?v=56.7"></script>
-<script src="wb-md5.js?v=56.7"></script>
-<script src="wb-ai-transfer.js?v=56.7"></script>
-<script src="report-ai.js?v=56.7"></script>
+<script src="report-workflow.js?v=56.8"></script>
+<script src="wb-md5.js?v=56.8"></script>
+<script src="wb-ai-transfer.js?v=56.8"></script>
+<script src="report-ai.js?v=56.8"></script>
 <script>
 /* v56.6.2 : récupération du module IA après un chargement incomplet/cache PWA ancien.
    Aucun brouillon ni donnée Firebase n'est supprimé. */
@@ -3362,7 +3210,7 @@ if('serviceWorker' in navigator){
   function clearNotes(){document.querySelectorAll('.wb-ai-boot-note').forEach(el=>el.remove());}
   function load(name){return new Promise((resolve,reject)=>{
     const script=document.createElement('script');
-    script.src=name+'?v=56.7&retry=1';script.async=false;
+    script.src=name+'?v=56.8&retry=1';script.async=false;
     script.onload=resolve;script.onerror=()=>reject(new Error('Impossible de charger '+name));
     document.body.appendChild(script);
   });}
