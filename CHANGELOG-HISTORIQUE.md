@@ -1,5 +1,11 @@
 # Historique des notices Atelier
 
+## Livraison 56.6.4
+
+- Ajout de « Mes brouillons » pour les copies locales, préparations IA locales et jobs IA accessibles sur le serveur. Les corrections IA locales restent sur leur appareil.
+- Protection des données locales illisibles ; catalogue IA serveur réservé au compte et à l’espace autorisés.
+- Le nettoyage automatique des photos après suppression d’un rapport reste à concevoir et n’est pas modifié dans cette livraison.
+
 Cette archive rassemble les anciennes notices livrées avec les sources v56.6.2. Les textes ci-dessous décrivent des versions historiques et peuvent être périmés, notamment leurs règles Firebase et leurs instructions de déploiement. Ne pas les appliquer sans vérification ; se référer aux règles actuelles et au guide de déploiement de la livraison. Les guides de configuration et la licence tierce restent dans leurs fichiers séparés.
 
 ## CORRECTIF-53.3-BUILD-2.txt

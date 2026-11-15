@@ -1,5 +1,7 @@
 # WheelerBrothers Atelier
 
+Version de livraison : **56.6.4**.
+
 Application web comprenant le Carnet d’atelier, le Planning, l’Inventaire et le générateur de rapports. Le dépôt est destiné à GitHub Pages ; le serveur Firebase est déployé séparément.
 
 - [Historique des notices](CHANGELOG-HISTORIQUE.md) : textes des anciennes livraisons, conservés à titre historique. Les anciennes instructions et règles Firebase doivent être vérifiées avant utilisation.

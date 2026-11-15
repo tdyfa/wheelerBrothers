@@ -426,7 +426,7 @@ async function refreshPushRegistration(requestPermission=false){
     label.textContent='Notifications non prises en charge ici. L’enregistrement reste disponible.';return;
    }
    const {spaceId}=await window.atelierReady;
-   const workerUrl=new URL('sw.js?v=56.6.3&build=1',location.href);
+   const workerUrl=new URL('sw.js?v=56.6.4&build=1',location.href);
    const scope=new URL('./',location.href).href;
    const registration=await navigator.serviceWorker.register(workerUrl.href,{scope,updateViaCache:'none'});
    await waitForPushWorker(registration);

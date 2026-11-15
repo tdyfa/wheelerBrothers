@@ -55,7 +55,7 @@
   document.body.appendChild(dialog);
   const $=name=>dialog.querySelector('#'+name);
   function status(message,kind=''){ $('aiStatus').textContent=message;$('aiStatus').dataset.kind=kind; }
-  function remember(){
+  function remember({serverJob=false}={}){
     $('aiDiscard').hidden=!jobId;
     try{
       const old=remembered();
@@ -73,8 +73,8 @@
       const docsById=new Map(docs.map(d=>[d.id,d]));
       const docManifest=oldDocs.length>docs.length?oldDocs.map(d=>docsById.get(d.id)||d):docs;
       const data={...(old?.jobId===jobId?old:{}),jobId,workflowRef,
-        uploadPending:!requestInput,manifest,docManifest};
-      if(!requestInput){data.meta=metaFromForm();data.notes=$('aiNotes').value;}
+        uploadPending:!serverJob&&!requestInput,manifest,docManifest};
+      if(!requestInput&&!serverJob){data.meta=metaFromForm();data.notes=$('aiNotes').value;}
       localStorage.setItem(KEY,JSON.stringify(data));
     }catch(e){console.warn('Reprise locale indisponible, garde cette page ouverte.',e);}
   }
@@ -90,10 +90,10 @@
     if(!value)updateProblems();
     if(!value && plan){renderReviewPhotos();renderSectionControls();$('aiUndo').disabled=!reviewUndo.length;$('aiExportReview').disabled=false;$('aiSummaryFromSections').disabled=false;$('aiFixProblems').disabled=false;}
   }
-  async function call(action,extra={}){
+  async function call(action,extra={},timeoutMs=510000){
     await H.ready;
     if(typeof window.firebase?.app!=='function' || typeof firebase.app().functions!=='function')throw new Error('Le module Firebase Functions n’a pas été chargé. Recharge la page avec une connexion active.');
-    const fn=firebase.app().functions(CFG.region).httpsCallable(CFG.functionName,{timeout:510000});
+    const fn=firebase.app().functions(CFG.region).httpsCallable(CFG.functionName,{timeout:timeoutMs});
     try{return (await fn({action,...extra})).data;}
     catch(e){
       const code=e.code||'';
@@ -564,9 +564,12 @@
     resetApproval();
   }
   async function consume(result, savedReview=null){
-    jobId=result.jobId||jobId;remember();
+    jobId=result.jobId||jobId;
     if(result.status==='not-found'){status('Ce transfert n’a pas de résultat serveur. Abandonne le brouillon incomplet pour recommencer.','error');return;}
     if(result.status==='discarded'){forget();reset();status('Ce brouillon a été abandonné.');return;}
+    // Le job existe déjà côté serveur, même si le chargement des URL échoue.
+    // Après rechargement, récupérer son statut au lieu de demander un transfert vide.
+    remember({serverJob:true});
     if(result.assets?.length){
       const old=new Map(assets.map(a=>[a.id,a]));
       let manifest=result.assets;
@@ -582,6 +585,7 @@
       requestInput={jobId,assets:result.assets,documents:result.documents||[],notes:result.notes,meta:result.meta,consent:true,mode:result.assets.every(a=>a.ext)?'batches':undefined};
       setMeta(result.meta||{});$('aiNotes').value=result.notes||'';
     }
+    remember({serverJob:true});
     usage=result.usage||null;
     if(result.status==='completed'||result.status==='applied'){
       recoveryIssues=[];recoveryOriginal=null;
@@ -757,7 +761,28 @@
     if(!plan && !jobId){const previous=remembered();if(previous?.workflowRef){workflowRef=previous.workflowRef;const info=await WBWorkflow.call('operationInfo',workflowRef);workflowOptions=[{...info.operation,vehicleId:info.vehicle.id}];renderWorkflowOptions();}$('aiResume').hidden=!previous?.jobId;$('aiGenerate').disabled=Boolean(previous?.jobId&&!previous?.uploadPending);}
     dialog.showModal();void loadVehicles();
   }
-  window.WBReportAI={open};window.dispatchEvent(new Event('wb-ai-ready'));
+  async function listDrafts(cursor){
+    return call('listDrafts',cursor?{cursor}:{},12000);
+  }
+  function checkedRemembered(){
+    let raw;try{raw=localStorage.getItem(KEY);}catch(_){throw new Error('Brouillon IA local inaccessible : aucune modification possible.');}
+    if(!raw)return null;
+    let saved;try{saved=JSON.parse(raw);}catch(_){throw new Error('Brouillon IA local illisible : aucune modification possible.');}
+    if(!saved||typeof saved!=='object'||!/^rai[a-f0-9]{32}$/.test(String(saved.jobId||'')))throw new Error('Brouillon IA local illisible : aucune modification possible.');
+    return saved;
+  }
+  async function openDraft(target){
+    if(!/^rai[a-f0-9]{32}$/.test(String(target||'')))throw new Error('Identifiant de brouillon IA invalide.');
+    if(busy)throw new Error('Une opération IA est déjà en cours.');
+    const saved=checkedRemembered();
+    if((saved?.jobId&&saved.jobId!==target)||(jobId&&jobId!==target))
+      throw new Error('Une autre préparation IA est présente sur cet appareil. Ouvre-la et sauvegarde-la ou abandonne-la avant de changer de brouillon.');
+    if(dialog.open)throw new Error('Ferme d’abord la fenêtre IA déjà ouverte.');
+    if(jobId===target && (plan||assets.length)){await open();return;}
+    const previous=jobId;
+    try{await open();if(!jobId)jobId=target;await resume(false);}catch(error){jobId=previous;throw error;}
+  }
+  window.WBReportAI={open,listDrafts,openDraft};window.dispatchEvent(new Event('wb-ai-ready'));
   $('aiGenerate').onclick=()=>generate(false);$('aiRetry').onclick=()=>generate(true);$('aiRefresh').onclick=()=>{const paid=$('aiRefresh').textContent.includes('Continuer les lots');if(paid&&!confirm('Continuer les lots restants ? Cela peut déclencher de nouveaux appels OpenAI facturables.'))return;void resume(paid);};
   $('aiResumeBtn').onclick=()=>{void resume(false);};$('aiForget').onclick=abandon;$('aiDiscard').onclick=abandon;
   $('aiClose').onclick=()=>{if(!busy)dialog.close();};dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault();});
