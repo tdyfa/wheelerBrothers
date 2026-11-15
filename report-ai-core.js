@@ -1,4 +1,4 @@
-/* WheelerBrothers 56.5 — contrat IA partagé navigateur/serveur. Aucune clé. */
+/* WheelerBrothers 56.6.2 — contrat IA partagé navigateur/serveur. Aucune clé. */
 (function(root, factory){
   const api = factory();
   if(typeof module === 'object' && module.exports) module.exports = api;
@@ -55,6 +55,48 @@
     });
     assets.forEach((a,i)=>{if(!seen.has(a.id)) photos.push({id:a.id,kind:'unassigned',sectionId:'',side:'',order:i,caption:'',reason:'Photo non classée par l’IA : affectation obligatoire.'});});
     return {summary:text(raw.summary,1600),sections,photos,warnings};
+  }
+  // v56.6.2: a completed AI job must remain readable even when its returned
+  // placement list has duplicate or unknown photo references. Never silently
+  // drop such entries: return a separate, user-resolvable audit trail. The
+  // strict normalizer and makeReport() remain the publication gatekeepers.
+  function recoverPlan(raw,assets){
+    if(!raw || !Array.isArray(raw.sections) || !Array.isArray(raw.photos) || !Array.isArray(raw.warnings))
+      throw new Error('Résultat IA incomplet : conserve le brouillon et son export.');
+    // Strictly validate chapters; do not silently lose their titles/contents.
+    const base=normalizePlan({...raw,photos:[]},assets);
+    const known=new Set(assets.map(a=>a.id));
+    const seen=new Map(),candidates=[],anomalies=[];
+    for(let index=0;index<raw.photos.length;index++){
+      const p=raw.photos[index];
+      const photoId=p && typeof p.id==='string'?p.id:'';
+      if(!photoId || !known.has(photoId)){
+        anomalies.push({type:'unknown',index,id:photoId,entry:p??null,resolved:false});
+        continue;
+      }
+      if(seen.has(photoId)){
+        anomalies.push({type:'duplicate',index,id:photoId,original:seen.get(photoId),entry:p,resolved:false});
+        continue;
+      }
+      seen.set(photoId,p);
+      const kind=KINDS.includes(p.kind)||p.kind==='excluded'?p.kind:'unassigned';
+      const validSide=['','L','R'].includes(p.side);
+      const section=base.sections.find(s=>s.id===p.sectionId);
+      const validSection=kind!=='section'||Boolean(section);
+      const validOrder=Number.isInteger(p.order);
+      const needManual=!validSide||!validSection||!validOrder||kind!==p.kind;
+      candidates.push({id:photoId,kind:needManual?'unassigned':kind,
+        sectionId:needManual?'':typeof p.sectionId==='string'?p.sectionId:'',
+        side:needManual?'':p.side,
+        order:validOrder?Math.max(0,Math.min(10000,p.order)):index,
+        caption:typeof p.caption==='string'?p.caption:'',
+        reason:needManual?'Classement incohérent dans le résultat IA : vérifie cette photo.':typeof p.reason==='string'?p.reason:'',
+        ...(kind==='excluded'&&p.excludedFrom?{excludedFrom:p.excludedFrom}:{})});
+    }
+    const cleaned={summary:raw.summary,sections:raw.sections,photos:candidates,warnings:raw.warnings};
+    const result=candidates.some(p=>p.kind==='excluded')
+      ?normalizeReviewPlan(cleaned,assets):normalizePlan(cleaned,assets);
+    return {plan:result,anomalies,original:JSON.parse(JSON.stringify(raw))};
   }
   function normalizeReviewPlan(raw,assets){
     const local=JSON.parse(JSON.stringify(raw)),excluded=new Map();
@@ -203,5 +245,5 @@
     });
     return report;
   }
-  return {MAX_IMAGES,KINDS,SINGLE,PLAN_SCHEMA,normalizePlan,normalizeReviewPlan,reviewProblems,reviewIssues,makeReport,galleryKey,gallery,movePhoto,moveSection,excludePhoto,restorePhoto,dropSection,normalizedText,isEngineBay,cleanDescription,summaryFromSections,sortGalleryByFilename,initialPhotoOrder};
+  return {MAX_IMAGES,KINDS,SINGLE,PLAN_SCHEMA,normalizePlan,normalizeReviewPlan,recoverPlan,reviewProblems,reviewIssues,makeReport,galleryKey,gallery,movePhoto,moveSection,excludePhoto,restorePhoto,dropSection,normalizedText,isEngineBay,cleanDescription,summaryFromSections,sortGalleryByFilename,initialPhotoOrder};
 });
