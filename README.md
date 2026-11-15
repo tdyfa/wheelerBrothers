@@ -1,6 +1,6 @@
 # WheelerBrothers Atelier
 
-Version de livraison : **56.9**.
+Version de livraison : **57**.
 
 Application web comprenant le Carnet d’atelier, le Planning, l’Inventaire et le générateur de rapports. Le dépôt est destiné à GitHub Pages ; le serveur Firebase est déployé séparément.
 

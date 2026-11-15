@@ -1,5 +1,16 @@
 # Historique des notices Atelier
 
+## Livraison 57 — documents et historique WB Carnet
+
+- Reprend la livraison 56.10 sous le numéro 57 ; coordonnée avec WB Carnet 10 et serveur 57.
+- L’activation des documents par véhicule et la simplification des brouillons restent incluses.
+
+
+## Livraison 56.10 — documents et historique WB Carnet
+
+- Livraison coordonnée avec WB Carnet 9.6 et serveur 56.10 ; activation des documents par véhicule inchangée.
+
+
 ## Livraison 56.9 — documents de véhicule dans WB Carnet
 
 - Ajoute une option activable par véhicule dans la fiche liée à WB Carnet ; les documents sont gérés par un serveur authentifié.
