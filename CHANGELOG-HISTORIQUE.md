@@ -1,5 +1,10 @@
 # Historique des notices Atelier
 
+## Livraison 57.1 — progression PDF
+
+- La barre de progression reste visible pendant la préparation des photos puis l’assemblage du PDF et de l’aperçu ; le compteur de pages ne la remplace plus.
+
+
 ## Livraison 57 — documents et historique WB Carnet
 
 - Reprend la livraison 56.10 sous le numéro 57 ; coordonnée avec WB Carnet 10 et serveur 57.
