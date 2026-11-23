@@ -70,6 +70,34 @@ const WBReportImages = (() => {
       throw original;
     }
   }
+  // Cache éphémère par génération PDF : conserver au plus 8 Mio de fichiers
+  // compressés, jamais de pixels décodés. Les premiers fichiers conservés
+  // restent disponibles pour le début de l'assemblage ; aucun évincement ne
+  // peut entraîner le scénario LRU où toutes les images sont retéléchargées.
+  function createGenerationBlobCache(loadSource=sourceAsBlob) {
+    const maxBytes=8*1024*1024, maxEntries=64, kept=new Map();
+    let retainedBytes=0;
+    async function forPreparation(src) {
+      if(kept.has(src))return kept.get(src);
+      const blob=await loadSource(src);
+      if(blob && Number.isSafeInteger(blob.size) && blob.size>0 &&
+          blob.size<=maxBytes-retainedBytes && kept.size<maxEntries){
+        kept.set(src,blob);retainedBytes+=blob.size;
+      }
+      return blob;
+    }
+    async function forAssembly(src) {
+      if(kept.has(src)){
+        const blob=kept.get(src);kept.delete(src);retainedBytes-=blob.size;
+        return blob;
+      }
+      // Aucun nouvel élément n'est admis pendant l'assemblage.
+      return loadSource(src);
+    }
+    function clear(){kept.clear();retainedBytes=0;}
+    function stats(){return {bytes:retainedBytes,entries:kept.size,maxBytes};}
+    return {forPreparation,forAssembly,clear,stats};
+  }
   async function decode(blob) {
     if(typeof createImageBitmap==='function') {
       try {
@@ -117,29 +145,44 @@ const WBReportImages = (() => {
   }
   // v56.5.1 : copie réduite réservée au rendu A4 sur écran.
   // Le fichier conservé dans Storage et le PDF final ne sont jamais modifiés.
-  async function loadPreview(src,cache) {
+  async function loadPreview(src,cache,loadSource=sourceAsBlob,onDecoded) {
     if(!src) return null;
     if(cache.has(src)) return cache.get(src);
     const promise=(async()=>{
-      const blob=await sourceAsBlob(src);
+      const blob=await loadSource(src);
       const original=await decode(blob);
+      let canvas,preview;
       try {
         const width=original.width||original.naturalWidth;
         const height=original.height||original.naturalHeight;
         if(!width||!height)throw failure('image-decode','Dimensions invalides');
         const factor=Math.min(1,1250/Math.max(width,height));
-        const canvas=document.createElement('canvas');
+        canvas=document.createElement('canvas');
         canvas.width=Math.max(1,Math.round(width*factor));
         canvas.height=Math.max(1,Math.round(height*factor));
         const ctx=canvas.getContext('2d');
         if(!ctx)throw failure('image-decode','Canvas inaccessible');
         ctx.drawImage(original,0,0,canvas.width,canvas.height);
         if(typeof createImageBitmap==='function') {
-          try { return await createImageBitmap(canvas); }
+          try { preview=await createImageBitmap(canvas); }
           catch(_) { /* Safari peut conserver le canvas réduit. */ }
         }
-        return canvas;
-      } finally { original.close?.(); }
+        if(!preview)preview=canvas;
+      } finally {
+        // Libérer l'image pleine définition avant le décodage possible du
+        // writer (notamment PNG/WebP), afin de ne pas cumuler deux originaux.
+        if(typeof original.close==='function')original.close();
+        else if('src' in original)original.src='';
+        if(canvas && preview!==canvas){canvas.width=1;canvas.height=1;}
+      }
+      try {
+        if(onDecoded)await onDecoded(src,blob);
+        return preview;
+      } catch(error) {
+        if(typeof preview?.close==='function')preview.close();
+        else if(preview===canvas && canvas){canvas.width=1;canvas.height=1;}
+        throw error;
+      }
     })();
     cache.set(src,promise);
     try { return await promise; }
@@ -317,5 +360,5 @@ const WBReportImages = (() => {
     panel.style.cssText='padding:16px;background:var(--panel,#fff);border:1px solid var(--line);border-radius:10px;margin-bottom:12px';
     tools.after(panel);
   }
-  return {remoteBlob,sourceAsBlob,load,loadPreview,entries,sourceInfo,explain,message,previewError,diagnose,replace,install};
+  return {remoteBlob,sourceAsBlob,load,loadPreview,createGenerationBlobCache,entries,sourceInfo,explain,message,previewError,diagnose,replace,install};
 })();

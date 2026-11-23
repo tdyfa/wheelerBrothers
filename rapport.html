@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=57.1">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=57.1">
+<link rel="manifest" href="manifest.json?v=57.4">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=57.4">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -16,18 +16,18 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
-<script src="firebase-config.js?v=57.1"></script>
-<script src="html2pdf.bundle.min.js?v=57.1"></script>
-<script src="report-images.js?v=57.1"></script>
-<script src="wb-pdf-writer.js?v=57.1"></script>
-<script src="wb-progress.js?v=57.1"></script>
-<script src="vehicle-info.js?v=57.1"></script>
-<script src="wb-workflow.js?v=57.1"></script>
-<link rel="stylesheet" href="wb-workflow.css?v=57.1">
-<script src="vehicle-input.js?v=57.1&build=2"></script>
-<link rel="stylesheet" href="report-ai.css?v=57.1">
-<script src="report-ai-config.js?v=57.1"></script>
-<script src="report-ai-core.js?v=57.1"></script>
+<script src="firebase-config.js?v=57.4"></script>
+<script src="html2pdf.bundle.min.js?v=57.4"></script>
+<script src="report-images.js?v=57.4"></script>
+<script src="wb-pdf-writer.js?v=57.4"></script>
+<script src="wb-progress.js?v=57.4"></script>
+<script src="vehicle-info.js?v=57.4"></script>
+<script src="wb-workflow.js?v=57.4"></script>
+<link rel="stylesheet" href="wb-workflow.css?v=57.4">
+<script src="vehicle-input.js?v=57.4&build=2"></script>
+<link rel="stylesheet" href="report-ai.css?v=57.4">
+<script src="report-ai-config.js?v=57.4"></script>
+<script src="report-ai-core.js?v=57.4"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -494,6 +494,29 @@
   .app-bar-actions .btn.danger{background:#242a33;color:#ffb4ac;border-color:#7f3b36}
   .app-bar-actions .btn.danger:hover{background:#3a2424}
   @media (min-width:1101px){.editor{top:132px}}
+  /* Ordinateur : la barre peut être réduite sans masquer les alertes. */
+  #btnHeaderToggle,#compactErrorHint{display:none}
+  @media (min-width:769px) and (hover:hover) and (pointer:fine){
+    body[data-report-view="editor"] #btnHeaderToggle{
+      display:inline-flex;align-items:center;justify-content:center;
+      white-space:nowrap;flex:0 0 auto;min-height:36px;
+    }
+    #btnHeaderToggle:focus-visible{outline:3px solid #93c5fd;outline-offset:3px}
+    body[data-report-view="editor"][data-header-mode="compact"] .app-back,
+    body[data-report-view="editor"][data-header-mode="compact"] #sizeIndicator{display:none}
+    body[data-report-view="editor"][data-header-mode="compact"] .app-bar{padding-top:8px;padding-bottom:8px}
+    body[data-report-view="editor"][data-header-mode="compact"] .app-bar-top{flex-wrap:wrap;gap:7px 12px;margin-bottom:6px}
+    body[data-report-view="editor"][data-header-mode="compact"] .app-bar-notices{min-width:0;flex:1 1 220px;flex-wrap:wrap;white-space:normal;overflow-wrap:anywhere}
+    body[data-report-view="editor"][data-header-mode="compact"] #saveWarn{min-width:0;overflow-wrap:anywhere;word-break:break-word}
+    body[data-report-view="editor"][data-header-mode="compact"] #saveWarn[style*="inline"] ~ #compactErrorHint{display:inline;color:#ffb4ac;font-size:12px;margin-left:5px}
+    body[data-report-view="editor"][data-header-mode="compact"] .app-bar-actions > :not(#btnSaveNow):not(#btnPdf){display:none !important}
+    body[data-report-view="editor"][data-header-mode="compact"] .app-bar-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    body[data-report-view="editor"][data-header-mode="compact"] .app-bar-actions .btn{min-height:38px}
+  }
+  /* Le volet suit la hauteur réellement occupée, alertes comprises. */
+  @media (min-width:1101px) and (hover:hover) and (pointer:fine){
+    .editor{top:calc(var(--report-header-height,132px) + 8px);max-height:max(160px,calc(100vh - var(--report-header-height,132px) - 16px))}
+  }
   @media (max-width:700px){
     .app-bar{position:static;padding:calc(12px + env(safe-area-inset-top)) 12px 12px}
     .app-bar-top{align-items:flex-start;flex-wrap:wrap;gap:8px 10px;margin-bottom:10px}
@@ -507,21 +530,22 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=57.1" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=57.4" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 57.1</span>
+          <span class="sub">Version 57.4</span>
         </div>
       </div>
       <div class="app-bar-notices">
         <span id="saveWarn" style="display:none; font-size:12px; font-weight:600">⚠️ Sauvegarde auto pleine → clique « Sauvegarder (.json) »</span>
         <span id="sizeIndicator" style="font-size:11.5px; font-weight:600;"></span>
-
+        <span id="compactErrorHint">Agrandis le bandeau pour accéder à « Exporter (.json) ».</span>
       </div>
+      <button class="btn ghost" id="btnHeaderToggle" type="button" aria-controls="btnArchive btnCompleteReport btnImport btnExport btnReset" aria-expanded="true">Réduire le bandeau</button>
     </div>
-    <div class="app-bar-actions">
+    <div class="app-bar-actions" id="headerActions">
       <button class="btn ghost wide" id="btnArchive">📁 Mes rapports</button>
       <button class="btn primary" id="btnSaveNow">💾 Enregistrer</button><button class="btn primary" id="btnCompleteReport" type="button" hidden>Enregistrer et marquer terminée</button>
       <button class="btn primary" id="btnPdf">📄 Générer le PDF</button>
@@ -532,6 +556,50 @@
     <input type="file" id="importFile" accept="application/json">
   </div>
 </div>
+<script id="compact-header">
+(function(){
+  'use strict';
+  const key='wb-report-header-mode-v1';
+  const bar=document.querySelector('.app-bar');
+  const toggle=document.getElementById('btnHeaderToggle');
+  const actions=document.getElementById('headerActions');
+  if(!bar||!toggle||!actions)return;
+  let chosen=null;
+  try{const saved=localStorage.getItem(key);if(saved==='compact'||saved==='expanded')chosen=saved;}catch(_){}
+  function automaticMode(){return (window.innerWidth<=1450||window.innerHeight<=850)?'compact':'expanded';}
+  function applyMode(mode){
+    const focused=document.activeElement;
+    const desktop=typeof window.matchMedia==='function' && window.matchMedia('(min-width:769px) and (hover:hover) and (pointer:fine)').matches;
+    const hiddenAction=actions.contains?.(focused) && focused?.id!=='btnSaveNow' && focused?.id!=='btnPdf';
+    const hiddenBack=focused && focused===bar.querySelector?.('.app-back');
+    const focusWouldBeHidden=mode==='compact' && desktop && document.body.dataset.reportView==='editor' && (hiddenAction||hiddenBack);
+    document.body.dataset.headerMode=mode;
+    if(focusWouldBeHidden && typeof toggle.focus==='function')toggle.focus();
+    const expanded=mode==='expanded';
+    toggle.textContent=expanded?'Réduire le bandeau':'Agrandir le bandeau';
+    toggle.setAttribute('aria-expanded',expanded?'true':'false');
+    measure();
+  }
+  function measure(){
+    const height=bar.getBoundingClientRect().height;
+    if(Number.isFinite(height)&&height>0)
+      document.documentElement.style.setProperty('--report-header-height',`${Math.ceil(height)}px`);
+  }
+  toggle.addEventListener('click',()=>{
+    chosen=document.body.dataset.headerMode==='compact'?'expanded':'compact';
+    try{localStorage.setItem(key,chosen);}catch(_){}
+    applyMode(chosen);
+  });
+  window.addEventListener('resize',()=>applyMode(chosen||automaticMode()));
+  if(typeof ResizeObserver==='function')new ResizeObserver(measure).observe(bar);
+  else if(typeof MutationObserver==='function'){
+    const observer=new MutationObserver(measure);
+    observer.observe(bar,{attributes:true,childList:true,characterData:true,subtree:true});
+    observer.observe(document.body,{attributes:true,attributeFilter:['data-report-view','data-header-mode']});
+  }
+  applyMode(chosen||automaticMode());
+})();
+</script>
 
 <main id="reportHome" class="report-home no-print" aria-labelledby="reportHomeTitle">
   <section class="report-home-card">
@@ -2523,7 +2591,11 @@ async function renderReportPdfPages(options={}){
     // Marquer l'image comme récemment utilisée : une paire gauche/droite
     // doit rester disponible jusqu'à son dessin, même si le cache est plein.
     if(cache.has(src)){const cached=cache.get(src);cache.delete(src);cache.set(src,cached);}
-    const result=await ((previewMode||hybridPdf) ? WBReportImages.loadPreview(src,cache) : WBReportImages.load(src,cache));
+    // Le logo est peint dans les fonds de page, pas ajouté comme photo
+    // originale à l'assemblage : ne pas immobiliser le budget pour lui.
+    const rawLoader=src===logoSrc?undefined:options.imageBlobLoader;
+    const onDecoded=src===logoSrc?undefined:options.onPreparedImage;
+    const result=await ((previewMode||hybridPdf) ? WBReportImages.loadPreview(src,cache,rawLoader,onDecoded) : WBReportImages.load(src,cache));
     if(result && src)sourcesByImage.set(result,src);
     if(cache.size>previewLimit){
       for(const [key,promise] of cache){
@@ -2844,16 +2916,36 @@ async function generatePdf(){
   const progress=window.WBProgress?.start('Génération du PDF Atelier');
   progress?.update('Photos préparées',0,1,'Chargement des images…');
   const imageCache=new Map();
+  // Pré-encoder chaque original dans le PDF après décodage réussi, sans
+  // conserver un second cache d'originaux distinct du contenu du PDF.
+  // Compatibilité si le navigateur charge encore un ancien writer.
+  const blobCache=typeof WBReportImages.createGenerationBlobCache==='function'
+    ? WBReportImages.createGenerationBlobCache()
+    : {forPreparation:pdfSourceAsBlob,forAssembly:pdfSourceAsBlob,clear(){}};
+  let writer=null;
   try{
     clearTimeout(reportPreviewTimer);reportPreviewRevision++;
     await previewRenderQueue.catch(()=>{});
     save();flushPendingSave();
-    const pages=await renderReportPdfPages({hybridPdf:true,imageCache,onProgress:(...args)=>progress?.update(...args)});
+    if(typeof WBPDFWriter.createIncremental==='function')writer=WBPDFWriter.createIncremental({sourceAsBlob:pdfSourceAsBlob});
+    const pages=await renderReportPdfPages({hybridPdf:true,imageCache,
+      imageBlobLoader:writer?undefined:blobCache.forPreparation,
+      onPreparedImage:writer?(src,blob)=>writer.ensureImage(src,blob):undefined,
+      onProgress:(...args)=>progress?.update(...args)});
     if(!pages.length)throw new Error('Aucune page générée');
-    // Les pages sont mesurées pendant l'assemblage ; la dernière unité est
-    // réservée à la finalisation du fichier, après la dernière page.
+    // Les originaux ont été incorporés au fur et à mesure quand le writer le
+    // permet ; l'ancienne version reste disponible comme repli.
     progress?.update('Assemblage du fichier PDF',0,pages.length+1,'Finalisation en cours…');
-    const blob=await WBPDFWriter.build(pages,{sourceAsBlob:pdfSourceAsBlob,
+    let blob;
+    if(writer){
+      for(let i=0;i<pages.length;i++){
+        await writer.addPage(pages[i]);
+        // La page assemblée n'est plus nécessaire ; libérer son fond base64.
+        pages[i]=null;
+        progress?.update('Assemblage du fichier PDF',i+1,pages.length+1,'Finalisation en cours…');
+      }
+      blob=await writer.finish();
+    }else blob=await WBPDFWriter.build(pages,{sourceAsBlob:blobCache.forAssembly,
       onProgress:(done,total)=>progress?.update('Assemblage du fichier PDF',done,total+1,'Finalisation en cours…')});
     progress?.update('Assemblage du fichier PDF',pages.length+1,pages.length+1,'PDF prêt');
     const url=URL.createObjectURL(blob);
@@ -2866,7 +2958,7 @@ async function generatePdf(){
     alert('Impossible de générer le PDF.\n\n'+WBReportImages.message(e));
   }finally{
     for(const promise of imageCache.values())Promise.resolve(promise).then(img=>img?.close?.()).catch(()=>{});
-    imageCache.clear();reportPdfGenerating=false;
+    imageCache.clear();blobCache.clear();if(writer)writer.abort();reportPdfGenerating=false;
     progress?.close();btn.disabled=false;btn.textContent=original;
   }
 }
@@ -3182,14 +3274,14 @@ window.WBReportWorkflowHost={
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=57.1&build=1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=57.4&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
-<script src="report-workflow.js?v=57.1"></script>
-<script src="wb-md5.js?v=57.1"></script>
-<script src="wb-ai-transfer.js?v=57.1"></script>
-<script src="report-ai.js?v=57.1"></script>
+<script src="report-workflow.js?v=57.4"></script>
+<script src="wb-md5.js?v=57.4"></script>
+<script src="wb-ai-transfer.js?v=57.4"></script>
+<script src="report-ai.js?v=57.4"></script>
 <script>
 /* v56.6.2 : récupération du module IA après un chargement incomplet/cache PWA ancien.
    Aucun brouillon ni donnée Firebase n'est supprimé. */
@@ -3214,7 +3306,7 @@ if('serviceWorker' in navigator){
   function clearNotes(){document.querySelectorAll('.wb-ai-boot-note').forEach(el=>el.remove());}
   function load(name){return new Promise((resolve,reject)=>{
     const script=document.createElement('script');
-    script.src=name+'?v=57.1&retry=1';script.async=false;
+    script.src=name+'?v=57.4&retry=1';script.async=false;
     script.onload=resolve;script.onerror=()=>reject(new Error('Impossible de charger '+name));
     document.body.appendChild(script);
   });}

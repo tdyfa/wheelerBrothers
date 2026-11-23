@@ -1,5 +1,23 @@
 # Historique des notices Atelier
 
+## Livraison 57.4 — bandeau compact du générateur de rapport
+
+- Sur ordinateur, un mode réduit conserve Enregistrer, Générer le PDF et les alertes ; les autres commandes restent accessibles en agrandissant le bandeau.
+- La hauteur du volet d’édition suit le bandeau. Le choix de présentation est mémorisé si le navigateur le permet.
+
+
+## Livraison 57.3 — originaux intégrés progressivement au PDF
+
+- Les photos originales sont intégrées pendant la préparation du PDF puis réutilisées à l’assemblage, sans cache séparé de 100 photos.
+- L’ancien chemin borné reste disponible comme repli ; le PDF final peut rester volumineux et les tests iPhone sont nécessaires.
+
+
+## Livraison 57.2 — réutilisation limitée des originaux PDF
+
+- Pendant la génération PDF, réutilise certains originaux compressés conservés temporairement en mémoire, avec un budget de 8 Mio et 64 entrées ; les autres restent relus.
+- L’aperçu, la qualité PDF et les règles de stockage restent inchangés.
+
+
 ## Livraison 57.1 — progression PDF
 
 - La barre de progression reste visible pendant la préparation des photos puis l’assemblage du PDF et de l’aperçu ; le compteur de pages ne la remplace plus.
