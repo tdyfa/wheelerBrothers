@@ -1,36 +1,36 @@
-const CACHE_NAME = 'outils-atelier-v57.6-r1';
+const CACHE_NAME = 'outils-atelier-v57.7-r1';
 const ASSETS = [
   './',
-  './wb-workflow.js?v=57.6',
-  './wb-workflow.css?v=57.6',
-  './report-workflow.js?v=57.6',
+  './wb-workflow.js?v=57.7',
+  './wb-workflow.css?v=57.7',
+  './report-workflow.js?v=57.7',
   './index.html',
-  './atelier.html?v=57.6',
-  './rapport.html?v=57.6',
-  './inventaire.html?v=57.6',
-  './planning.html?v=57.6',
-  './planning.js?v=57.6',
-  './manifest.json?v=57.6',
-  './firebase-config.js?v=57.6',
-  './apple-touch-icon.png?v=57.6',
+  './atelier.html?v=57.7',
+  './rapport.html?v=57.7',
+  './inventaire.html?v=57.7',
+  './planning.html?v=57.7',
+  './planning.js?v=57.7',
+  './manifest.json?v=57.7',
+  './firebase-config.js?v=57.7',
+  './apple-touch-icon.png?v=57.7',
   './icon-192.png',
   './icon-512.png',
   './report-cover-logo.png',
-  './report-ai.css?v=57.6',
-  './report-ai-config.js?v=57.6',
-  './report-ai-core.js?v=57.6',
-  './wb-md5.js?v=57.6',
-  './wb-ai-transfer.js?v=57.6',
-  './report-ai.js?v=57.6',
-  './wb-progress.js?v=57.6',
-  './report-images.js?v=57.6',
-  './wb-pdf-writer.js?v=57.6',
-  './vehicle-info.js?v=57.6',
-  './vehicle-input.js?v=57.6&build=2',
-  './wb-phone.js?v=57.6',
-  './html2pdf.bundle.min.js?v=57.6',
-  './wb-carnet-pro.css?v=57.6',
-  './wb-carnet-pro.js?v=57.6'
+  './report-ai.css?v=57.7',
+  './report-ai-config.js?v=57.7',
+  './report-ai-core.js?v=57.7',
+  './wb-md5.js?v=57.7',
+  './wb-ai-transfer.js?v=57.7',
+  './report-ai.js?v=57.7',
+  './wb-progress.js?v=57.7',
+  './report-images.js?v=57.7',
+  './wb-pdf-writer.js?v=57.7',
+  './vehicle-info.js?v=57.7',
+  './vehicle-input.js?v=57.7&build=2',
+  './wb-phone.js?v=57.7',
+  './html2pdf.bundle.min.js?v=57.7',
+  './wb-carnet-pro.css?v=57.7',
+  './wb-carnet-pro.js?v=57.7'
 ];
 
 self.addEventListener('install', event => {
@@ -96,6 +96,6 @@ self.addEventListener('push', event => {
  // Existing v55/v56 server sends data-only messages; also accept a notification payload.
 
  const data={...(payload.notification||{}),...(payload.data||{})};
- event.waitUntil(self.registration.showNotification(data.title||'WheelerBrothers Planning',{body:data.body||'Intervention mise à jour',icon:'./icon-192.png',data:{url:'./planning.html?v=57.6'}}));
+ event.waitUntil(self.registration.showNotification(data.title||'WheelerBrothers Planning',{body:data.body||'Intervention mise à jour',icon:'./icon-192.png',data:{url:'./planning.html?v=57.7'}}));
 });
-self.addEventListener('notificationclick',event=>{event.notification.close();event.waitUntil(self.clients.openWindow('./planning.html?v=57.6'))});
+self.addEventListener('notificationclick',event=>{event.notification.close();event.waitUntil(self.clients.openWindow('./planning.html?v=57.7'))});
