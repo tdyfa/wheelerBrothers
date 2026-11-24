@@ -140,3 +140,6 @@
 /* Only the body scrolls. Hidden overflow can itself be scrolled by focus/scrollIntoView,
    pulling the header upwards; clip prevents this secondary scroll container. */
 @supports (overflow:clip){.wb-ai-dialog{overflow:clip}}
+
+.wb-ai-empty-choice{margin:10px 0;padding:10px;border:1px solid #91c5a5;border-radius:8px;background:#effaf2;color:#14532d}
+.wb-ai-body .wb-ai-empty-choice p{margin:0 0 8px}

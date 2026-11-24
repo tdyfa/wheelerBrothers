@@ -1,6 +1,8 @@
 # WheelerBrothers Atelier
 
-Version de livraison : **57.8**.
+Version de livraison : **58**.
+
+Le choix « Conserver sans photo » dans la relecture IA utilise le Serveur IA v58.
 
 Application web comprenant le Carnet d’atelier, le Planning, l’Inventaire et le générateur de rapports. Le dépôt est destiné à GitHub Pages ; le serveur Firebase est déployé séparément.
 

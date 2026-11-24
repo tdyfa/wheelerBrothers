@@ -60,7 +60,7 @@
   // placement list has duplicate or unknown photo references. Never silently
   // drop such entries: return a separate, user-resolvable audit trail. The
   // strict normalizer and makeReport() remain the publication gatekeepers.
-  function recoverPlan(raw,assets){
+  function recoverPlan(raw,assets,{manualReview=false}={}){
     if(!raw || !Array.isArray(raw.sections) || !Array.isArray(raw.photos) || !Array.isArray(raw.warnings))
       throw new Error('Résultat IA incomplet : conserve le brouillon et son export.');
     // Strictly validate chapters; do not silently lose their titles/contents.
@@ -93,8 +93,10 @@
         reason:needManual?'Classement incohérent dans le résultat IA : vérifie cette photo.':typeof p.reason==='string'?p.reason:'',
         ...(kind==='excluded'&&p.excludedFrom?{excludedFrom:p.excludedFrom}:{})});
     }
-    const cleaned={summary:raw.summary,sections:raw.sections,photos:candidates,warnings:raw.warnings};
-    const result=candidates.some(p=>p.kind==='excluded')
+    // Only a previously reviewed local plan may carry the user's explicit
+    // decision. Never accept this flag from a model response being recovered.
+    const cleaned={summary:raw.summary,sections:manualReview?raw.sections:base.sections,photos:candidates,warnings:raw.warnings};
+    const result=manualReview||candidates.some(p=>p.kind==='excluded')
       ?normalizeReviewPlan(cleaned,assets):normalizePlan(cleaned,assets);
     return {plan:result,anomalies,original:JSON.parse(JSON.stringify(raw))};
   }
@@ -102,6 +104,12 @@
     const local=JSON.parse(JSON.stringify(raw)),excluded=new Map();
     for(const p of local.photos||[])if(p.kind==='excluded'){excluded.set(p.id,{reason:p.reason,from:p.excludedFrom});p.kind='unassigned';p.sectionId='';p.side='';}
     const result=normalizePlan(local,assets);
+    // This path is reserved for user review, not a raw model response.
+    // Retain only explicit boolean approvals, not truthy strings or numbers.
+    for(const section of result.sections){
+      const original=local.sections.find(s=>s.id===section.id);
+      if(original?.allowWithoutPhotos===true)section.allowWithoutPhotos=true;
+    }
     for(const p of result.photos)if(excluded.has(p.id)){
       const old=excluded.get(p.id);p.kind='excluded';p.reason=typeof old.reason==='string'?old.reason.slice(0,700):'';
       if(old.from&&KINDS.includes(old.from.kind))p.excludedFrom={kind:old.from.kind,sectionId:String(old.from.sectionId||'').slice(0,48),side:['L','R'].includes(old.from.side)?old.from.side:'',order:Number.isInteger(old.from.order)?old.from.order:0,reason:String(old.from.reason||'').slice(0,700)};
@@ -133,8 +141,8 @@
     plan.sections.forEach(s=>{
       const photos=plan.photos.filter(p=>p.kind==='section' && p.sectionId===s.id);
       if(!String(s.title||'').trim())issues.push({kind:'section',sectionId:s.id,message:'Titre de prestation vide.'});
-      if(!photos.length)issues.push({kind:'section',sectionId:s.id,empty:true,message:'Photos manquantes : '+s.title});
-      else if(s.type==='sym'){
+      if(!photos.length && s.allowWithoutPhotos!==true)issues.push({kind:'section',sectionId:s.id,empty:true,message:'Photos manquantes : '+s.title});
+      else if(photos.length && s.type==='sym'){
         if(!photos.some(p=>p.side==='L'))issues.push({kind:'section',sectionId:s.id,message:'Photos gauche manquantes : '+s.title});
         if(!photos.some(p=>p.side==='R'))issues.push({kind:'section',sectionId:s.id,message:'Photos droite manquantes : '+s.title});
       }
@@ -238,8 +246,11 @@
     report.sections=plan.sections.map((s,i)=>{
       const selected=ordered.filter(p=>p.kind==='section' && p.sectionId===s.id);
       const photo=p=>({id:'ai_ph_'+p.id,src:src(p.id),cap:text(p.caption,350)});
-      const out={id:'ai_sec_'+(i+1),type:s.type,title:text(s.title,160),desc:text(s.description,1600),cols:s.type==='sym'?1:2,rowsPerPage:2,newpage:false,photos:[]};
-      if(s.type==='sym') Object.assign(out,{labelL:'Gauche',labelR:'Droite',photosL:selected.filter(p=>p.side==='L').map(photo),photosR:selected.filter(p=>p.side==='R').map(photo)});
+      // A manually approved, truly empty symmetric section is rendered as a
+      // text-only normal section; the review plan retains its original type.
+      const type=s.type==='sym' && !selected.length && s.allowWithoutPhotos===true?'normal':s.type;
+      const out={id:'ai_sec_'+(i+1),type,title:text(s.title,160),desc:text(s.description,1600),cols:type==='sym'?1:2,rowsPerPage:!selected.length && s.allowWithoutPhotos===true?0:2,newpage:false,photos:[]};
+      if(type==='sym') Object.assign(out,{labelL:'Gauche',labelR:'Droite',photosL:selected.filter(p=>p.side==='L').map(photo),photosR:selected.filter(p=>p.side==='R').map(photo)});
       else out.photos=selected.map(photo);
       return out;
     });

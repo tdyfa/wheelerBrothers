@@ -1,5 +1,10 @@
 # Historique des notices Atelier
 
+## Livraison 58 — conserver une opération sans photo
+
+- Dans les corrections d’un rapport IA, « Conserver sans photo » permet de confirmer une opération vide et de garder son titre et sa description dans le rapport et le PDF.
+- La confirmation est réversible pendant la relecture. Les autres corrections et la validation finale continuent de s’appliquer. La création et le partage de ce type de rapport utilisent le Serveur IA v58.
+
 ## Livraison 57.8 — choix du modèle pour les rapports IA
 
 - Le dialogue de création propose GPT‑6.2 Sol par défaut et GPT‑6.2 Astra. Le choix s’applique à l’analyse de toutes les photos et à la synthèse.

@@ -438,7 +438,7 @@
     const unassigned=plan.photos.filter(p=>p.kind==='unassigned').length;
     $('aiReviewCounts').textContent=`${assets.length} photos comptabilisées : ${plan.photos.length-excluded-unassigned} classées, ${unassigned} à classer, ${excluded} retirées du rapport.`;
     $('aiProblems').hidden=!issues.length;renderRecoveryIssues();
-    $('aiProblems').innerHTML=issues.length?'<strong>À corriger avant de créer le rapport :</strong>'+issues.map((issue,i)=>`<div class="wb-ai-issue"><span>${esc(namedMessage(issue.message))}</span><button type="button" class="btn ghost" data-issue="${i}">Corriger</button>${issue.empty?`<button type="button" class="btn ghost" data-empty-section="${esc(issue.sectionId)}">Retirer l’opération vide</button>`:''}</div>`).join(''):'';
+    $('aiProblems').innerHTML=issues.length?'<strong>À corriger avant de créer le rapport :</strong>'+issues.map((issue,i)=>`<div class="wb-ai-issue"><span>${esc(namedMessage(issue.message))}</span><button type="button" class="btn ghost" data-issue="${i}">Corriger</button>${issue.empty?`<button type="button" class="btn ghost" data-allow-empty="${esc(issue.sectionId)}">Conserver sans photo</button><button type="button" class="btn ghost" data-empty-section="${esc(issue.sectionId)}">Retirer l’opération vide</button>`:''}</div>`).join(''):'';
     $('aiProblems').querySelectorAll('[data-issue]').forEach(button=>button.onclick=()=>{
       const issue=issues[Number(button.dataset.issue)];
       if(issue.photoId){focusReviewPhoto(issue.photoId,'.wb-ai-target');return;}
@@ -446,9 +446,10 @@
       el?.scrollIntoView({block:'center'});el?.querySelector('input')?.focus({preventScroll:true});
     });
     $('aiProblems').querySelectorAll('[data-empty-section]').forEach(b=>b.onclick=()=>requestSectionRemoval(b.dataset.emptySection));
+    $('aiProblems').querySelectorAll('[data-allow-empty]').forEach(b=>b.onclick=()=>allowEmptySection(b.dataset.allowEmpty));
     $('aiApply').disabled=busy||issues.length>0||pendingRecovery.length>0||!$('aiApprove').checked;
     $('aiFixProblems').hidden=!(issues.length||pendingRecovery.length);
-    $('aiApplyHint').textContent=busy?'Une opération est en cours…':pendingRecovery.length?`${pendingRecovery.length} référence(s) problématique(s) à examiner dans « Récupération des photos ». Examine les références avant de confirmer.`:issues.length?`${issues.length} correction(s) requise(s). Réaffecte les photos ou retire les opérations indésirables. Une prestation conservée doit être illustrée.`:!$('aiApprove').checked?'Le contenu est prêt. Coche « J’ai relu… » pour activer la création.':'Tout est prêt : tu peux créer le rapport dans l’éditeur.';
+    $('aiApplyHint').textContent=busy?'Une opération est en cours…':pendingRecovery.length?`${pendingRecovery.length} référence(s) problématique(s) à examiner dans « Récupération des photos ». Examine les références avant de confirmer.`:issues.length?`${issues.length} correction(s) requise(s). Classe les photos, retire les opérations indésirables ou confirme celles à conserver sans photo.`:!$('aiApprove').checked?'Le contenu est prêt. Coche « J’ai relu… » pour activer la création.':'Tout est prêt : tu peux créer le rapport dans l’éditeur.';
     $('aiApply').title=$('aiApplyHint').textContent;
   }
   // Les anomalies portent sur des propositions d'affectation, pas sur des
@@ -574,19 +575,41 @@
       card.querySelector('[data-section-step="1"]').disabled=busy||i===plan.sections.length-1;
     });
   }
+  function allowEmptySection(sectionId){
+    if(busy||!plan)return;
+    const section=plan.sections.find(s=>s.id===sectionId);
+    if(!section||section.allowWithoutPhotos===true||plan.photos.some(p=>p.kind==='section'&&p.sectionId===sectionId))return;
+    if(!confirm('Conserver l’opération « '+section.title+' » sans photo dans le rapport ?'))return;
+    checkpointReview();section.allowWithoutPhotos=true;refreshReview();
+    status('Opération conservée sans photo. Tu peux annuler ce choix dans sa fiche.');
+  }
+  function revokeEmptySection(sectionId){
+    if(busy||!plan)return;
+    const section=plan.sections.find(s=>s.id===sectionId);
+    if(!section||section.allowWithoutPhotos!==true)return;
+    checkpointReview();delete section.allowWithoutPhotos;refreshReview();
+    status('Choix annulé. Une opération sans photo devra être corrigée ou confirmée à nouveau.');
+  }
+  function invalidateEmptyChoice(section,card){
+    if(section.allowWithoutPhotos!==true)return;
+    delete section.allowWithoutPhotos;
+    card?.querySelector('.wb-ai-empty-choice')?.remove();
+    status('L’opération a changé : confirme à nouveau si tu veux la conserver sans photo.');
+  }
   function renderSections(){
-    $('aiSections').innerHTML=plan.sections.map((s,i)=>`<div class="wb-ai-section" data-section="${esc(s.id)}"><div class="wb-ai-section-tools"><strong>Opération ${i+1} / ${plan.sections.length}</strong><button type="button" class="btn ghost" data-section-step="-1" aria-label="Monter ${esc(s.title)}">↑</button><button type="button" class="btn ghost" data-section-step="1" aria-label="Descendre ${esc(s.title)}">↓</button><label>Position<input type="number" class="ai-sposition" min="1" max="${plan.sections.length}" value="${i+1}" inputmode="numeric"></label><button type="button" class="btn ghost ai-sremove">Supprimer / fusionner</button></div><label>Titre<input class="ai-stitle" maxlength="160" value="${esc(s.title)}"></label><label>Références / description<textarea class="ai-sdesc" maxlength="1600" placeholder="Marque et référence, une ligne par produit">${esc(s.description)}</textarea></label><button type="button" class="btn ghost ai-sclean">Retirer les lignes répétées</button><label>Présentation<select class="ai-stype"><option value="normal">Simple</option><option value="sym">Gauche / droite</option></select></label>${isEngineBay(s.title)?'<p class="wb-ai-warning">La baie moteur appartient au bloc spécial. Utilise « Supprimer / fusionner » puis « Bloc baie moteur » pour y réaffecter les photos.</p>':''}</div>`).join('');
+    $('aiSections').innerHTML=plan.sections.map((s,i)=>`<div class="wb-ai-section" data-section="${esc(s.id)}"><div class="wb-ai-section-tools"><strong>Opération ${i+1} / ${plan.sections.length}</strong><button type="button" class="btn ghost" data-section-step="-1" aria-label="Monter ${esc(s.title)}">↑</button><button type="button" class="btn ghost" data-section-step="1" aria-label="Descendre ${esc(s.title)}">↓</button><label>Position<input type="number" class="ai-sposition" min="1" max="${plan.sections.length}" value="${i+1}" inputmode="numeric"></label><button type="button" class="btn ghost ai-sremove">Supprimer / fusionner</button></div><label>Titre<input class="ai-stitle" maxlength="160" value="${esc(s.title)}"></label><label>Références / description<textarea class="ai-sdesc" maxlength="1600" placeholder="Marque et référence, une ligne par produit">${esc(s.description)}</textarea></label><button type="button" class="btn ghost ai-sclean">Retirer les lignes répétées</button><label>Présentation<select class="ai-stype"><option value="normal">Simple</option><option value="sym">Gauche / droite</option></select></label>${s.allowWithoutPhotos===true?'<div class="wb-ai-empty-choice"><p>Choix confirmé : cette opération peut être conservée sans photo.</p><button type="button" class="btn ghost ai-srevoke-empty">Annuler ce choix</button></div>':''}${isEngineBay(s.title)?'<p class="wb-ai-warning">La baie moteur appartient au bloc spécial. Utilise « Supprimer / fusionner » puis « Bloc baie moteur » pour y réaffecter les photos.</p>':''}</div>`).join('');
     $('aiSections').querySelectorAll('[data-section]').forEach(card=>{
       const s=plan.sections.find(s=>s.id===card.dataset.section);card.querySelector('.ai-stype').value=s.type;
-      card.querySelector('.ai-stitle').oninput=e=>{s.title=e.target.value;renderReviewPhotos();resetApproval();};
-      card.querySelector('.ai-sdesc').oninput=e=>{s.description=e.target.value;resetApproval();};
-      card.querySelector('.ai-sclean').onclick=()=>{checkpointReview();s.description=C.cleanDescription(s.description);refreshReview();};
-      card.querySelector('.ai-stype').onchange=e=>{checkpointReview();s.type=e.target.value;plan.photos.filter(p=>p.kind==='section'&&p.sectionId===s.id).forEach(p=>{p.side='';if(s.type==='sym'){p.kind='unassigned';p.reason='Choisir le côté gauche ou droit.';}});refreshReview();};
+      card.querySelector('.ai-stitle').oninput=e=>{if(s.title!==e.target.value)invalidateEmptyChoice(s,card);s.title=e.target.value;renderReviewPhotos();resetApproval();};
+      card.querySelector('.ai-sdesc').oninput=e=>{if(s.description!==e.target.value)invalidateEmptyChoice(s,card);s.description=e.target.value;resetApproval();};
+      card.querySelector('.ai-sclean').onclick=()=>{checkpointReview();const next=C.cleanDescription(s.description);if(next!==s.description)invalidateEmptyChoice(s,card);s.description=next;refreshReview();};
+      card.querySelector('.ai-stype').onchange=e=>{checkpointReview();if(s.type!==e.target.value)invalidateEmptyChoice(s,card);s.type=e.target.value;plan.photos.filter(p=>p.kind==='section'&&p.sectionId===s.id).forEach(p=>{p.side='';if(s.type==='sym'){p.kind='unassigned';p.reason='Choisir le côté gauche ou droit.';}});refreshReview();};
       function move(position){if(busy)return;const from=plan.sections.indexOf(s);if(!Number.isInteger(position)||position<1||position>plan.sections.length){status('Position d’opération invalide.','error');renderSections();return;}if(position===from+1)return;checkpointReview();C.moveSection(plan,s.id,position);refreshReview();const current=[...$('aiSections').querySelectorAll('[data-section]')].find(c=>c.dataset.section===s.id);current?.scrollIntoView({block:'nearest'});}
       card.querySelectorAll('[data-section-step]').forEach(b=>b.onclick=()=>move(plan.sections.indexOf(s)+1+Number(b.dataset.sectionStep)));
       card.querySelector('.ai-sposition').onchange=e=>move(Number(e.target.value));
       card.querySelector('.ai-sposition').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur();}};
       card.querySelector('.ai-sremove').onclick=()=>requestSectionRemoval(s.id);
+      const revoke=card.querySelector('.ai-srevoke-empty');if(revoke)revoke.onclick=()=>revokeEmptySection(s.id);
     });renderSectionControls();
   }
   function requestSectionRemoval(sectionId){
@@ -601,7 +624,7 @@
     $('aiSectionConfirm').onclick=()=>{
       const targetId=$('aiSectionDestination').value,target=plan.sections.find(s=>s.id===targetId);checkpointReview();
       try{
-        if(target)target.description=C.cleanDescription(target.description+'\n'+s.description);
+        if(target){invalidateEmptyChoice(target);target.description=C.cleanDescription(target.description+'\n'+s.description);}
         C.dropSection(plan,sectionId,targetId);panel.hidden=true;refreshReview();
         status(target?'Opérations fusionnées. Les photos et références ont été conservées une seule fois ; vérifie leur ordre.':'Opération retirée. Vérifie les affectations des photos avant de créer le rapport.');
       }catch(e){status(e.message,'error');}
@@ -673,7 +696,7 @@
       }catch(validationError){
         // Le résultat serveur et la relecture locale sont non destructifs.
         // Aucune nouvelle analyse payante, aucun doublon publié par défaut.
-        const recovered=C.recoverPlan(source,assets);
+        const recovered=C.recoverPlan(source,assets,{manualReview:Boolean(savedReview?.plan)});
         plan=recovered.plan;
         recoveryIssues=recovered.anomalies;
         recoveryOriginal=savedReview?.recoveryOriginal||recovered.original;
@@ -783,7 +806,9 @@
       if(WBVehicleInput.isFrench(report.plate))report.plate=WBVehicleInput.plate(report.plate);
       for(const d of documents)for(let i=0;i<d.pages.length;i++)report.invoices.push({id:'ai_pdf_'+d.id+'_'+i,kind:'img',src:d.pages[i].url,name:d.name+' p.'+(i+1)});
       report.invoicesOn=report.invoices.length>0;
-      await H.apply(report,jobId,workflowRef);
+      // Le navigateur transmet le choix à part, sans l'insérer lui-même dans le rapport.
+      const sectionsWithoutPhotos=report.sections.flatMap((section,i)=>section.type==='normal'&&Array.isArray(section.photos)&&section.photos.length===0&&plan.sections[i]?.allowWithoutPhotos===true?[i]:[]);
+      await H.apply(report,jobId,workflowRef,sectionsWithoutPhotos);
       forget();dialog.close();reset();
     }catch(e){status('Le rapport n’a pas pu être ouvert : '+e.message+'. Garde cette fenêtre ouverte pour vérifier la situation. Aucun nouvel appel IA n’a été lancé.','error');}
     finally{setBusy(false);}
@@ -829,7 +854,20 @@
       }
       synthesisRetry=false;
       const proposed=C.normalizeReviewPlan(result.plan,assets),panel=$('aiSynthesisPreview');panel.hidden=false;
-      panel.innerHTML=`<h3>Proposition de synthèse globale</h3><p><strong>Résumé :</strong> ${esc(proposed.summary)}</p>${proposed.sections.map(s=>`<div class="wb-ai-synthesis-section"><strong>${esc(s.title)}</strong><p>${esc(s.description).replace(/\n/g,'<br>')}</p></div>`).join('')}<p>Les ${proposed.photos.length} photos restent comptabilisées, y compris celles retirées. Si des opérations sont fusionnées, les galeries sont réunies en conservant l’ordre relatif choisi dans chaque galerie. Les vues de baie moteur sans stade avant/après certain restent à classer.</p><div class="wb-ai-actions"><button type="button" class="btn" id="aiAcceptSynthesis">Appliquer cette proposition</button><button type="button" class="btn ghost" id="aiRejectSynthesis">Garder mes textes et mon classement</button></div>`;
+      // Ne jamais accepter une autorisation envoyée par l'IA. Après synthèse,
+      // la conserver uniquement pour une section strictement identique, et
+      // seulement si l'ensemble des identifiants montre qu'aucune fusion ou
+      // suppression de section n'a eu lieu. Sinon, demander une nouvelle revue.
+      const oldSections=new Map(plan.sections.map(s=>[s.id,s]));
+      const sameSections=proposed.sections.length===plan.sections.length&&proposed.sections.every(s=>oldSections.has(s.id));
+      let reconfirmEmpty=false;
+      for(const section of proposed.sections){
+        delete section.allowWithoutPhotos;
+        const old=oldSections.get(section.id);
+        if(sameSections&&old?.allowWithoutPhotos===true&&section.title===old.title&&section.description===old.description&&section.type===old.type)section.allowWithoutPhotos=true;
+      }
+      reconfirmEmpty=plan.sections.some(s=>s.allowWithoutPhotos===true&&!proposed.sections.some(p=>p.id===s.id&&p.allowWithoutPhotos===true));
+      panel.innerHTML=`<h3>Proposition de synthèse globale</h3><p><strong>Résumé :</strong> ${esc(proposed.summary)}</p>${proposed.sections.map(s=>`<div class="wb-ai-synthesis-section"><strong>${esc(s.title)}</strong><p>${esc(s.description).replace(/\n/g,'<br>')}</p></div>`).join('')}<p>Les ${proposed.photos.length} photos restent comptabilisées, y compris celles retirées. Si des opérations sont fusionnées, les galeries sont réunies en conservant l’ordre relatif choisi dans chaque galerie. Les vues de baie moteur sans stade avant/après certain restent à classer.</p>${reconfirmEmpty?'<p class="wb-ai-warning">Des opérations ont changé : les choix « conserver sans photo » concernés devront être confirmés à nouveau après application.</p>':''}<div class="wb-ai-actions"><button type="button" class="btn" id="aiAcceptSynthesis">Appliquer cette proposition</button><button type="button" class="btn ghost" id="aiRejectSynthesis">Garder mes textes et mon classement</button></div>`;
       $('aiRejectSynthesis').onclick=()=>{panel.hidden=true;status('Proposition non appliquée. Ton classement est inchangé.');};
       $('aiAcceptSynthesis').onclick=()=>{
         if(JSON.stringify(plan)!==original){status('Tu as modifié le classement depuis cette proposition. Elle n’est pas appliquée pour préserver tes corrections.','error');return;}
