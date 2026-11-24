@@ -259,7 +259,7 @@ const WBReportImages = (() => {
   }
   function commit(entry,src) {
     if(entry.field)state[entry.field]=src;else entry.item.src=src;
-    buildSections();buildBaie();buildChecklist();buildInvoices();renderReport(true);save();
+    buildSections();buildBaie();buildChecklist();buildInvoices();renderReport();save();
   }
   async function replace(entry,reportId,file) {
     if(!reportId||!stillCurrent(entry,reportId))throw new Error('Le rapport ou la photo a changé. Relancer le diagnostic.');
@@ -352,8 +352,6 @@ const WBReportImages = (() => {
   function install() {
     const tools=document.querySelector('.preview-tools');
     tools.style.flexWrap='wrap';
-    const retry=document.createElement('button');retry.className='btn';retry.textContent='Réessayer';
-    retry.onclick=()=>renderReport(true);tools.appendChild(retry);
     const check=document.createElement('button');check.className='btn';check.id='btnCheckImages';check.textContent='Vérifier les photos';
     check.onclick=diagnose;tools.appendChild(check);
     const panel=document.createElement('div');panel.id='imageDiagnostics';panel.hidden=true;

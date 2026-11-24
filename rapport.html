@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=57.4">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=57.4">
+<link rel="manifest" href="manifest.json?v=57.5">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=57.5">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -16,18 +16,18 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
-<script src="firebase-config.js?v=57.4"></script>
-<script src="html2pdf.bundle.min.js?v=57.4"></script>
-<script src="report-images.js?v=57.4"></script>
-<script src="wb-pdf-writer.js?v=57.4"></script>
-<script src="wb-progress.js?v=57.4"></script>
-<script src="vehicle-info.js?v=57.4"></script>
-<script src="wb-workflow.js?v=57.4"></script>
-<link rel="stylesheet" href="wb-workflow.css?v=57.4">
-<script src="vehicle-input.js?v=57.4&build=2"></script>
-<link rel="stylesheet" href="report-ai.css?v=57.4">
-<script src="report-ai-config.js?v=57.4"></script>
-<script src="report-ai-core.js?v=57.4"></script>
+<script src="firebase-config.js?v=57.5"></script>
+<script src="html2pdf.bundle.min.js?v=57.5"></script>
+<script src="report-images.js?v=57.5"></script>
+<script src="wb-pdf-writer.js?v=57.5"></script>
+<script src="wb-progress.js?v=57.5"></script>
+<script src="vehicle-info.js?v=57.5"></script>
+<script src="wb-workflow.js?v=57.5"></script>
+<link rel="stylesheet" href="wb-workflow.css?v=57.5">
+<script src="vehicle-input.js?v=57.5&build=2"></script>
+<link rel="stylesheet" href="report-ai.css?v=57.5">
+<script src="report-ai-config.js?v=57.5"></script>
+<script src="report-ai-core.js?v=57.5"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -530,12 +530,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=57.4" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=57.5" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 57.4</span>
+          <span class="sub">Version 57.5</span>
         </div>
       </div>
       <div class="app-bar-notices">
@@ -823,7 +823,8 @@
   <!-- ====================== PREVIEW ====================== -->
   <div class="preview">
     <div class="preview-tools">
-      <span id="previewStatus">Aperçu A4 — mise à jour automatique.</span>
+      <span id="previewStatus" role="status">Aperçu A4 — à afficher.</span>
+      <button class="btn" id="btnPreviewRefresh" type="button" aria-controls="report">Afficher l’aperçu</button>
     </div>
     <div class="stage">
       <div class="report-shell">
@@ -1211,11 +1212,7 @@ function setReportView(view, message='', kind=''){
   const status=document.getElementById('reportHomeStatus');
   status.textContent=message;
   status.dataset.kind=kind;
-  if(view!=='editor'){
-    clearTimeout(reportPreviewTimer);
-    reportPreviewRevision++;
-    document.getElementById('report').innerHTML='';
-  }
+  if(view!=='editor')resetA4Preview();
 }
 
 function resetReportViewport(){
@@ -1249,6 +1246,7 @@ function subscribeToReport(id, {isNew=false, localDraft=null}={}){
   const isCurrent=()=>revision===reportSubscriptionRevision && currentReportId===id;
   Object.keys(state).forEach(k=>delete state[k]);
   Object.assign(state,blankState(),localDraft||{});
+  if(isNew||localDraft)resetA4Preview();
   setReportView(isNew||localDraft?'editor':'loading','Ouverture du rapport…');
   resetReportViewport();
   if(isNew||localDraft)refreshEditorFromState();
@@ -1808,7 +1806,7 @@ function buildSections(){
 
 /* miniatures pour un tableau de photos donné */
 function renderThumbs(tw, sec, arr){
-  arr.forEach((p, pi)=>{
+  arr.forEach(p=>{
     const th=document.createElement('div'); th.className='thumb';
     th.innerHTML=`
       <div class="tbar">
@@ -1820,9 +1818,13 @@ function renderThumbs(tw, sec, arr){
       <input class="cap" placeholder="Légende (optionnel)">`;
     const cap=th.querySelector('.cap'); cap.value=p.cap||'';
     cap.addEventListener('input', ()=>{ p.cap=cap.value; renderReport(); save(); });
-    th.querySelector('.pup').addEventListener('click', ()=>movePhotoArr(arr,pi,-1));
-    th.querySelector('.pdown').addEventListener('click', ()=>movePhotoArr(arr,pi,1));
-    th.querySelector('.pdel').addEventListener('click', ()=>{ retainReportAsset(arr[pi].src); arr.splice(pi,1); buildSections(); renderReport(); save(); });
+    th.querySelector('.pup').addEventListener('click', ()=>movePhotoArr(arr,th,-1));
+    th.querySelector('.pdown').addEventListener('click', ()=>movePhotoArr(arr,th,1));
+    th.querySelector('.pdel').addEventListener('click', ()=>{
+      const index=arr.indexOf(p);
+      if(index<0)return;
+      retainReportAsset(p.src); arr.splice(index,1); buildSections(); renderReport(); save();
+    });
     tw.appendChild(th);
   });
 }
@@ -1832,10 +1834,21 @@ function move(i,d){
   [state.sections[i],state.sections[j]]=[state.sections[j],state.sections[i]];
   buildSections(); renderReport(); save();
 }
-function movePhotoArr(arr,i,d){
-  const j=i+d; if(j<0||j>=arr.length) return;
-  [arr[i],arr[j]]=[arr[j],arr[i]];
-  buildSections(); renderReport(); save();
+function movePhotoArr(arr,thumb,step,visible=arr,updateLabels){
+  const gallery=thumb.parentElement;
+  const neighbor=step<0?thumb.previousElementSibling:thumb.nextElementSibling;
+  if(!gallery||!neighbor)return;
+  const position=Array.prototype.indexOf.call(gallery.children,thumb);
+  const target=position+step;
+  const from=visible===arr?position:arr.indexOf(visible[position]);
+  const to=visible===arr?target:arr.indexOf(visible[target]);
+  if(from<0||to<0||from>=arr.length||to>=arr.length||from===to)return;
+  [arr[from],arr[to]]=[arr[to],arr[from]];
+  // Déplacer la voisine laisse le bouton activé et son image dans le DOM.
+  gallery.insertBefore(neighbor,step<0?thumb.nextElementSibling:thumb);
+  updateLabels?.(thumb,target);
+  updateLabels?.(neighbor,position);
+  renderReport(); save();
 }
 function addSection(){
   state.sections.push({id:nid(), type:'normal', title:'', desc:'', cols:2, rowsPerPage:0, newpage:false, photos:[]});
@@ -2024,10 +2037,25 @@ function productPhotosOf(report=state){
 function ensureProductsArray(){
   if(!Array.isArray(state.productsPhotos))state.productsPhotos=[];
   if(state.products){
-    if(!state.productsPhotos.some(p=>p.src===state.products))state.productsPhotos.unshift({id:nid(),src:state.products,cap:''});
+    if(!state.productsPhotos.some(p=>p?.src===state.products))state.productsPhotos.unshift({id:nid(),src:state.products,cap:''});
     state.products=null;
   }
   return state.productsPhotos;
+}
+function updateProductPhotoLabels(item,index){
+  const up=item.querySelector('.pup');
+  const down=item.querySelector('.pdown');
+  const active=document.activeElement;
+  const number=index+1;
+  up.setAttribute('aria-label',`Avancer la photo ${number}`);
+  down.setAttribute('aria-label',`Reculer la photo ${number}`);
+  item.querySelector('.pdel').setAttribute('aria-label',`Supprimer la photo ${number}`);
+  item.querySelector('.cap').setAttribute('aria-label',`Légende photo ${number}`);
+  item.querySelector('img').alt=`Pièce ${number}`;
+  up.disabled=!item.previousElementSibling;
+  down.disabled=!item.nextElementSibling;
+  if(active===up&&up.disabled&&!down.disabled)down.focus({preventScroll:true});
+  if(active===down&&down.disabled&&!up.disabled)up.focus({preventScroll:true});
 }
 function buildProductsPhotos(){
   const host=document.getElementById('productPhotosList');if(!host)return;
@@ -2037,11 +2065,23 @@ function buildProductsPhotos(){
     item.innerHTML=`<div class="tbar"><button type="button" class="pup" title="Avancer" aria-label="Avancer la photo ${i+1}" ${i===0?'disabled':''}>‹</button><button type="button" class="pdown" title="Reculer" aria-label="Reculer la photo ${i+1}" ${i===all.length-1?'disabled':''}>›</button><button type="button" class="pdel" title="Supprimer" aria-label="Supprimer la photo ${i+1}">✕</button></div><img alt="Pièce ${i+1}"><input class="cap" placeholder="Légende (optionnel)" aria-label="Légende photo ${i+1}">`;
     item.querySelector('img').src=p.src;
     const cap=item.querySelector('.cap');cap.value=p.cap||'';
-    cap.oninput=()=>{ensureProductsArray()[i].cap=cap.value;save();renderReport();};
-    const change=step=>{const arr=ensureProductsArray(),target=i+step;if(target<0||target>=arr.length)return;[arr[i],arr[target]]=[arr[target],arr[i]];buildProductsPhotos();renderReport();save();};
+    let photo=p;
+    const currentPhoto=()=>{
+      if(state.productsPhotos?.includes?.(photo))return photo;
+      if(photo?.id!=='legacy-product-photo'||state.products!==photo.src)return null;
+      const src=photo.src;
+      photo=ensureProductsArray().find(item=>item?.src===src);
+      return photo;
+    };
+    cap.oninput=()=>{const current=currentPhoto();if(!current)return;current.cap=cap.value;save();renderReport();};
+    const change=step=>movePhotoArr(state.productsPhotos,item,step,productPhotosOf(),updateProductPhotoLabels);
     item.querySelector('.pup').onclick=()=>change(-1);
     item.querySelector('.pdown').onclick=()=>change(1);
-    item.querySelector('.pdel').onclick=()=>{const arr=ensureProductsArray();retainReportAsset(arr[i].src);arr.splice(i,1);buildProductsPhotos();renderReport();save();};
+    item.querySelector('.pdel').onclick=()=>{
+      const current=currentPhoto();if(!current)return;
+      const arr=state.productsPhotos;
+      retainReportAsset(current.src);arr.splice(arr.indexOf(current),1);buildProductsPhotos();renderReport();save();
+    };
     host.appendChild(item);
   });
 }
@@ -2172,10 +2212,17 @@ function buildInvoices(){
     const preview = isPdf
       ? `<div style="height:78px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f4f6f9;gap:4px"><span style="font-size:24px">📄</span><span style="font-size:9px;color:#6b7280;padding:0 4px;text-align:center;word-break:break-all;line-height:1.2">${esc((inv.name||'PDF').slice(0,28))}</span></div>`
       : `<img src="${inv.src}">`;
-    th.innerHTML=`<div class="tbar"><button class="pup">‹</button><button class="pdown">›</button><button class="pdel">✕</button></div>${preview}<div style="font-size:11px;text-align:center;padding:5px;border-top:1px solid var(--line);font-weight:600">Facture ${i+1}${isPdf?' (PDF)':''}</div>`;
-    th.querySelector('.pup').addEventListener('click',()=>{ if(i>0){[state.invoices[i-1],state.invoices[i]]=[state.invoices[i],state.invoices[i-1]];buildInvoices();renderReport();save();}});
-    th.querySelector('.pdown').addEventListener('click',()=>{ if(i<state.invoices.length-1){[state.invoices[i+1],state.invoices[i]]=[state.invoices[i],state.invoices[i+1]];buildInvoices();renderReport();save();}});
-    th.querySelector('.pdel').addEventListener('click',()=>{ retainReportAsset(state.invoices[i].src); state.invoices.splice(i,1); buildInvoices(); renderReport(); save();});
+    th.innerHTML=`<div class="tbar"><button class="pup">‹</button><button class="pdown">›</button><button class="pdel">✕</button></div>${preview}<div class="invoice-thumb-label" style="font-size:11px;text-align:center;padding:5px;border-top:1px solid var(--line);font-weight:600">Facture ${i+1}${isPdf?' (PDF)':''}</div>`;
+    const updateLabels=(thumb,index)=>{
+      const pdf=state.invoices[index]?.kind==='pdf';
+      thumb.querySelector('.invoice-thumb-label').textContent=`Facture ${index+1}${pdf?' (PDF)':''}`;
+    };
+    th.querySelector('.pup').addEventListener('click',()=>movePhotoArr(state.invoices,th,-1,undefined,updateLabels));
+    th.querySelector('.pdown').addEventListener('click',()=>movePhotoArr(state.invoices,th,1,undefined,updateLabels));
+    th.querySelector('.pdel').addEventListener('click',()=>{
+      const index=state.invoices.indexOf(inv);if(index<0)return;
+      retainReportAsset(inv.src); state.invoices.splice(index,1); buildInvoices(); renderReport(); save();
+    });
     tw.appendChild(th);
   });
 }
@@ -2587,7 +2634,11 @@ async function renderReportPdfPages(options={}){
   // Cache borné : les 82 originaux décodés ne doivent pas coexister en RAM.
   const previewLimit=7;
   const logoSrc=s.logo||DEFAULT_LOGO;
+  const checkPreviewCancelled=()=>{
+    if(options.shouldAbort?.())throw Object.assign(new Error('Aperçu annulé'),{code:'preview-cancelled'});
+  };
   const loadReportPdfImage=async(src,cache)=>{
+    checkPreviewCancelled();
     // Marquer l'image comme récemment utilisée : une paire gauche/droite
     // doit rester disponible jusqu'à son dessin, même si le cache est plein.
     if(cache.has(src)){const cached=cache.get(src);cache.delete(src);cache.set(src,cached);}
@@ -2596,6 +2647,7 @@ async function renderReportPdfPages(options={}){
     const rawLoader=src===logoSrc?undefined:options.imageBlobLoader;
     const onDecoded=src===logoSrc?undefined:options.onPreparedImage;
     const result=await ((previewMode||hybridPdf) ? WBReportImages.loadPreview(src,cache,rawLoader,onDecoded) : WBReportImages.load(src,cache));
+    checkPreviewCancelled();
     if(result && src)sourcesByImage.set(result,src);
     if(cache.size>previewLimit){
       for(const [key,promise] of cache){
@@ -2633,7 +2685,7 @@ async function renderReportPdfPages(options={}){
   };
   let pageIndex=0;
   const finish=page=>{
-    if(options.shouldAbort?.())throw Object.assign(new Error('Aperçu remplacé'),{code:'preview-cancelled'});
+    checkPreviewCancelled();
     const item={dataUrl:page.canvas.toDataURL('image/jpeg',previewMode?.78:.94),width:page.canvas.width,height:page.canvas.height};
     if(hybridPdf)item.overlays=page.overlays;
     // En aperçu : ne pas accumuler les JPEG de toutes les pages dans deux tableaux.
@@ -2924,8 +2976,8 @@ async function generatePdf(){
     : {forPreparation:pdfSourceAsBlob,forAssembly:pdfSourceAsBlob,clear(){}};
   let writer=null;
   try{
-    clearTimeout(reportPreviewTimer);reportPreviewRevision++;
-    await previewRenderQueue.catch(()=>{});
+    cancelA4Preview();
+    await previewRenderQueue;
     save();flushPendingSave();
     if(typeof WBPDFWriter.createIncremental==='function')writer=WBPDFWriter.createIncremental({sourceAsBlob:pdfSourceAsBlob});
     const pages=await renderReportPdfPages({hybridPdf:true,imageCache,
@@ -3057,7 +3109,8 @@ function setMobileView(view){
     be.classList.toggle('active', view==='editor');
     bp.classList.toggle('active', view==='preview');
   }
-  if(view==='preview') renderReport(true);
+  if(view==='preview')requestA4Preview();
+  else if(isMobile())cancelA4Preview();
 
   if(isMobile()){
     requestAnimationFrame(()=>{
@@ -3084,25 +3137,60 @@ function updatePreviewScale(){
   }
 }
 
-// L'aperçu utilise exactement le même moteur canvas que le PDF final.
-// Il est différé de quelques millisecondes pour rester fluide pendant la saisie.
-const _legacyRenderReport = renderReport; // conservé uniquement pour compatibilité interne
-let reportPreviewTimer = null;
+// Un aperçu complet est conservé pour le rapport courant jusqu'au prochain rendu.
+// La saisie ne lance aucun rendu A4 en arrière-plan.
 let reportPreviewRevision = 0;
 let previewRenderQueue = Promise.resolve();
+let previewRequest = null;
+let renderedPreviewRevision = null;
+let previewFailed = false;
+let previewScrollHandler = null;
+const previewRefreshButton = document.getElementById('btnPreviewRefresh');
+const previewStatus = document.getElementById('previewStatus');
 
-function shouldRenderA4Preview(){
-  return currentReportId && document.body.dataset.reportView==='editor'
-    && (!isMobile() || document.body.getAttribute('data-mview')==='preview');
+function clearA4Preview(){
+  if(previewScrollHandler)window.removeEventListener('scroll',previewScrollHandler);
+  previewScrollHandler=null;
+  document.getElementById('report').replaceChildren();
+  document.querySelector('.report-shell').style.height='';
+  renderedPreviewRevision=null;
+  previewFailed=false;
 }
 
-async function refreshA4Preview(revision){
+function showPendingA4Preview(){
+  previewRefreshButton.disabled=false;
+  if(renderedPreviewRevision===reportPreviewRevision)return;
+  previewRefreshButton.textContent=renderedPreviewRevision===null?'Afficher l’aperçu':'Actualiser l’aperçu';
+  const label=renderedPreviewRevision===null?'Aperçu A4 — à afficher.':'Aperçu A4 — à actualiser.';
+  if(previewStatus.textContent!==label)previewStatus.textContent=label;
+}
+
+function cancelA4Preview(){
+  const pending=previewRequest;
+  if(!pending)return;
+  previewRequest=null;
+  pending.progress?.close();
+  pending.progress=null;
+  if(pending.started)clearA4Preview();
+  showPendingA4Preview();
+}
+
+function resetA4Preview(){
+  reportPreviewRevision++;
+  cancelA4Preview();
+  clearA4Preview();
+  const diagnostics=document.getElementById('imageDiagnostics');
+  if(diagnostics){diagnostics.hidden=true;diagnostics.replaceChildren();}
+  showPendingA4Preview();
+}
+
+async function refreshA4Preview(request){
   const report=document.getElementById('report');
-  const status=document.getElementById('previewStatus');
-  if(!report || !currentReportId || document.body.dataset.reportView!=='editor')return;
-  report.replaceChildren();
-  if(status)status.textContent='Aperçu A4 — préparation…';
-  const previewProgress=window.WBProgress?.start('Aperçu A4');
+  const isCurrent=()=>previewRequest===request && reportPreviewRevision===request.revision;
+  request.started=true;
+  clearA4Preview();
+  previewStatus.textContent='Aperçu A4 — préparation…';
+  const previewProgress=request.progress=window.WBProgress?.start('Aperçu A4');
   previewProgress?.update('Photos préparées',0,1,'Chargement des images…');
   const mobile=isMobile();
   let count=0;
@@ -3126,9 +3214,7 @@ async function refreshA4Preview(revision){
     visibleRange={first:Math.max(0,Math.floor(top/step)),last:Math.ceil((top+height)/step)};
     updateMounted();
   }
-  // Éviter une accumulation d'écouteurs lorsque la page est recalculée.
-  if(refreshA4Preview.scrollHandler)window.removeEventListener('scroll',refreshA4Preview.scrollHandler);
-  refreshA4Preview.scrollHandler=onScroll;
+  previewScrollHandler=onScroll;
   window.addEventListener('scroll',onScroll,{passive:true});
   const previewCache=new Map();
   try {
@@ -3136,53 +3222,72 @@ async function refreshA4Preview(revision){
       imageCache:previewCache,
       previewMode:mobile, collectPages:false,
       onProgress:(...args)=>previewProgress?.update(...args),
-      shouldAbort:()=>revision!==reportPreviewRevision,
+      shouldAbort:()=>!isCurrent(),
       onPage:(page,index)=>{
-        if(revision!==reportPreviewRevision)return;
+        if(!isCurrent())return;
         const holder=document.createElement('div');holder.className='pdf-preview-page';
         holder.setAttribute('aria-label',`Page ${index+1}`);
         const img=document.createElement('img');img.alt=`Aperçu de la page ${index+1}`;
         holder.appendChild(img);report.appendChild(holder);
         previews.push({img,dataUrl:page.dataUrl});count++;
         if(index===0 || index%4===0){
-          if(status)status.textContent=`Aperçu A4 — ${count} page${count>1?'s':''} préparée${count>1?'s':''}…`;
+          previewStatus.textContent=`Aperçu A4 — ${count} page${count>1?'s':''} préparée${count>1?'s':''}…`;
           updateMounted();
           requestAnimationFrame(()=>updatePreviewScale());
         }
       }
     });
-    if(revision!==reportPreviewRevision)return;
-    if(status)status.textContent=`Aperçu A4 — ${count} page${count>1?'s':''}.`;
+    if(!isCurrent())return;
+    renderedPreviewRevision=request.revision;
+    previewRefreshButton.textContent='Actualiser l’aperçu';
+    previewStatus.textContent=`Aperçu A4 — ${count} page${count>1?'s':''}.`;
     onScroll();requestAnimationFrame(()=>updatePreviewScale());
   }catch(error){
-    if(revision!==reportPreviewRevision||error.code==='preview-cancelled')return;
+    if(!isCurrent()||error.code==='preview-cancelled')return;
     console.error('Aperçu A4 impossible',error);
+    clearA4Preview();
+    previewFailed=true;
     WBReportImages.previewError(error);
-    if(status)status.textContent=error.imageLocations ? 'Aperçu A4 indisponible — '+(error.imageLocations[0]?.description||'image en échec') : 'Aperçu A4 — erreur de génération.';
+    previewRefreshButton.textContent='Réessayer';
+    previewStatus.textContent=error.imageLocations ? 'Aperçu A4 indisponible — '+(error.imageLocations[0]?.description||'image en échec') : 'Aperçu A4 — erreur de génération.';
     requestAnimationFrame(()=>updatePreviewScale());
   }finally{
     for(const promise of previewCache.values())Promise.resolve(promise).then(img=>img?.close?.()).catch(()=>{});
-    previewCache.clear();previewProgress?.close();
+    previewCache.clear();request.progress?.close();
   }
 }
 
-renderReport = function(force=false){
+renderReport = function(){
   reportPreviewRevision++;
   const diagnostics=document.getElementById('imageDiagnostics');if(diagnostics)diagnostics.hidden=true;
-  const revision=reportPreviewRevision;
-  clearTimeout(reportPreviewTimer);
-  if(reportPdfGenerating)return;
-  if(!currentReportId || document.body.dataset.reportView!=='editor')return;
-  if(!force&&!shouldRenderA4Preview())return;
-  reportPreviewTimer=setTimeout(()=>{
-    // Une seule génération à la fois, y compris lors des passages rapides
-    // entre Éditeur et Aperçu sur iPhone.
-    previewRenderQueue=previewRenderQueue.catch(()=>{}).then(()=>{
-      if(revision===reportPreviewRevision)return refreshA4Preview(revision);
-    });
-  },320);
+  cancelA4Preview();
+  if(previewFailed)clearA4Preview();
+  showPendingA4Preview();
 };
 
+function requestA4Preview({force=false}={}){
+  if(reportPdfGenerating||previewRequest||!currentReportId||document.body.dataset.reportView!=='editor')return;
+  if(!force&&renderedPreviewRevision===reportPreviewRevision)return;
+  const request={revision:reportPreviewRevision,started:false};
+  previewRequest=request;
+  previewRefreshButton.disabled=true;
+  const diagnostics=document.getElementById('imageDiagnostics');if(diagnostics)diagnostics.hidden=true;
+  // Un seul rendu à la fois, même en cas de changements rapides sur iPhone.
+  previewRenderQueue=previewRenderQueue.then(()=>{
+    if(previewRequest===request)return refreshA4Preview(request);
+  }).catch(error=>{
+    if(previewRequest!==request)return;
+    clearA4Preview();
+    previewFailed=true;
+    previewRefreshButton.textContent='Réessayer';
+    previewStatus.textContent='Aperçu A4 — erreur de génération.';
+    console.error('Aperçu A4 impossible',error);
+  }).finally(()=>{
+    if(previewRequest===request){previewRequest=null;previewRefreshButton.disabled=false;}
+  });
+}
+
+previewRefreshButton.addEventListener('click',()=>requestA4Preview({force:true}));
 WBReportImages.install();
 
 window.addEventListener('resize', ()=>{ if(isMobile()) updatePreviewScale(); });
@@ -3274,14 +3379,14 @@ window.WBReportWorkflowHost={
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=57.4&build=1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=57.5&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
-<script src="report-workflow.js?v=57.4"></script>
-<script src="wb-md5.js?v=57.4"></script>
-<script src="wb-ai-transfer.js?v=57.4"></script>
-<script src="report-ai.js?v=57.4"></script>
+<script src="report-workflow.js?v=57.5"></script>
+<script src="wb-md5.js?v=57.5"></script>
+<script src="wb-ai-transfer.js?v=57.5"></script>
+<script src="report-ai.js?v=57.5"></script>
 <script>
 /* v56.6.2 : récupération du module IA après un chargement incomplet/cache PWA ancien.
    Aucun brouillon ni donnée Firebase n'est supprimé. */
@@ -3306,7 +3411,7 @@ if('serviceWorker' in navigator){
   function clearNotes(){document.querySelectorAll('.wb-ai-boot-note').forEach(el=>el.remove());}
   function load(name){return new Promise((resolve,reject)=>{
     const script=document.createElement('script');
-    script.src=name+'?v=57.4&retry=1';script.async=false;
+    script.src=name+'?v=57.5&retry=1';script.async=false;
     script.onload=resolve;script.onerror=()=>reject(new Error('Impossible de charger '+name));
     document.body.appendChild(script);
   });}

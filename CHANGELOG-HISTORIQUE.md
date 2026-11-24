@@ -1,5 +1,11 @@
 # Historique des notices Atelier
 
+## Livraison 57.5 — édition des photos et aperçu à la demande
+
+- Réordonner des photos déplace les miniatures dans leur galerie et enregistre le nouvel ordre.
+- Après une modification, le dernier aperçu du rapport reste affiché avec la mention « À actualiser ». Sur ordinateur, le bouton lance le rendu à la demande. Sur mobile, la bascule « Aperçu » le lance uniquement si nécessaire.
+- Le bouton « Générer le PDF » utilise directement le contenu du rapport.
+
 ## Livraison 57.4 — bandeau compact du générateur de rapport
 
 - Sur ordinateur, un mode réduit conserve Enregistrer, Générer le PDF et les alertes ; les autres commandes restent accessibles en agrandissant le bandeau.
