@@ -1,5 +1,10 @@
 # Historique des notices Atelier
 
+## Livraison 57.8 — choix du modèle pour les rapports IA
+
+- Le dialogue de création propose GPT‑6.2 Sol par défaut et GPT‑6.2 Astra. Le choix s’applique à l’analyse de toutes les photos et à la synthèse.
+- L’estimation de coût utilise les tarifs du modèle choisi. La mise à jour de la fonction `wbReportAI` fournit les options du menu.
+
 ## Livraison 57.7 — libellés des boutons visibles
 
 - Dans le générateur de rapport, les boutons sur fond clair ont un libellé sombre, notamment « Actualiser les véhicules », « Créer avec l’IA » dans « Mes rapports » et les commandes du suivi de nettoyage. Les bandeaux gardent leurs libellés clairs.

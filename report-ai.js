@@ -39,7 +39,11 @@
       ${checks.map((cp,i)=>`<label class="wb-ai-check"><input type="checkbox" id="aiCp${i}"><span>${esc(cp.label)}</span></label>`).join('')}
       <label for="aiClosing">Recommandations / prochaine révision</label><textarea id="aiClosing" maxlength="2000" placeholder="Reprendre uniquement les recommandations et échéances que tu confirmes."></textarea></details>
       <label class="wb-ai-check"><input type="checkbox" id="aiConsent"><span>J’autorise l’envoi de ces photos, factures PDF et notes à OpenAI pour préparer ce rapport. Plusieurs appels API facturables sont nécessaires (un par lot, puis une synthèse globale textuelle, sans renvoyer les photos) lorsque je cliquerai sur « Préparer le rapport ».</span></label>
-      <div class="wb-ai-actions"><button type="button" class="btn primary" id="aiGenerate">Préparer le rapport</button><button type="button" class="btn ghost" id="aiUploadOnly">Transférer les fichiers sans analyse IA</button></div>
+      <label for="wb-ai-model">Modèle IA</label><select id="wb-ai-model" aria-describedby="wb-ai-model-status wb-ai-model-pricing" disabled></select>
+      <p id="wb-ai-model-status" class="wb-ai-muted" role="status" aria-live="polite" hidden></p>
+      <p id="wb-ai-model-pricing" class="wb-ai-muted" hidden>Le tarif Standard d’Astra est quatre fois celui de Sol par token.</p>
+      <button type="button" class="btn ghost" id="wb-ai-model-retry" hidden>Réessayer la vérification</button>
+      <div class="wb-ai-actions"><button type="button" class="btn primary" id="aiGenerate" disabled>Préparer le rapport</button><button type="button" class="btn ghost" id="aiUploadOnly">Transférer les fichiers sans analyse IA</button></div>
     </section>
     <div id="aiStatus" class="wb-ai-status" role="status" aria-live="polite"></div>
     <section id="aiReview" hidden><h3>Relire le classement</h3><p id="aiReviewCounts" class="wb-ai-muted" role="status"></p><div class="wb-ai-actions wb-ai-review-toolbar"><button type="button" class="btn ghost" id="aiUndo" disabled>Annuler le dernier déplacement / retrait</button><button type="button" class="btn ghost" id="aiTextSynthesis">Refaire la synthèse globale (textes)</button></div><p class="wb-ai-muted">Les retraits sont réversibles pendant cette session : aucune photo originale n’est effacée de Storage. Les corrections ne sont pas conservées si tu fermes la page avant de créer le rapport.</p><p class="wb-ai-muted">Corrige les titres et affectations. Pour déplacer une photo du chapitre A vers D, utilise la liste « Affectation » sous la miniature (avec choix gauche/droite), puis les flèches ‹ et › ou le champ Position pour régler son ordre directement dans le chapitre cible. Les opérations peuvent aussi être déplacées, fusionnées ou retirées. « Ne pas inclure » est un choix explicite, jamais automatique.</p>
@@ -51,6 +55,8 @@
     </section></div>`;
   document.body.appendChild(dialog);
   const $=name=>dialog.querySelector('#'+name);
+  const modelSelect=$('wb-ai-model'),modelStatus=$('wb-ai-model-status'),modelRetry=$('wb-ai-model-retry'),modelPricing=$('wb-ai-model-pricing');
+  let modelOptions=new Map(),selectedModel='',modelRequest=0;
   function status(message,kind=''){ $('aiStatus').textContent=message;$('aiStatus').dataset.kind=kind; }
   // Aucune sauvegarde locale ni lecture ou suppression des anciennes données.
   function remember(){}
@@ -58,12 +64,13 @@
   function forget(){}
   function setBusy(value){
     busy=value;
-    ['aiClose','aiGenerate','aiUploadOnly','aiFiles','aiPdfFiles','aiVerify','aiApply','aiVehicleSelect','aiReloadVehicles'].forEach(k=>{$(k).disabled=value;});
+    ['aiClose','aiUploadOnly','aiFiles','aiPdfFiles','aiVerify','aiApply','aiVehicleSelect','aiReloadVehicles'].forEach(k=>{$(k).disabled=value;});
     $('aiInput').querySelectorAll('input,textarea').forEach(el=>el.disabled=value);
     $('aiReview').querySelectorAll('input,textarea,select').forEach(el=>el.disabled=value);
     $('aiReview').querySelectorAll('.wb-ai-photo-move').forEach(el=>el.disabled=value||el.dataset.boundary==='true');
     $('aiReview').querySelectorAll('button').forEach(el=>{el.disabled=value;});
-    if(interrupted){$('aiGenerate').disabled=true;$('aiUploadOnly').disabled=true;$('aiFiles').disabled=true;$('aiPdfFiles').disabled=true;}
+    if(interrupted){$('aiUploadOnly').disabled=true;$('aiFiles').disabled=true;$('aiPdfFiles').disabled=true;}
+    updateModelControls();
     if(!value)updateProblems();
     if(!value && plan){renderReviewPhotos();renderSectionControls();$('aiUndo').disabled=!reviewUndo.length;$('aiSummaryFromSections').disabled=false;$('aiFixProblems').disabled=false;}
   }
@@ -78,6 +85,68 @@
       throw new Error(e.message||'Connexion au service IA impossible.');
     }
   }
+  function updateModelControls(){
+    modelSelect.disabled=busy||interrupted||Boolean(requestInput)||!modelOptions.size;
+    $('aiGenerate').disabled=modelSelect.disabled||!modelOptions.has(modelSelect.value);
+    modelRetry.disabled=busy;
+  }
+  function modelOption(value,label){
+    const option=document.createElement('option');
+    option.value=value;option.textContent=label;
+    return option;
+  }
+  function showModelStatus(message){
+    modelStatus.textContent=message;modelStatus.hidden=!message;
+  }
+  function availableModels(caps){
+    if(caps?.version!=='56.5'||caps.mode!=='batches'||caps.globalSynthesis!==true||!Array.isArray(caps.models))return null;
+    const options=new Map();
+    for(const entry of caps.models){
+      if(typeof entry?.id!=='string'||!entry.id.trim()||typeof entry.label!=='string'||!entry.label.trim()||options.has(entry.id))return null;
+      options.set(entry.id,entry.label);
+    }
+    return options.has(caps.defaultModel)?options:null;
+  }
+  async function loadModels(preferredModel=selectedModel){
+    const request=++modelRequest;
+    const isCurrent=()=>dialog.open&&request===modelRequest;
+    selectedModel=preferredModel;
+    modelOptions.clear();modelRetry.hidden=true;modelPricing.hidden=true;
+    modelSelect.replaceChildren(modelOption('','Vérification des modèles…'));
+    showModelStatus('Vérification des modèles disponibles sur le serveur IA…');
+    updateModelControls();
+    try{
+      const caps=await call('capabilities',{},15000);
+      if(!isCurrent())return false;
+      const options=availableModels(caps);
+      if(!options)throw new Error('Le serveur IA ne propose pas le choix du modèle. Vérifie que la mise à jour du serveur Firebase est déployée.');
+      modelOptions=options;
+      selectedModel=preferredModel?options.has(preferredModel)?preferredModel:'':caps.defaultModel;
+      modelSelect.replaceChildren(...Array.from(options,([value,label])=>modelOption(value,label)));
+      if(!selectedModel){
+        const placeholder=modelOption('','Choisir un modèle disponible');
+        placeholder.disabled=true;modelSelect.prepend(placeholder);
+      }
+      modelSelect.value=selectedModel;
+      modelPricing.hidden=!(options.has('gpt-6.2-sol')&&options.has('gpt-6.2-astra'));
+      showModelStatus(selectedModel?'':'Le modèle choisi n’est plus disponible. Sélectionne un modèle pour continuer.');
+      return Boolean(selectedModel);
+    }catch(error){
+      if(!isCurrent())return false;
+      modelSelect.replaceChildren(modelOption('','Modèles indisponibles'));
+      showModelStatus((error.message||'Impossible de vérifier les modèles IA.')+' Cette vérification ne lance aucune analyse OpenAI.');
+      modelRetry.hidden=false;
+      return false;
+    }finally{
+      if(isCurrent())updateModelControls();
+    }
+  }
+  modelSelect.onchange=()=>{
+    selectedModel=modelSelect.value;
+    if(modelOptions.has(selectedModel))showModelStatus('');
+    updateModelControls();
+  };
+  modelRetry.onclick=()=>{if(!busy&&!requestInput)void loadModels();};
   function normalizePlate(v){return String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');}
   function checkKm(){
     const value=Number(String($('aiKm').value).replace(/[^0-9]/g,''));
@@ -248,7 +317,6 @@
       if(recovering){
         const positions=new Map(pending.manifest.map((a,i)=>[a.id,i]));
         assets.sort((a,b)=>(positions.get(a.id)??999)-(positions.get(b.id)??999));
-        $('aiGenerate').disabled=false;
         remember();
       }
     }finally{
@@ -539,6 +607,24 @@
       }catch(e){status(e.message,'error');}
     };
   }
+  function renderUsage(){
+    const model=usage?.model||requestInput?.model;
+    const details=[];
+    if(model)details.push(`Modèle IA : ${modelOptions.get(model)||model}.`);
+    if(usage){
+      const scope=usage.reviewSynthesis?'Utilisation de la synthèse de relecture':'Utilisation remontée par l’API';
+      if(Number.isFinite(usage.inputTokens)&&Number.isFinite(usage.outputTokens)){
+        details.push(`${scope} : ${usage.inputTokens} tokens reçus, ${usage.outputTokens} générés (raisonnement inclus).`);
+      }
+      const cost=usage.estimatedUsd;
+      if(Number.isFinite(cost)&&cost>=0){
+        const amount=cost>0&&cost<0.001?'< 0,001':cost.toLocaleString('fr-FR',{minimumFractionDigits:3,maximumFractionDigits:3});
+        const date=usage.pricingDate?` (tarifs du ${usage.pricingDate})`:'';
+        details.push(`Coût indicatif : ${amount} $ US, hors Firebase et taxes${date}.`);
+      }else details.push('Estimation du coût indisponible.');
+    }else if(model)details.push('Estimation du coût indisponible.');
+    $('aiUsage').textContent=details.join(' ');
+  }
   function renderReview(){
     $('aiInput').hidden=true;$('aiReview').hidden=false;
     $('aiSummary').value=plan.summary;
@@ -546,7 +632,7 @@
     renderReviewPhotos();
     $('aiInvoiceReview').textContent=documents.length?'Factures jointes automatiquement en fin de rapport : '+documents.map(d=>d.name+' ('+d.pages.length+' pages)').join(' ; '):'';
     const notes=plan.warnings.filter(w=>!(/^(?:Lot \d|Photos? manquantes?\s*:)|dans ce lot|lot partiel|classement du lot|après (?:réunion|fusion)|réunion des (?:autres )?lots/i.test(w)));$('aiWarnings').textContent=notes.map(namedMessage).join('\n');$('aiWarningsBox').hidden=!notes.length;
-    $('aiUsage').textContent=usage?`Utilisation remontée par l’API : ${usage.inputTokens} tokens reçus, ${usage.outputTokens} générés (raisonnement inclus). Coût indicatif : ${Number(usage.estimatedUsd).toFixed(3)} $ — hors Firebase/taxes, tarifs ${usage.pricingDate}, pas une facture.`:'';
+    renderUsage();
     resetApproval();
   }
   async function consume(result, savedReview=null){
@@ -568,7 +654,8 @@
       for(const a of assets){if(!a.url)a.url=await H.storage().ref().child(`spaces/${H.space()}/reports/${jobId}/ai-${a.id}.${a.ext||'jpg'}`).getDownloadURL();}
       documents=(result.documents||[]).map(d=>({...d,pages:d.pages.map(page=>({...page,url:page.url||''}))}));
       for(const d of documents)for(const page of d.pages)if(!page.url)page.url=await H.storage().ref().child(`spaces/${H.space()}/reports/${jobId}/ai-inv-${page.id}.jpg`).getDownloadURL();
-      requestInput={jobId,assets:result.assets,documents:result.documents||[],notes:result.notes,meta:result.meta,consent:true,mode:result.assets.every(a=>a.ext)?'batches':undefined};
+      const model=result.model||requestInput?.model;
+      requestInput={jobId,assets:result.assets,documents:result.documents||[],notes:result.notes,meta:result.meta,consent:true,mode:result.assets.every(a=>a.ext)?'batches':undefined,...(model?{model}:{})};
       setMeta(result.meta||{});$('aiNotes').value=result.notes||'';
     }
     remember({serverJob:true});
@@ -622,6 +709,8 @@
   async function generate(retry=false, uploadOnly=false){
     if(busy)return;
     if(interrupted){status('La préparation est interrompue. Ferme cette fenêtre pour recommencer. Une analyse déjà lancée peut être facturée.', 'error');return;}
+    const requestedModel=modelSelect.value;
+    if(!retry&&!uploadOnly&&!modelOptions.has(requestedModel))return;
     if(!retry && !$('aiPlate').reportValidity())return;
     if(!retry && ((jobId&&requestInput)||(remembered()?.jobId&&!jobId&&!remembered()?.uploadPending))){status('Une préparation IA existe déjà. Reprends-la ou abandonne-la avant un nouvel envoi.','error');return;}
     if(!retry && remembered()?.uploadPending && remembered()?.manifest?.length && assets.length!==remembered().manifest.length){
@@ -643,25 +732,10 @@
     setBusy(true);
     try{
       if(!retry){
-        if(!uploadOnly){
-        status('Vérification des capacités du serveur IA… Aucun appel OpenAI.');
-        let caps;
-        try { caps=await call('capabilities'); }
-        catch (error) {
-          throw new Error('Diagnostic IA — appel capabilities impossible. '+(error?.message||String(error))+'. Aucun appel OpenAI effectué.');
-        }
-        const expected={version:'56.5',mode:'batches',globalSynthesis:true};
-        const valid=!!caps && typeof caps==='object' && caps.version===expected.version && caps.mode===expected.mode && caps.globalSynthesis===expected.globalSynthesis;
-        if(!valid){
-          const printable=v=>v===undefined?'absent':v===null?'null':JSON.stringify(v);
-          const actual=caps && typeof caps==='object'?caps:{};
-          const details='Version reçue : '+printable(actual.version)+' (attendue : 56.5) ; mode : '+printable(actual.mode)+' (attendu : batches) ; globalSynthesis : '+printable(actual.globalSynthesis)+' (attendu : true).';
-          throw new Error('Diagnostic IA — réponse capabilities incompatible. '+details+' Fonction appelée : '+String(CFG.functionName)+' ; région : '+String(CFG.region)+'. Aucun appel OpenAI effectué. Transmets ce message pour identifier la différence, sans redéployer à l’aveugle.');
-        }
-        }
+        if(!uploadOnly&&!(await loadModels(requestedModel)))return;
         if(!jobId)jobId=id('rai',16);remember();await upload();
         if(uploadOnly){status('Les fichiers ont été transférés sans analyse OpenAI. Garde cette fenêtre ouverte pour préparer le rapport.');return;}
-        requestInput={jobId,assets:assets.map(a=>({id:a.id,name:a.name,ext:a.ext})),documents:documents.map(d=>({id:d.id,name:d.name,pages:d.pages.map(p=>({id:p.id}))})),notes:$('aiNotes').value.trim(),meta:metaFromForm(),consent:true,mode:'batches'};
+        requestInput={jobId,assets:assets.map(a=>({id:a.id,name:a.name,ext:a.ext})),documents:documents.map(d=>({id:d.id,name:d.name,pages:d.pages.map(p=>({id:p.id}))})),notes:$('aiNotes').value.trim(),meta:metaFromForm(),consent:true,mode:'batches',model:requestedModel};
         remember();
       }
       $('aiInput').hidden=true;status('Analyse et préparation du classement… L’appel API est en cours.');
@@ -694,6 +768,7 @@
   });
   function reset(){
     $('aiVehicleSelect').value='';
+    modelRequest++;modelOptions.clear();selectedModel='';modelSelect.replaceChildren();modelRetry.hidden=true;modelPricing.hidden=true;showModelStatus('');
     assets.forEach(a=>{if(a.preview)URL.revokeObjectURL(a.preview);});assets=[];documents=[];reviewUndo=[];recoveryIssues=[];recoveryOriginal=null;vehicleKm=null;vehiclePlate='';rejectedFiles.clear();renderDocuments();plan=null;jobId='';requestInput=null;usage=null;workflowRef=null;workflowOptions=[];renderWorkflowOptions();
     synthesisRetry=false;interrupted=false;$('aiSynthesisPreview').hidden=true;$('aiSectionAction').hidden=true;$('aiUploadProgress').textContent='';$('aiInput').hidden=false;$('aiReview').hidden=true;setMeta({});$('aiNotes').value='';$('aiConsent').checked=false;renderInputPhotos();setBusy(false);
   }
@@ -722,6 +797,7 @@
   $('aiLinkedOperation').onchange=()=>{const value=$('aiLinkedOperation').value;workflowRef=value?(value.startsWith('planning::')?{planningId:value.split('::')[1]}:{vehicleId:value.split('::')[0],operationId:value.split('::')[1]}):null;if(jobId)remember();renderWorkflowOptions();};
   async function open(context){
     await H.ready;
+    if(dialog.open)return;
     if(context){
       if(jobId||assets.length){alert('Une préparation IA est déjà ouverte. Ferme-la avant de commencer un autre rapport lié.');return;}
       const v=context.vehicle,op=context.operation,meta=window.WBVehicleInfo.fromVehicle(v);
@@ -729,7 +805,7 @@
       workflowRef=context.ref;workflowOptions=[{...op,vehicleId:v.id}];renderWorkflowOptions();
       $('aiWorkflowHint').textContent+=' Travaux initialement prévus : '+(op.operation||'');
     }
-    dialog.showModal();void loadVehicles();
+    dialog.showModal();void loadVehicles();void loadModels();
   }
   window.WBReportAI={open};window.dispatchEvent(new Event('wb-ai-ready'));
   $('aiGenerate').onclick=()=>generate(false);$('aiUploadOnly').onclick=()=>generate(false,true);
@@ -747,7 +823,7 @@
     const original=JSON.stringify(plan);persistReview();setBusy(true);status('Synthèse globale textuelle… Tes photos ne sont ni renvoyées ni réanalysées.');
     try{
       const result=await call('synthesizeReview',{jobId,plan:JSON.parse(original),assets:assets.map(a=>({id:a.id,name:a.name,ext:a.ext||'jpg'})),consent:true,retry:synthesisRetry});
-      if(result.usage){usage=result.usage;persistReview();$('aiUsage').textContent=`Utilisation cumulée : ${usage.inputTokens} tokens reçus, ${usage.outputTokens} générés. Coût indicatif : ${Number(usage.estimatedUsd).toFixed(3)} $ — hors Firebase/taxes, tarifs ${usage.pricingDate}, pas une facture.`;}
+      if(result.usage){usage={...result.usage,reviewSynthesis:true};persistReview();renderUsage();}
       if(result.status!=='completed'){
         synthesisRetry=result.status==='failed';status(result.error||'Synthèse encore en cours. Réutilise ce bouton pour récupérer le résultat mis en cache ; les photos restent intactes.','error');return;
       }
