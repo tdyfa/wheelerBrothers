@@ -1,5 +1,10 @@
 # Historique des notices Atelier
 
+## Livraison 57.6 — actualisation de l’aperçu depuis le bandeau
+
+- Sur ordinateur, le bouton « Actualiser l’aperçu » reste accessible dans le bandeau, y compris en mode réduit.
+- Sur téléphone, le bouton apparaît à côté d’« Aperçu » dans la barre fixe pendant la consultation du rapport.
+
 ## Livraison 57.5 — édition des photos et aperçu à la demande
 
 - Réordonner des photos déplace les miniatures dans leur galerie et enregistre le nouvel ordre.

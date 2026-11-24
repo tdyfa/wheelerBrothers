@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Générateur de rapport d'intervention</title>
-<link rel="manifest" href="manifest.json?v=57.5">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=57.5">
+<link rel="manifest" href="manifest.json?v=57.6">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=57.6">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Générateur de rapport">
@@ -16,18 +16,18 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
-<script src="firebase-config.js?v=57.5"></script>
-<script src="html2pdf.bundle.min.js?v=57.5"></script>
-<script src="report-images.js?v=57.5"></script>
-<script src="wb-pdf-writer.js?v=57.5"></script>
-<script src="wb-progress.js?v=57.5"></script>
-<script src="vehicle-info.js?v=57.5"></script>
-<script src="wb-workflow.js?v=57.5"></script>
-<link rel="stylesheet" href="wb-workflow.css?v=57.5">
-<script src="vehicle-input.js?v=57.5&build=2"></script>
-<link rel="stylesheet" href="report-ai.css?v=57.5">
-<script src="report-ai-config.js?v=57.5"></script>
-<script src="report-ai-core.js?v=57.5"></script>
+<script src="firebase-config.js?v=57.6"></script>
+<script src="html2pdf.bundle.min.js?v=57.6"></script>
+<script src="report-images.js?v=57.6"></script>
+<script src="wb-pdf-writer.js?v=57.6"></script>
+<script src="wb-progress.js?v=57.6"></script>
+<script src="vehicle-info.js?v=57.6"></script>
+<script src="wb-workflow.js?v=57.6"></script>
+<link rel="stylesheet" href="wb-workflow.css?v=57.6">
+<script src="vehicle-input.js?v=57.6&build=2"></script>
+<link rel="stylesheet" href="report-ai.css?v=57.6">
+<script src="report-ai-config.js?v=57.6"></script>
+<script src="report-ai-core.js?v=57.6"></script>
 <style>
   :root{
     --ink:#111418; --ink-soft:#3b4250; --muted:#6b7280; --line:#e3e7ee;
@@ -351,6 +351,9 @@
       cursor:pointer; background:#2b3340; color:#fff;
     }
     .mobile-toggle button.active{background:#fff; color:#0f1216}
+    .app-bar-top > #btnPreviewRefresh{display:none}
+    .mobile-toggle #btnPreviewRefresh{min-width:0;min-height:44px;padding:8px 6px;font-size:12px}
+    body:not([data-mview="preview"]) .mobile-toggle #btnPreviewRefresh{display:none}
 
     .wrap{padding:12px; gap:0}
     /* on montre l'un OU l'autre selon la vue choisie */
@@ -495,7 +498,10 @@
   .app-bar-actions .btn.danger:hover{background:#3a2424}
   @media (min-width:1101px){.editor{top:132px}}
   /* Ordinateur : la barre peut être réduite sans masquer les alertes. */
-  #btnHeaderToggle,#compactErrorHint{display:none}
+  #btnHeaderToggle,#compactErrorHint,
+  body:not([data-report-view="editor"]) #btnPreviewRefresh{display:none}
+  .app-bar-top > #btnPreviewRefresh{flex:0 0 auto;min-height:36px}
+  #btnPreviewRefresh:focus-visible{outline:3px solid #93c5fd;outline-offset:3px}
   @media (min-width:769px) and (hover:hover) and (pointer:fine){
     body[data-report-view="editor"] #btnHeaderToggle{
       display:inline-flex;align-items:center;justify-content:center;
@@ -530,12 +536,12 @@
 <div class="app-bar">
   <div class="app-bar-inner">
     <div class="app-bar-top">
-      <a class="app-back" href="index.html?v=57.5" aria-label="Accueil">‹</a>
+      <a class="app-back" href="index.html?v=57.6" aria-label="Accueil">‹</a>
       <div class="app-bar-title">
         <h1>Rapport d'intervention</h1>
         <div class="app-version-line">
           <span class="firebase-status-icon is-disconnected" data-firebase-status role="status" aria-label="Firebase déconnecté" title="Firebase déconnecté"></span>
-          <span class="sub">Version 57.5</span>
+          <span class="sub">Version 57.6</span>
         </div>
       </div>
       <div class="app-bar-notices">
@@ -543,6 +549,7 @@
         <span id="sizeIndicator" style="font-size:11.5px; font-weight:600;"></span>
         <span id="compactErrorHint">Agrandis le bandeau pour accéder à « Exporter (.json) ».</span>
       </div>
+      <button class="btn ghost" id="btnPreviewRefresh" type="button" aria-controls="report">Afficher l’aperçu</button>
       <button class="btn ghost" id="btnHeaderToggle" type="button" aria-controls="btnArchive btnCompleteReport btnImport btnExport btnReset" aria-expanded="true">Réduire le bandeau</button>
     </div>
     <div class="app-bar-actions" id="headerActions">
@@ -824,7 +831,6 @@
   <div class="preview">
     <div class="preview-tools">
       <span id="previewStatus" role="status">Aperçu A4 — à afficher.</span>
-      <button class="btn" id="btnPreviewRefresh" type="button" aria-controls="report">Afficher l’aperçu</button>
     </div>
     <div class="stage">
       <div class="report-shell">
@@ -3290,6 +3296,27 @@ function requestA4Preview({force=false}={}){
 previewRefreshButton.addEventListener('click',()=>requestA4Preview({force:true}));
 WBReportImages.install();
 
+// Sur téléphone, c'est la barre Éditer / Aperçu qui reste visible en défilant.
+// Déplacer le même bouton conserve son libellé, son état et son gestionnaire.
+const previewMobileLayout=window.matchMedia('(max-width:768px)');
+function placePreviewRefreshButton(){
+  const mobileToggle=document.querySelector('.mobile-toggle');
+  const desktopToggle=document.getElementById('btnHeaderToggle');
+  const parent=previewMobileLayout.matches?mobileToggle:desktopToggle.parentElement;
+  if(previewRefreshButton.parentElement===parent)return;
+  const focused=document.activeElement===previewRefreshButton;
+  if(previewMobileLayout.matches)mobileToggle.appendChild(previewRefreshButton);
+  else desktopToggle.before(previewRefreshButton);
+  if(focused){
+    const visibleButton=previewMobileLayout.matches&&document.body.dataset.mview!=='preview'
+      ? document.getElementById('mviewPreview') : previewRefreshButton;
+    visibleButton.focus({preventScroll:true});
+  }
+}
+placePreviewRefreshButton();
+if(previewMobileLayout.addEventListener)previewMobileLayout.addEventListener('change',placePreviewRefreshButton);
+else previewMobileLayout.addListener(placePreviewRefreshButton);
+
 window.addEventListener('resize', ()=>{ if(isMobile()) updatePreviewScale(); });
 window.addEventListener('beforeunload',event=>{if(currentReportId&&dirtyReportIds.has(currentReportId)){event.preventDefault();event.returnValue='';}});
 window.addEventListener('pagehide',flushPendingSave);
@@ -3379,14 +3406,14 @@ window.WBReportWorkflowHost={
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js?v=57.5&build=1',{updateViaCache:'none'}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js?v=57.6&build=1',{updateViaCache:'none'}).catch(()=>{});
   });
 }
 </script>
-<script src="report-workflow.js?v=57.5"></script>
-<script src="wb-md5.js?v=57.5"></script>
-<script src="wb-ai-transfer.js?v=57.5"></script>
-<script src="report-ai.js?v=57.5"></script>
+<script src="report-workflow.js?v=57.6"></script>
+<script src="wb-md5.js?v=57.6"></script>
+<script src="wb-ai-transfer.js?v=57.6"></script>
+<script src="report-ai.js?v=57.6"></script>
 <script>
 /* v56.6.2 : récupération du module IA après un chargement incomplet/cache PWA ancien.
    Aucun brouillon ni donnée Firebase n'est supprimé. */
@@ -3411,7 +3438,7 @@ if('serviceWorker' in navigator){
   function clearNotes(){document.querySelectorAll('.wb-ai-boot-note').forEach(el=>el.remove());}
   function load(name){return new Promise((resolve,reject)=>{
     const script=document.createElement('script');
-    script.src=name+'?v=57.5&retry=1';script.async=false;
+    script.src=name+'?v=57.6&retry=1';script.async=false;
     script.onload=resolve;script.onerror=()=>reject(new Error('Impossible de charger '+name));
     document.body.appendChild(script);
   });}
